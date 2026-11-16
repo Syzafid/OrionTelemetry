@@ -11,11 +11,12 @@ import * as m from "motion/react-m";
 import { DURATION, EASE_STANDARD } from "@/lib/motion-tokens";
 
 const MODULES: { id: ModuleId; label: string }[] = [
-  { id: "01", label: "SHOWROOM DIGITAL TWIN" },
-  { id: "02", label: "WARM-UP QUEUE & FLEET" },
-  { id: "03", label: "ENGINE & OBD-II" },
-  { id: "04", label: "YARD PRESENCE LOG" },
-  { id: "05", label: "REMOTE NODE CONFIG" },
+  { id: "01", label: "Digital Twin 3D" },
+  { id: "02", label: "Armada & PDI" },
+  { id: "03", label: "Antrean Pemanasan" },
+  { id: "04", label: "OBD-II Diagnostik" },
+  { id: "05", label: "Presensi & Log" },
+  { id: "06", label: "Konfigurasi Node" },
 ];
 
 /**
@@ -141,6 +142,7 @@ export function TopNav() {
           "3": "03",
           "4": "04",
           "5": "05",
+          "6": "06",
         };
         const mod = keyMap[e.key];
         if (mod) {
@@ -155,8 +157,8 @@ export function TopNav() {
   }, [setActiveModule]);
 
   const live = dataSource === "LIVE_API";
-  const statusTone = !live ? "cyan" : apiStatus === "CONNECTED" ? "emerald" : "amber";
-  const statusClass = !live ? "text-cyan" : apiStatus === "CONNECTED" ? "text-emerald" : "text-amber";
+  const statusTone = !live ? "dim" : apiStatus === "CONNECTED" ? "emerald" : "amber";
+  const statusClass = !live ? "text-muted-foreground" : apiStatus === "CONNECTED" ? "text-emerald" : "text-amber";
 
   const onlineUnits = units.filter((u) => u.in_yard);
   const onlineCount = onlineUnits.length;
@@ -193,7 +195,7 @@ export function TopNav() {
                 ORION
               </div>
               <div className="label-hmi hidden 2xl:block text-[10px] tracking-[0.06em] text-muted-foreground">
-                Onboard Reporting for Inventory &amp; Operational Notifications
+                Sistem Monitoring Baterai &amp; Telemetri Stock Yard
               </div>
               <div className="label-hmi block 2xl:hidden text-[9.5px] sm:text-[10px] text-muted-foreground">
                 DIPO Stock Yard Telemetry
@@ -207,9 +209,9 @@ export function TopNav() {
               type="button"
               onClick={() => setCommandOpen(true)}
               title="Buka Global Command Palette (Ctrl+K / Cmd+K)"
-              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
+              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
             >
-              <Command size={13} strokeWidth={1.75} className="shrink-0 text-cyan" aria-hidden="true" />
+              <Command size={13} strokeWidth={1.75} className="shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="hidden md:inline">Command (Ctrl+K)</span>
               <span className="inline md:hidden">Ctrl+K</span>
             </button>
@@ -218,24 +220,17 @@ export function TopNav() {
               <Radio size={13} strokeWidth={1.5} className={cn("shrink-0", apToneClass)} aria-hidden="true" />
               <span className="num text-[11px] text-foreground hidden xl:inline">{apLabel}</span>
               <span className="num text-[10px] text-foreground inline xl:hidden">{apLabelMobile}</span>
-              <Led tone={apTone} pulse={onlineCount < totalCount} />
+              <Led tone={apTone} pulse={onlineCount === 0} />
             </div>
 
-            {/* Global Fleet Scale Toggle (3 Core Units vs 12 Expanded Yard Units) */}
-            <button
-              type="button"
-              onClick={() => setFleetScale(fleetScale === 3 ? 12 : 3)}
-              title="Switch antara 3 Unit Inti Hardware dan 12 Unit Simulasi Skalabilitas Gudang"
-              className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]",
-                fleetScale === 12
-                  ? "border-cyan/60 bg-cyan/15 text-cyan font-semibold"
-                  : "text-foreground hover:border-cyan hover:text-cyan",
-              )}
+            {/* Global Fleet Total Units Indicator */}
+            <div
+              className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-muted-foreground sm:px-3 sm:text-[11px]"
+              title="Total 12 unit kendaraan terdaftar di stock yard Mitsubishi"
             >
-              <Layers size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
-              <span>{fleetScale} Units</span>
-            </button>
+              <Layers size={13} strokeWidth={1.75} className="shrink-0 text-foreground" aria-hidden="true" />
+              <span>{units.length} Units Yard</span>
+            </div>
 
             <button
               type="button"
@@ -305,7 +300,7 @@ export function TopNav() {
                   onChange={(e) => setApiUrl(e.target.value)}
                   spellCheck={false}
                   aria-label="API endpoint URL"
-                  className="min-h-[44px] w-full border border-border bg-background px-2.5 py-2 num text-[11px] outline-none focus:border-cyan"
+                  className="min-h-[44px] w-full border border-border bg-background px-2.5 py-2 num text-[11px] outline-none focus:border-foreground/60"
                 />
                 <div className="mt-3 space-y-1.5 num text-[11px]">
                   <div className="flex justify-between gap-3">
@@ -324,14 +319,14 @@ export function TopNav() {
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">SNAPSHOT CACHE</span>
-                    <span className="text-[10px] text-cyan">{lastSyncedAt ?? "None"}</span>
+                    <span className="text-[10px] text-foreground">{lastSyncedAt ?? "None"}</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   disabled={!live}
                   onClick={pollNow}
-                  className="mt-3 min-h-[44px] w-full cursor-pointer border border-cyan/60 py-2 num text-[10px] uppercase tracking-wider text-cyan transition-colors hover:bg-cyan/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mt-3 min-h-[44px] w-full cursor-pointer border border-border py-2 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   TEST PING
                 </button>
@@ -354,16 +349,16 @@ export function TopNav() {
                   type="button"
                   onClick={() => setActiveModule(mod.id)}
                   className={cn(
-                    "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[11px] uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-4 sm:py-3 sm:tracking-[0.2em] md:px-5",
+                    "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[12px] font-medium tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-4 sm:py-3 md:px-5",
                     on ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card/50 hover:text-foreground",
                   )}
                 >
-                  <span className={cn("num font-semibold", on ? "text-crimson" : "text-dim")}>{mod.id}</span>
+                  <span className={cn("num font-semibold", on ? "text-foreground" : "text-dim")}>{mod.id}</span>
                   <span>{mod.label}</span>
                   {on && (
                     <m.span
                       layoutId="module-tab-indicator"
-                      className="absolute inset-x-0 bottom-0 h-0.5 bg-crimson"
+                      className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground"
                       transition={{ duration: DURATION.deliberate, ease: EASE_STANDARD }}
                     />
                   )}

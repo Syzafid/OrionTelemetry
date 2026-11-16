@@ -239,7 +239,7 @@ try {
 
     // BAGIAN 1: HEADER BANNER
     echo '<table>' . "\n";
-    echo '  <tr><td colspan="21" class="banner-title">ORION — ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS</td></tr>' . "\n";
+    echo '  <tr><td colspan="21" class="banner-title">ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD</td></tr>' . "\n";
     echo '  <tr><td colspan="21" class="banner-sub">STOCK YARD INVENTORY TELEMETRY &amp; BATTERY HEALTH AUDIT REPORT</td></tr>' . "\n";
     echo '  <tr><td colspan="21" class="banner-meta">Export Timestamp: ' . escXml($dateHuman) . ' | Unit Filter: ' . escXml($unitFilterLabel) . ' | Max Rows: ' . (int)$limit . ' | Standard: SOP C.1 &amp; PDI Readiness (100% Read-Only ECU)</td></tr>' . "\n";
     echo '  <tr><td colspan="21" style="border:none;height:10px;"></td></tr>' . "\n";

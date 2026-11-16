@@ -60,7 +60,7 @@ describe("computeBatteryPrediction (OLS Time-to-Critical & Drain Rate)", () => {
     expect(res.ttcHours).toBeNull();
     expect(res.slopeMvPerHour).toBe(320);
     expect(res.statusText).toBe("Charging (+320 mV/h)");
-    expect(res.tone).toBe("cyan");
+    expect(res.tone).toBe("emerald");
   });
 
   it("returns Stable (> 72h Safe) when voltage drift is flat", () => {
@@ -89,7 +89,7 @@ describe("computeBatteryPrediction (OLS Time-to-Critical & Drain Rate)", () => {
   it("builds formatted Excel workbook with executive summary, conditional formatting, and log headers", () => {
     const configs = Object.fromEntries(UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)]));
     const xls = buildFormattedExcelPrettier(UNITS, configs, {}, "ALL");
-    expect(xls).toContain("ORION — ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS");
+    expect(xls).toContain("ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD");
     expect(xls).toContain("STOCK YARD INVENTORY TELEMETRY &amp; BATTERY HEALTH AUDIT REPORT");
     expect(xls).toContain("#8E1218");
     expect(xls).toContain("#F2EFE9");

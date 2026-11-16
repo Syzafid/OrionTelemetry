@@ -3,7 +3,6 @@ import { HardDriveUpload, Search, ShieldAlert, X } from "lucide-react";
 import * as m from "motion/react-m";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { OPERATIONAL_TAGS } from "@/data/mockTelemetry";
-import { useAnime } from "@/hooks/useAnime";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
 import { DURATION, EASE_STANDARD } from "@/lib/motion-tokens";
 import { Led, Panel, Pill, fmtV } from "./primitives";
@@ -12,8 +11,7 @@ import { cn } from "@/lib/utils";
 type PresenceFilter = "ALL" | "IN_YARD" | "OUT_OF_YARD" | "BURST_SYNCED";
 
 export function PresenceModule() {
-  const { units, selected, selectUnit, flushBuffer, movement, tagMovement } = useTelemetry();
-  const [flushing, setFlushing] = useState(-1);
+  const { units, selected, selectUnit, movement, tagMovement } = useTelemetry();
   const [searchQuery, setSearchQuery] = useState("");
   const [presenceFilter, setPresenceFilter] = useState<PresenceFilter>("ALL");
   const slotGridRef = useRef<HTMLDivElement>(null);
@@ -24,37 +22,6 @@ export function PresenceModule() {
   }, []);
 
   const used = selected.buffer_used;
-  const [displayUsed, setDisplayUsed] = useState(used);
-  useEffect(() => {
-    if (flushing < 0) setDisplayUsed(used);
-  }, [used, flushing]);
-
-  useAnime(
-    slotGridRef,
-    (anime, el) => {
-      const cells = el.querySelectorAll<HTMLElement>("[data-slot-active='1']");
-      const counter = { v: used };
-      const counterAnim = anime.animate(counter, {
-        v: 0,
-        duration: 420,
-        ease: "outQuad",
-        onUpdate: () => setDisplayUsed(Math.max(0, Math.round(counter.v))),
-      });
-      if (cells.length === 0) return counterAnim;
-      const cellAnim = anime.animate(cells, {
-        scale: [1, 0.94, 1],
-        duration: 360,
-        delay: anime.stagger(14),
-        ease: "outQuad",
-      });
-      return [counterAnim, cellAnim];
-    },
-    [flushing],
-    {
-      enabled: flushing >= 0,
-      onReduced: () => setDisplayUsed(0),
-    },
-  );
   const awayCount = units.filter((u) => !u.in_yard).length;
   const inYardCount = units.length - awayCount;
   const burstCount = units.filter((u) => u.buffer_used > 0).length;
@@ -83,15 +50,6 @@ export function PresenceModule() {
       );
     });
   }, [movement, units, searchQuery]);
-
-  const runClear = () => {
-    if (used === 0 || flushing >= 0) return;
-    setFlushing(0);
-    setTimeout(() => {
-      flushBuffer(selected.unit_id);
-      setFlushing(-1);
-    }, 450);
-  };
 
   return (
     <div className="module-presence flex h-full min-h-0 flex-1 flex-col gap-3">
@@ -139,7 +97,7 @@ export function PresenceModule() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Bay, Model, VIN, Event ID..."
               aria-label="Search yard presence units and movement logs"
-              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-8 py-1.5 num text-xs text-foreground outline-none placeholder:text-dim focus:border-cyan"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-8 py-1.5 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
             />
             {searchQuery && (
               <button
@@ -156,10 +114,10 @@ export function PresenceModule() {
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
-                { id: "ALL", label: "All", count: units.length, tone: "cyan" },
+                { id: "ALL", label: "All", count: units.length, tone: "dim" },
                 { id: "IN_YARD", label: "In Yard", count: inYardCount, tone: "emerald" },
                 { id: "OUT_OF_YARD", label: "Out of Yard", count: awayCount, tone: "amber" },
-                { id: "BURST_SYNCED", label: "Burst Synced > 0", count: burstCount, tone: "crimson" },
+                { id: "BURST_SYNCED", label: "Burst Synced > 0", count: burstCount, tone: "amber" },
               ] as const
             ).map((f) => {
               const active = presenceFilter === f.id;
@@ -171,7 +129,9 @@ export function PresenceModule() {
                   className={cn(
                     "num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-3 py-1.5 text-[11px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     active
-                      ? cn("border-current bg-current/15 font-semibold", `text-${f.tone}`)
+                      ? f.tone === "dim"
+                        ? "border-foreground/60 bg-foreground/10 font-semibold text-foreground"
+                        : cn("border-current bg-current/15 font-semibold", `text-${f.tone}`)
                       : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -189,14 +149,14 @@ export function PresenceModule() {
         <Panel
           title="Unit Presence & Two-Tier Queue"
           code="BUF"
-          right={<span className="num text-[10px] text-cyan">2,020 Slots Max</span>}
+          right={<span className="num text-[10px] text-muted-foreground">2,020 Slots Max</span>}
         >
           {/* Filtered Unit Selector Pills (Horizontal Scroll) */}
           <div className="card-scroll mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
             {filteredUnits.map((u) => (
               <div key={u.unit_id} className="shrink-0">
                 <Pill
-                  tone={u.in_yard ? "cyan" : "amber"}
+                  tone="dim"
                   active={u.unit_id === selected.unit_id}
                   onClick={() => selectUnit(u.unit_id)}
                 >
@@ -207,39 +167,38 @@ export function PresenceModule() {
           </div>
 
           {/* Architecture Spec Banner */}
-          <div className="mb-3 space-y-1 rounded-[2px] border border-border bg-background/60 p-2.5 num text-[11px]">
+          <div className="mb-3 space-y-1.5 rounded-[2px] border border-border bg-background/60 p-2.5 num text-[11px]">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
-                Two-Tier Queue Architecture
+              <span className="font-sans text-[11px] font-semibold text-foreground">
+                Arsitektur Antrean Dua Tingkat (Two-Tier Queue)
               </span>
-              <span className="text-[10px] font-medium text-cyan">20 RTC + 2,000 LittleFS = 2,020 Max</span>
+              <span className="rounded-[2px] border border-border bg-secondary/60 px-1.5 py-0.5 text-[9.5px] font-medium text-foreground">
+                Kapasitas: 2.020 Slot
+              </span>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Tier 1: 20 Slots in RTC SRAM</span>
-              <span>Tier 2: 2,000 Slots in LittleFS Flash</span>
+            <div className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+              <span>Tier 1: 20 Slot (RTC SRAM Cepat)</span>
+              <span>Tier 2: 2.000 Slot (LittleFS Flash)</span>
             </div>
           </div>
 
           {/* Tier 1 Visualization: 20 Fast Cache Slots */}
           <div className="mb-2 flex items-center justify-between num text-[10px] text-muted-foreground">
-            <span>TIER 1: FAST WRITE RTC SRAM CACHE (20 SLOTS)</span>
-            <span>{Math.min(displayUsed, 20)}/20 active</span>
+            <span className="font-sans font-medium text-foreground">Tier 1: Fast Write RTC SRAM (20 Slot)</span>
+            <span>{Math.min(used, 20)}/20 aktif</span>
           </div>
           <div ref={slotGridRef} className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
             {Array.from({ length: 20 }).map((_, i) => {
               const occupied = i < used;
-              const sent = flushing >= 0;
               return (
                 <div
                   key={i}
                   data-slot-active={occupied ? "1" : "0"}
                   className={cn(
                     "relative flex aspect-[1.8/1] flex-col justify-between border p-1.5 transition-colors duration-200",
-                    sent
-                      ? "border-emerald bg-emerald/15"
-                      : occupied
-                        ? "border-cyan/70 bg-cyan/10"
-                        : "border-border",
+                    occupied
+                      ? "border-foreground/50 bg-foreground/[0.06]"
+                      : "border-border",
                   )}
                 >
                   <span className="num text-[10px] text-muted-foreground">
@@ -248,12 +207,11 @@ export function PresenceModule() {
                   <span
                     className={cn(
                       "num text-[10px] font-medium tracking-tight",
-                      sent ? "text-emerald" : occupied ? "text-cyan" : "text-dim",
+                      occupied ? "text-foreground" : "text-dim",
                     )}
                   >
-                    {sent ? "SYNC" : occupied ? `0x${(0x3FF0 + i * 0x18).toString(16).toUpperCase()}` : "FREE"}
+                    {occupied ? `0x${(0x3FF0 + i * 0x18).toString(16).toUpperCase()}` : "FREE"}
                   </span>
-                  {occupied && !sent && <span className="led absolute right-1 top-1 text-cyan" />}
                 </div>
               );
             })}
@@ -273,13 +231,13 @@ export function PresenceModule() {
             <div className="num text-sm">
               {used > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={cn("font-medium", used > 20 ? "text-amber" : "text-cyan")}>{displayUsed} recs synced</span>
+                  <span className={cn("font-medium", used > 20 ? "text-amber" : "text-foreground")}>{used} recs synced</span>
                   <span
                     className={cn(
                       "rounded-[2px] px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
                       used > 20
                         ? "border border-amber/50 bg-amber/10 text-amber"
-                        : "border border-cyan/50 bg-cyan/10 text-cyan",
+                        : "border border-border bg-secondary/50 text-muted-foreground",
                     )}
                   >
                     {used > 20 ? "Tier 1 + Tier 2 Flash Spillover (> 20)" : "Tier 1 Fast Cache (<= 20)"}
@@ -287,7 +245,7 @@ export function PresenceModule() {
                 </div>
               ) : (
                 <span className="flex items-center gap-1.5 text-xs font-medium text-emerald">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
+                  <Led tone="emerald" />
                   Live Stream (Queue Empty)
                 </span>
               )}
@@ -295,28 +253,20 @@ export function PresenceModule() {
             <span className="num text-[10px] text-muted-foreground">Boot #{selected.telemetry.boot}</span>
           </div>
 
-          <button
-            onClick={runClear}
-            disabled={used === 0 || flushing >= 0}
-            type="button"
-            className="relative mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 overflow-hidden border border-emerald/50 py-2.5 num text-[11px] font-medium text-emerald transition-colors hover:bg-emerald/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {flushing >= 0 && (
-              <m.span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 left-0 w-1/4 bg-emerald/25"
-                initial={{ x: "-100%" }}
-                animate={{ x: "400%" }}
-                transition={{ duration: 0.45, ease: EASE_STANDARD }}
-              />
-            )}
-            <HardDriveUpload size={14} strokeWidth={1.5} aria-hidden="true" />
-            {flushing >= 0
-              ? `Clearing Badge (${displayUsed} Recs)...`
-              : used === 0
-                ? "Live Stream (Queue Empty)"
-                : `Clear Sync Badge (${used} Recs)`}
-          </button>
+          {/* Automatic Flash Buffer Status Callout */}
+          <div className="mt-3 rounded-[2px] border border-border bg-background/50 p-3 num text-[11px] leading-relaxed">
+            <div className="flex items-center gap-2">
+              <HardDriveUpload size={14} className={used > 0 ? "text-amber" : "text-emerald"} aria-hidden="true" />
+              <span className="font-semibold text-foreground">
+                {used > 0 ? `Antrean Offline (${used} Rekaman Tertahan)` : "Sinkronisasi Live Penuh (Queue Kosong)"}
+              </span>
+            </div>
+            <p className="mt-1 text-[10.5px] text-muted-foreground">
+              {used > 0
+                ? "Node menyimpan rekaman telemetri di Tier-1 RTC SRAM & Tier-2 LittleFS Flash selama offline. Firmware ESP32 akan melakukan kuras antrean (Auto-Burst Sync) secara otomatis saat terhubung kembali ke Wi-Fi dealer."
+                : "Seluruh rekaman tersinkronisasi ke server. Firmware streaming langsung secara real-time tanpa penumpukan memori flash lokal."}
+            </p>
+          </div>
 
           {/* Filtered Fleet Presence Directory inside Scrollable Card Body (Horizontal Snap Strip on Mobile, Stacked on Desktop) */}
           <div className="mt-4 border-t border-border pt-3">
@@ -333,12 +283,12 @@ export function PresenceModule() {
                     "flex shrink-0 cursor-pointer items-center justify-between rounded-[2px] border px-2.5 py-2 text-left num text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     "w-[220px] snap-start lg:w-full",
                     u.unit_id === selected.unit_id
-                      ? "border-cyan bg-cyan/10"
+                      ? "border-foreground/70 bg-foreground/[0.06]"
                       : "border-border bg-background/40 hover:border-muted-foreground",
                   )}
                 >
                   <div className="min-w-0 pr-1.5">
-                    <span className="font-semibold text-crimson">{u.bay}</span>{" "}
+                    <span className="font-semibold text-foreground">{u.bay}</span>{" "}
                     <span className="font-medium text-foreground truncate block sm:inline">{u.model}</span>{" "}
                     <span className="text-[10px] text-muted-foreground">({u.trim})</span>
                   </div>
@@ -394,7 +344,7 @@ export function PresenceModule() {
                         transition={{ duration: DURATION.instant, ease: EASE_STANDARD }}
                         className="border-b border-border/60"
                       >
-                        <td className="num py-2.5 pr-3 text-[11px] text-crimson">{e.id}</td>
+                        <td className="num py-2.5 pr-3 text-[11px] font-medium text-foreground">{e.id}</td>
                         <td className="py-2.5 pr-3">
                           <div className="font-display text-[11px] font-medium uppercase tracking-wider">
                             {u?.model ?? e.unit_id}
@@ -404,8 +354,8 @@ export function PresenceModule() {
                         <td className="num py-2.5 pr-3 text-[11px]">{e.departed}</td>
                         <td className="num py-2.5 pr-3 text-[11px]">
                           {e.returned ?? (
-                            <span className="flex items-center gap-1.5 text-cyan">
-                              <Led tone="cyan" pulse />
+                            <span className="flex items-center gap-1.5 text-amber">
+                              <Led tone="amber" pulse />
                               Away
                             </span>
                           )}
@@ -417,7 +367,7 @@ export function PresenceModule() {
                         <td className="py-2.5">
                           <div className="flex flex-wrap gap-1">
                             {OPERATIONAL_TAGS.map((tg) => (
-                              <Pill key={tg} active={e.tag === tg} onClick={() => tagMovement(e.id, tg)} tone="amber">
+                              <Pill key={tg} active={e.tag === tg} onClick={() => tagMovement(e.id, tg)} tone="dim">
                                 {tg}
                               </Pill>
                             ))}

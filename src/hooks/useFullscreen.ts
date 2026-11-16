@@ -9,10 +9,25 @@ export function useFullscreen() {
 
   useEffect(() => {
     function onChange() {
-      setIsFullscreen(!!document.fullscreenElement);
+      const active = !!document.fullscreenElement;
+      setIsFullscreen(active);
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.toggle("is-fullscreen", active);
+        if (document.body) {
+          document.body.classList.toggle("is-fullscreen", active);
+        }
+      }
     }
     document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove("is-fullscreen");
+        if (document.body) {
+          document.body.classList.remove("is-fullscreen");
+        }
+      }
+    };
   }, []);
 
   const enter = useCallback(async () => {
@@ -21,7 +36,7 @@ export function useFullscreen() {
         await document.documentElement.requestFullscreen();
       }
     } catch {
-      // User denied or browser doesn't support — silently ignore
+      // User denied or browser doesn't support: silently ignore
     }
   }, []);
 

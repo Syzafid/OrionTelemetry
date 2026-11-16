@@ -8,6 +8,7 @@ import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
 import { TopNav } from "@/components/hmi/TopNav";
 import { ShowroomModule } from "@/components/hmi/ShowroomModule";
 import { FleetModule } from "@/components/hmi/FleetModule";
+import { WarmupQueueModule } from "@/components/hmi/WarmupQueueModule";
 import { DiagnosticsModule } from "@/components/hmi/DiagnosticsModule";
 import { PresenceModule } from "@/components/hmi/PresenceModule";
 import { ConfigModule } from "@/components/hmi/ConfigModule";
@@ -17,13 +18,13 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "ORION: Onboard Reporting for Inventory & Operational Notifications" },
+      { title: "ORION: Konsol Workbench Telemetri & Digital Twin Stock Yard" },
       {
         name: "description",
         content:
-          "ORION (Onboard Reporting for Inventory & Operational Notifications): Live stock yard digital twin, battery warm-up queue, OBD-II diagnostics and ESP32 node configuration.",
+          "ORION Telemetry Workbench: Monitoring voltase baterai 12V real-time, digital twin 3D armada, antrean pemanasan mesin, dan diagnostik OBD-II stock yard.",
       },
-      { property: "og:title", content: "ORION: Onboard Reporting for Inventory & Operational Notifications" },
+      { property: "og:title", content: "ORION: Konsol Workbench Telemetri & Digital Twin Stock Yard" },
       { property: "og:description", content: "ORION Fleet Telemetry HMI: 3D vehicle digital twin, warm-up queue, diagnostics and remote node config." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -55,9 +56,10 @@ function Workspace() {
             exit={{ opacity: 0, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
           >
             {activeModule === "02" && <FleetModule />}
-            {activeModule === "03" && <DiagnosticsModule />}
-            {activeModule === "04" && <PresenceModule />}
-            {activeModule === "05" && <ConfigModule />}
+            {activeModule === "03" && <WarmupQueueModule />}
+            {activeModule === "04" && <DiagnosticsModule />}
+            {activeModule === "05" && <PresenceModule />}
+            {activeModule === "06" && <ConfigModule />}
           </m.div>
         )}
       </AnimatePresence>
@@ -103,7 +105,7 @@ function FullscreenToggle() {
       aria-label={isFullscreen ? "Keluar fullscreen" : "Masuk fullscreen"}
       className="fixed right-3 top-2.5 z-[9999] flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-md
                  border border-hairline bg-carbon/80 text-muted-foreground backdrop-blur-sm
-                 transition-colors duration-200 hover:border-cyan hover:text-foreground"
+                 transition-colors duration-200 hover:border-foreground/60 hover:text-foreground"
     >
       {isFullscreen ? <Minimize2 size={16} strokeWidth={1.5} /> : <Maximize2 size={16} strokeWidth={1.5} />}
     </Button>

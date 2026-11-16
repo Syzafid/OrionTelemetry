@@ -31,7 +31,7 @@ import {
 import { resolveSafeSelectedUnitId } from "@/lib/fleet-filter";
 import { applyRemoteUpdate } from "@/lib/telemetry-sync";
 
-export type ModuleId = "01" | "02" | "03" | "04" | "05";
+export type ModuleId = "01" | "02" | "03" | "04" | "05" | "06";
 export type DataSource = "SIMULATOR" | "LIVE_API";
 export type ApiStatus = "SANDBOX" | "CONNECTED" | "FALLBACK_ERROR";
 export type FleetScale = 3 | 12;
@@ -46,18 +46,20 @@ const MODULE_PARAM_MAP: Record<string, ModuleId> = {
   "02": "02",
   "2": "02",
   fleet: "02",
-  warmup: "02",
   "03": "03",
   "3": "03",
-  diagnostics: "03",
-  obd: "03",
+  warmup: "03",
   "04": "04",
   "4": "04",
-  presence: "04",
-  yard: "04",
+  diagnostics: "04",
+  obd: "04",
   "05": "05",
   "5": "05",
-  config: "05",
+  presence: "05",
+  yard: "05",
+  "06": "06",
+  "6": "06",
+  config: "06",
 };
 
 export interface DeepLinkResolution {
@@ -136,6 +138,16 @@ interface Ctx {
   ) => void;
   tagMovement: (evId: string, tag: OperationalTag) => void;
   pairUnit: (oldId: string, data: { vin: string; model: string; color: string; bay: string }) => void;
+  registerUnit: (data: {
+    unit_id: string;
+    vin: string;
+    model: string;
+    trim?: string;
+    color: string;
+    bay: string;
+    crit_v?: number;
+    sleep_cfg?: number;
+  }) => void;
   unpairUnit: (id: string) => void;
   unpaired: string[];
   dataSource: DataSource;
@@ -156,7 +168,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const [allUnits, setAllUnits] = useState<VehicleUnit[]>(() =>
     EXPANDED_YARD_UNITS.map((u) => ({ ...u, telemetry: { ...u.telemetry } })),
   );
-  const [fleetScale, setFleetScaleState] = useState<FleetScale>(3);
+  const [fleetScale, setFleetScaleState] = useState<FleetScale>(12);
   const [selectedId, setSelectedId] = useState(UNITS[0]!.unit_id);
   const [configs, setConfigs] = useState<Record<string, PiggybackConfig>>(() =>
     Object.fromEntries(EXPANDED_YARD_UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)])),
@@ -171,6 +183,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const [apiStatus, setApiStatus] = useState<ApiStatus>("SANDBOX");
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [liveUnitIds, setLiveUnitIds] = useState<string[]>(["MITSUBISHI-STOCK-01"]);
   const [isOfflineSnapshot, setIsOfflineSnapshot] = useState<boolean>(false);
   const pollRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -219,10 +232,13 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const units = useMemo<VehicleUnit[]>(
-    () => (fleetScale === 3 ? allUnits.slice(0, 3) : allUnits),
-    [allUnits, fleetScale],
-  );
+  const units = useMemo<VehicleUnit[]>(() => {
+    if (dataSource === "LIVE_API") {
+      const liveList = allUnits.filter((u) => liveUnitIds.includes(u.unit_id));
+      return liveList.length > 0 ? liveList : allUnits.slice(0, 1);
+    }
+    return fleetScale === 3 ? allUnits.slice(0, 3) : allUnits;
+  }, [allUnits, fleetScale, dataSource, liveUnitIds]);
 
   const setFleetScale = useCallback(
     (scale: FleetScale) => {
@@ -444,6 +460,108 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     [patchUnit, appendLocalAudit, sendMutation],
   );
 
+  const registerUnit = useCallback(
+    (d: {
+      unit_id: string;
+      vin: string;
+      model: string;
+      trim?: string;
+      color: string;
+      bay: string;
+      crit_v?: number;
+      sleep_cfg?: number;
+    }) => {
+      const newId = d.unit_id.trim().toUpperCase();
+      const newBay = d.bay.trim().toUpperCase();
+      const newVin = d.vin.trim().toUpperCase();
+      const newModel = d.model.trim().toUpperCase();
+      const newTrim = (d.trim?.trim() || "STANDARD").toUpperCase();
+
+      setLiveUnitIds((prev) => (prev.includes(newId) ? prev : [...prev, newId]));
+
+      setAllUnits((prev) => {
+        const existingIdx = prev.findIndex((u) => u.unit_id === newId);
+        const newUnit: VehicleUnit = {
+          unit_id: newId,
+          bay: newBay,
+          model: newModel,
+          trim: newTrim,
+          vin: newVin,
+          color: d.color,
+          status_label: "Registered (Standby)",
+          state: "STANDBY",
+          in_yard: true,
+          online_status: "ONLINE",
+          buffer_used: 0,
+          telemetry: {
+            unit_id: newId,
+            v_bat: 12.60,
+            adc_raw_mv: 2260,
+            rtc_temp_c: 30.0,
+            shunt_sleep_ua: 380,
+            can_ok: true,
+            engine_on: false,
+            crit_alert: false,
+            rpm: 0,
+            temp_c: 32,
+            dtc_cnt: 0,
+            dtc: "NONE",
+            rssi: -65,
+            sleep_cfg: d.sleep_cfg || 300,
+            active_ms: 0,
+            daily_mah: 0,
+            seq: 1,
+            boot: 1,
+            ts_epoch: Math.floor(Date.now() / 1000),
+            speed_kmh: 0,
+            iat_c: 30,
+            map_kpa: 101,
+            load_pct: 0,
+            tps_pct: 0,
+            ign_deg: 5,
+            maf_gs: 0,
+            run_time_s: 0,
+            fuel_pct: 100,
+            fuel_rate_lh: 0,
+            o2_v: 0.45,
+            stft_pct: 0,
+            mil_on: false,
+            ecu_v: 12.60,
+            dist_clr_km: 0,
+          },
+        };
+        if (existingIdx >= 0) {
+          const next = prev.slice();
+          next[existingIdx] = { ...next[existingIdx]!, ...newUnit };
+          return next;
+        }
+        return [...prev, newUnit];
+      });
+
+      if (d.crit_v) {
+        setConfigs((c) => ({
+          ...c,
+          [newId]: {
+            ...(c[newId] ?? DEFAULT_CONFIG(newId)),
+            crit_v: d.crit_v!,
+            sleep_cfg: d.sleep_cfg || 300,
+          },
+        }));
+      }
+
+      appendLocalAudit(
+        newId,
+        "NODE_REGISTERED",
+        "INFO",
+        `New node ${newId} registered and paired to ${newModel} ${newTrim} (VIN: ${newVin}, Bay: ${newBay})`,
+      );
+
+      void sendMutation("REGISTER_UNIT", { ...d, unit_id: newId });
+      setSelectedId(newId);
+    },
+    [appendLocalAudit, sendMutation],
+  );
+
   const selected = units.find((u) => u.unit_id === safeSelectedId) ?? units[0]!;
 
   const selectedIdRef = useRef(safeSelectedId);
@@ -485,6 +603,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
 
       if (json && typeof json === "object" && !Array.isArray(json)) {
         const obj = json as Record<string, unknown>;
+        if (Array.isArray(obj["units"])) {
+          const remoteIds = (obj["units"] as Array<{ unit_id?: string }>).map((u) => u.unit_id).filter(Boolean) as string[];
+          if (remoteIds.length > 0) {
+            setLiveUnitIds(remoteIds);
+          }
+        }
         const hasSectionChanged = (
           key: "configs" | "movement" | "history" | "audit" | "tickets",
           data: unknown,
@@ -684,6 +808,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       updateTicketStatus,
       tagMovement,
       pairUnit,
+      registerUnit,
       unpairUnit,
       unpaired,
       dataSource,
@@ -719,6 +844,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       updateTicketStatus,
       tagMovement,
       pairUnit,
+      registerUnit,
       unpairUnit,
       unpaired,
       dataSource,

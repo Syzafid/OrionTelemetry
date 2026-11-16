@@ -164,7 +164,6 @@ describe("ORION Motion Upgrade (motion.dev + anime.js)", () => {
       hexToLin("#F45B60"), // --crimson
       oklchToLin(0.76, 0.155, 163), // --emerald
       oklchToLin(0.81, 0.165, 75), // --amber
-      oklchToLin(0.78, 0.13, 215), // --cyan
       hexToLin("#94A3B8"), // Recharts & Gauge ticks
     ];
 

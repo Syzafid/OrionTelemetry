@@ -1,23 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
-import { BatteryCharging, BatteryWarning, Moon, Navigation, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useTelemetry } from "@/context/TelemetryContext";
-import { getUnitConnectionState, type SimState } from "@/data/mockTelemetry";
+import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
 import { Led, Panel, Stat, unitTone, fmtV } from "./primitives";
 import { cn } from "@/lib/utils";
 
 const Stage3D = lazy(() => import("./Stage3D"));
 
-const SIMS: { s: SimState; label: string; shortLabel: string; Icon: typeof Moon }[] = [
-  { s: "STANDBY", label: "STANDBY 12.6V", shortLabel: "STANDBY 12.6V", Icon: Moon },
-  { s: "WARMUP", label: "ENGINE WARM-UP 14.2V", shortLabel: "WARM-UP 14.2V", Icon: BatteryCharging },
-  { s: "CRITICAL", label: "CRITICAL DRAIN 11.6V", shortLabel: "CRITICAL 11.6V", Icon: BatteryWarning },
-  { s: "DEPARTED", label: "YARD DEPARTURE", shortLabel: "DEPARTURE", Icon: Navigation },
-];
-
 export function ShowroomModule({ active }: { active: boolean }) {
-  const { units, selected, selectUnit, simulate, configs } = useTelemetry();
+  const { units, selected, selectUnit, configs } = useTelemetry();
   const [sidebarQuery, setSidebarQuery] = useState("");
   const activeUnitRef = useRef<HTMLButtonElement>(null);
   const t = selected.telemetry;
@@ -59,7 +52,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
                     className={cn(
                       "flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[10.5px] uppercase transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                       on
-                        ? "border-crimson bg-crimson/15 font-semibold text-crimson"
+                        ? "border-foreground/70 bg-foreground/[0.06] font-semibold text-foreground"
                         : "border-border text-muted-foreground hover:bg-card/60 hover:text-foreground",
                     )}
                   >
@@ -71,7 +64,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
               })}
             </div>
 
-            <div className="num text-[11px] font-medium text-crimson">
+            <div className="num text-[11px] font-medium text-muted-foreground">
               Bay {selected.bay} ({selected.unit_id})
             </div>
             <h1 className="mt-0.5 truncate font-display text-lg font-semibold uppercase tracking-[0.06em] sm:mt-1 sm:text-xl sm:tracking-[0.08em] md:text-2xl md:tracking-[0.1em]">
@@ -116,9 +109,8 @@ export function ShowroomModule({ active }: { active: boolean }) {
           <div className="pointer-events-none absolute right-3 top-3 z-20 hidden w-72 flex-col gap-1 md:flex">
             <div className="glass rounded-[2px] border border-border p-2.5 shadow-xl backdrop-blur-md">
               <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border/80 pb-1.5">
-                <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan" />
-                  ORION TELEMETRY CHANNELS
+                <span className="label-hmi text-[10px] text-foreground">
+                  Saluran Telemetri Node
                 </span>
                 <span
                   className={cn(
@@ -136,18 +128,15 @@ export function ShowroomModule({ active }: { active: boolean }) {
               <div className="num space-y-1 text-[11px]">
                 <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
                   <div className="flex items-center gap-1.5">
-                    <Led tone={t.crit_alert ? "crimson" : "emerald"} pulse={t.crit_alert} />
+                    <Led tone={tone} pulse={t.crit_alert} />
                     <span className="label-hmi text-[10px]">PIN 16 BAT</span>
                   </div>
-                  <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : "text-foreground")}>
+                  <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : tone === "amber" ? "text-amber" : "text-foreground")}>
                     {fmtV(t.v_bat)} V <span className="text-[10px] text-muted-foreground">({t.adc_raw_mv} mV)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
-                  <div className="flex items-center gap-1.5">
-                    <Led tone="cyan" />
-                    <span className="label-hmi text-[10px]">RTC DS3231</span>
-                  </div>
+                  <span className="label-hmi text-[10px]">RTC DS3231</span>
                   <span className="font-semibold text-foreground">{t.rtc_temp_c.toFixed(1)} °C</span>
                 </div>
                 <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
@@ -166,10 +155,10 @@ export function ShowroomModule({ active }: { active: boolean }) {
                 </div>
                 <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
                   <div className="flex items-center gap-1.5">
-                    <Led tone={selected.buffer_used > 0 ? "amber" : "dim"} />
+                    {selected.buffer_used > 0 && <Led tone="amber" />}
                     <span className="label-hmi text-[10px]">QUEUE / WIFI</span>
                   </div>
-                  <span className="text-[10.5px] font-semibold text-foreground">
+                  <span className={cn("text-[10.5px] font-semibold", selected.buffer_used > 0 ? "text-amber" : "text-foreground")}>
                     {selected.buffer_used} slot, {t.rssi} dBm
                   </span>
                 </div>
@@ -206,13 +195,13 @@ export function ShowroomModule({ active }: { active: boolean }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Led tone={t.can_ok === false ? "crimson" : t.engine_on ? "cyan" : "emerald"} />
+                    <Led tone={t.can_ok === false ? "crimson" : "emerald"} />
                     CAN BUS
                   </span>
                   <span
                     className={cn(
                       "text-[10px] font-semibold",
-                      t.can_ok === false ? "text-crimson" : t.engine_on ? "text-cyan" : "text-emerald",
+                      t.can_ok === false ? "text-crimson" : "text-emerald",
                     )}
                   >
                     {t.can_ok === false ? "FAULT" : t.engine_on ? "ACTIVE" : "OK"}
@@ -230,27 +219,40 @@ export function ShowroomModule({ active }: { active: boolean }) {
           </div>
         </div>
 
-        {/* Stage Simulation Controls */}
-        <div className="stage-controls relative z-10 grid shrink-0 grid-cols-2 gap-px border-t border-border bg-border md:grid-cols-4">
-          {SIMS.map(({ s, label, shortLabel, Icon }) => {
-            const on = selected.state === s;
-            return (
-              <button
-                key={s}
-                onClick={() => simulate(s)}
-                type="button"
-                className={cn(
-                  "flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 bg-card px-2 py-2.5 text-center num text-[10px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:gap-2 sm:py-3.5 sm:text-[11px]",
-                  on ? "font-semibold text-crimson" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon size={13} strokeWidth={1.5} className="shrink-0 sm:size-[14px]" aria-hidden="true" />
-                <span className="hidden sm:inline">{label}</span>
-                <span className="inline sm:hidden">{shortLabel}</span>
-                {on && <Led tone="crimson" pulse={s === "CRITICAL"} />}
-              </button>
-            );
-          })}
+        {/* Live Telemetry State Bar (Physical Observability) */}
+        <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/95 px-4 py-3 num text-[11px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Led tone={t.engine_on ? "emerald" : "dim"} pulse={t.engine_on} />
+              <span className="font-semibold uppercase tracking-wider text-foreground text-[10.5px]">
+                {t.engine_on ? "Mesin Menyala (RUN)" : "Kontak Mati (STANDBY)"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
+              <span>Alternator:</span>
+              <span className={cn("font-medium", t.v_bat >= 13.20 ? "text-emerald" : "text-foreground")}>
+                {t.v_bat >= 13.20 ? `Aktif (${fmtV(t.v_bat)}V)` : `Off (${fmtV(t.v_bat)}V)`}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
+              <span>Keberadaan:</span>
+              <span className={cn("font-medium", selected.in_yard ? "text-emerald" : "text-amber")}>
+                {selected.in_yard ? `In Yard (Bay ${selected.bay})` : "Departed (Luar Geofence)"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
+              <span>Status Baterai:</span>
+              <span className={cn("font-medium uppercase", tone === "emerald" ? "text-emerald" : tone === "amber" ? "text-amber" : "text-crimson")}>
+                {tone === "emerald" ? "Optimal" : tone === "amber" ? "Perlu Pemanasan" : "Kritis Segera Cas"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 text-[10.5px] text-muted-foreground">
+            <span>Sinyal: <strong className="text-foreground">{t.rssi} dBm</strong></span>
+            <span className="border-l border-border pl-3">Boot: <strong className="text-foreground">#{t.boot}</strong></span>
+            <span className="border-l border-border pl-3">Seq: <strong className="text-foreground">#{t.seq}</strong></span>
+          </div>
         </div>
       </section>
 
@@ -263,7 +265,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
           <header className="shrink-0 border-b border-border p-3 space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="label-hmi text-foreground">Stock Yard Units</h3>
-              <span className="num text-[10px] text-cyan">
+              <span className="num text-[10px] text-muted-foreground">
                 {filteredSidebarUnits.length}/{units.length} Active
               </span>
             </div>
@@ -281,7 +283,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
                   onChange={(e) => setSidebarQuery(e.target.value)}
                   placeholder="Filter Bay, Model, VIN..."
                   aria-label="Filter stock yard units"
-                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-8 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-cyan"
+                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-8 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
                 />
                 {sidebarQuery && (
                   <button
@@ -311,7 +313,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
                   className={cn(
                     "panel shrink-0 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     "w-[240px] snap-start lg:w-full",
-                    on ? "border-crimson/70 bg-crimson/[0.04]" : "hover:border-muted-foreground/60",
+                    on ? "border-foreground/70 bg-foreground/[0.05]" : "hover:border-muted-foreground/60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -364,7 +366,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
             <Stat
               label="Burst Sync"
               value={selected.buffer_used > 0 ? `${selected.buffer_used} Recs` : "LIVE (0)"}
-              tone={selected.buffer_used > 20 ? "amber" : selected.buffer_used > 0 ? "cyan" : "emerald"}
+              tone={selected.buffer_used > 0 ? "amber" : "emerald"}
             />
             <Stat
               label={t.seq !== undefined ? "CAN & Seq" : "CAN & Boot"}
@@ -375,7 +377,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
               label="Speed / Load"
               value={!t.engine_on ? "----" : (t.speed_kmh ?? 0)}
               unit={!t.engine_on ? "" : `km/h · ${(t.load_pct ?? 0).toFixed(0)}%`}
-              tone={t.engine_on ? "cyan" : "dim"}
+              tone="dim"
             />
             <Stat
               label="Fuel / Rate"

@@ -37,11 +37,12 @@ interface PaletteItem {
 }
 
 const MODULE_META: { id: ModuleId; name: string; shortcut: string }[] = [
-  { id: "01", name: "Showroom Digital Twin", shortcut: "Alt+1" },
-  { id: "02", name: "Warm-Up Queue & Fleet", shortcut: "Alt+2" },
-  { id: "03", name: "Engine & OBD-II Diagnostics", shortcut: "Alt+3" },
-  { id: "04", name: "Yard Presence & Burst Log", shortcut: "Alt+4" },
-  { id: "05", name: "Remote Node Config & Audit", shortcut: "Alt+5" },
+  { id: "01", name: "Digital Twin 3D", shortcut: "Alt+1" },
+  { id: "02", name: "Armada & PDI Stock Yard", shortcut: "Alt+2" },
+  { id: "03", name: "Antrean Pemanasan Mesin", shortcut: "Alt+3" },
+  { id: "04", name: "Engine & OBD-II Diagnostics", shortcut: "Alt+4" },
+  { id: "05", name: "Presensi & Log Pergerakan", shortcut: "Alt+5" },
+  { id: "06", name: "Konfigurasi Node & Kalibrasi", shortcut: "Alt+6" },
 ];
 
 export function CommandPaletteModal({
@@ -121,7 +122,7 @@ export function CommandPaletteModal({
         title: `Switch to Module ${m.id}: ${m.name}`,
         subtitle: "Control Room Navigation",
         badge: m.shortcut,
-        tone: "cyan" as const,
+        tone: "dim" as const,
         onSelect: () => {
           setActiveModule(m.id);
           onClose();
@@ -133,7 +134,7 @@ export function CommandPaletteModal({
         title: `Toggle Fleet Scale (${fleetScale === 3 ? "Switch to 12 Units Yard" : "Switch to 3 Core Units"})`,
         subtitle: `Currently showing ${fleetScale} units`,
         badge: `${fleetScale} -> ${fleetScale === 3 ? 12 : 3}`,
-        tone: "cyan",
+        tone: "dim",
         onSelect: () => {
           setFleetScale(fleetScale === 3 ? 12 : 3);
           onClose();
@@ -174,7 +175,7 @@ export function CommandPaletteModal({
         tone: "amber",
         onSelect: () => {
           simulateBurstSync(selected.unit_id);
-          setActiveModule("04");
+          setActiveModule("05");
           onClose();
         },
       },
@@ -267,7 +268,7 @@ export function CommandPaletteModal({
       >
         {/* Search Input Header */}
         <div className="flex shrink-0 items-center gap-2.5 border-b border-border px-3.5 py-2.5">
-          <Search size={16} strokeWidth={1.75} className="shrink-0 text-cyan" aria-hidden="true" />
+          <Search size={16} strokeWidth={1.75} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             ref={inputRef}
             type="search"
@@ -306,7 +307,7 @@ export function CommandPaletteModal({
             <>
               {unitResults.length > 0 && (
                 <div>
-                  <div className="label-hmi mb-1.5 px-2 text-[10px] text-cyan">
+                  <div className="label-hmi mb-1.5 px-2 text-[10px] text-muted-foreground">
                     Stock Yard Fleet Directory ({unitResults.length} Matched)
                   </div>
                   <div className="space-y-1">
@@ -359,7 +360,7 @@ export function CommandPaletteModal({
 
               {actionResults.length > 0 && (
                 <div>
-                  <div className="label-hmi mb-1.5 px-2 text-[10px] text-crimson">
+                  <div className="label-hmi mb-1.5 px-2 text-[10px] text-muted-foreground">
                     Control Room Quick Actions ({actionResults.length})
                   </div>
                   <div className="space-y-1">
@@ -382,19 +383,19 @@ export function CommandPaletteModal({
                           {isFocused && <FocusHighlight />}
                           <div className="relative flex min-w-0 items-center gap-2.5">
                             {item.id.startsWith("mod-") ? (
-                              <LayoutGrid size={14} className="shrink-0 text-cyan" aria-hidden="true" />
+                              <LayoutGrid size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : item.id === "act-scale" ? (
-                              <Layers size={14} className="shrink-0 text-cyan" aria-hidden="true" />
+                              <Layers size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : item.id === "act-excel" ? (
-                              <FileSpreadsheet size={14} className="shrink-0 text-emerald" aria-hidden="true" />
+                              <FileSpreadsheet size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : item.id === "act-alarm" ? (
                               alarmArmed ? (
-                                <VolumeX size={14} className="shrink-0 text-amber" aria-hidden="true" />
+                                <VolumeX size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                               ) : (
-                                <Volume2 size={14} className="shrink-0 text-crimson" aria-hidden="true" />
+                                <Volume2 size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                               )
                             ) : (
-                              <HardDriveUpload size={14} className="shrink-0 text-amber" aria-hidden="true" />
+                              <HardDriveUpload size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                             )}
                             <div className="min-w-0">
                               <div className="num text-xs font-semibold text-foreground truncate">
@@ -424,7 +425,7 @@ export function CommandPaletteModal({
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-background/70 px-3.5 py-2 num text-[10px] text-muted-foreground">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <Command size={11} className="text-cyan" aria-hidden="true" />
+              <Command size={11} className="text-muted-foreground" aria-hidden="true" />
               <span>Navigate: Up/Down</span>
             </span>
             <span>Select: Enter</span>
@@ -445,7 +446,7 @@ function FocusHighlight() {
     <m.span
       layoutId="palette-focus-highlight"
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 rounded-[2px] border border-cyan bg-cyan/15"
+      className="pointer-events-none absolute inset-0 rounded-[2px] border border-foreground/50 bg-foreground/10"
       transition={{ duration: DURATION.instant, ease: EASE_STANDARD }}
     />
   );

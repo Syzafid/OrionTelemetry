@@ -9,7 +9,7 @@ const MATRIX_SIZE = 21;
  */
 export function buildUnitDeepLinkUrl(
   unitId: string,
-  moduleName: "showroom" | "fleet" | "diagnostics" | "presence" | "config" = "fleet",
+  moduleName: "showroom" | "fleet" | "warmup" | "diagnostics" | "presence" | "config" = "fleet",
   origin?: string,
 ): string {
   const base =

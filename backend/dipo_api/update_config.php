@@ -178,49 +178,76 @@ try {
             break;
 
         // ----------------------------------------------------------------------
-        // ACTION 3: PAIR_UNIT (Modul 05 - Vehicle to Node Re-assignment)
+        // ACTION 3: PAIR_UNIT / REGISTER_UNIT (IoT Node Onboarding & ECU Linking)
         // ----------------------------------------------------------------------
+        case 'REGISTER_UNIT':
         case 'PAIR_UNIT':
-            $unitId = $payload['unit_id'] ?? ($payload['oldId'] ?? null);
+            $unitId = strtoupper(trim($payload['unit_id'] ?? ($payload['oldId'] ?? '')));
             if (!$unitId) {
-                sendJson(['error' => 'MISSING_UNIT_ID', 'message' => 'unit_id is required for PAIR_UNIT.'], 400);
+                sendJson(['error' => 'MISSING_UNIT_ID', 'message' => 'unit_id is required.'], 400);
             }
 
             $vin = strtoupper(trim($payload['vin'] ?? ''));
-            $modelRaw = trim($payload['model'] ?? '');
-            $color = trim($payload['color'] ?? '');
-            $bay = strtoupper(trim($payload['bay'] ?? ''));
+            $modelRaw = trim($payload['model'] ?? 'MITSUBISHI NEW');
+            $color = trim($payload['color'] ?? 'White Diamond');
+            $bay = strtoupper(trim($payload['bay'] ?? 'A-01'));
+            $critV = floatval($payload['crit_v'] ?? 11.80);
+            $sleepCfg = intval($payload['sleep_cfg'] ?? 300);
 
             $parts = explode(' ', strtoupper($modelRaw));
             $model = count($parts) >= 2 ? implode(' ', array_slice($parts, 0, 2)) : ($modelRaw ?: 'NEW MODEL');
             $trim = count($parts) > 2 ? implode(' ', array_slice($parts, 2)) : ($payload['trim'] ?? 'NEW ARRIVAL');
 
-            $stmtPair = $pdo->prepare("
-                UPDATE `vehicles`
-                SET
-                    `vin` = :vin,
-                    `model` = :model,
-                    `trim` = :trim,
-                    `color` = :color,
-                    `bay` = :bay,
-                    `buffer_used` = 0,
+            // 1. Insert or update vehicles record
+            $stmtVeh = $pdo->prepare("
+                INSERT INTO `vehicles` (
+                    `unit_id`, `bay`, `model`, `trim`, `vin`, `color`,
+                    `v_bat`, `status_label`, `state`, `in_yard`, `online_status`, `last_seen`
+                ) VALUES (
+                    :uid, :bay, :model, :trim, :vin, :color,
+                    12.60, 'Registered (Standby)', 'STANDBY', 1, 'ONLINE', NOW()
+                )
+                ON DUPLICATE KEY UPDATE
+                    `bay` = VALUES(`bay`),
+                    `model` = VALUES(`model`),
+                    `trim` = VALUES(`trim`),
+                    `vin` = VALUES(`vin`),
+                    `color` = VALUES(`color`),
                     `updated_at` = NOW()
-                WHERE `unit_id` = :uid
             ");
-            $stmtPair->execute([
-                ':vin'   => $vin,
+            $stmtVeh->execute([
+                ':uid'   => $unitId,
+                ':bay'   => $bay,
                 ':model' => $model,
                 ':trim'  => $trim,
+                ':vin'   => $vin,
                 ':color' => $color,
-                ':bay'   => $bay,
-                ':uid'   => $unitId,
             ]);
 
-            recordSystemEvent($pdo, (string)$unitId, 'NODE_PAIRED', 'INFO', "Node paired to VIN {$vin} ({$model} {$trim}, Bay {$bay})");
+            // 2. Insert or update node_configs record with pending ACK for NVS sync
+            $stmtCfg = $pdo->prepare("
+                INSERT INTO `node_configs` (
+                    `unit_id`, `crit_v`, `sleep_cfg`, `cal_slope`, `cal_offset`, `pending_ack`
+                ) VALUES (
+                    :uid, :crit_v, :sleep_cfg, 0.0054120, 0.3580, 1
+                )
+                ON DUPLICATE KEY UPDATE
+                    `crit_v` = VALUES(`crit_v`),
+                    `sleep_cfg` = VALUES(`sleep_cfg`),
+                    `pending_ack` = 1,
+                    `updated_at` = NOW()
+            ");
+            $stmtCfg->execute([
+                ':uid'       => $unitId,
+                ':crit_v'    => $critV,
+                ':sleep_cfg' => $sleepCfg,
+            ]);
+
+            recordSystemEvent($pdo, (string)$unitId, 'NODE_REGISTERED', 'INFO', "Node {$unitId} registered & paired to {$model} {$trim} (VIN: {$vin}, Bay: {$bay})");
 
             sendJson([
                 'status'  => 'OK',
-                'action'  => 'PAIR_UNIT',
+                'action'  => $action,
                 'unit_id' => $unitId,
                 'vehicle' => [
                     'vin'   => $vin,
@@ -229,6 +256,7 @@ try {
                     'color' => $color,
                     'bay'   => $bay,
                 ],
+                'message' => "Node {$unitId} successfully onboarded and registered."
             ]);
             break;
 

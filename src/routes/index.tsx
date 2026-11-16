@@ -2,18 +2,19 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cable, CheckCircle2, Cpu, Database, Radio, Server, ShieldCheck, Wifi, Zap } from "lucide-react";
 import { OrionLogo } from "@/components/hmi/OrionLogo";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import yard from "@/assets/yard-night.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ORION: Onboard Reporting for Inventory & Operational Notifications" },
+      { title: "ORION: Sistem Telemetri & Digital Twin Stok Kendaraan" },
       {
         name: "description",
         content:
-          "ORION (Onboard Reporting for Inventory & Operational Notifications): Stock yard fleet telemetry, 12V battery voltage monitoring, warm-up queue, and yard presence tracking.",
+          "ORION Telemetry Platform: Pengawasan voltase baterai 12V, parameter OBD-II CAN bus, antrean prioritas pemanasan mesin, dan pelacakan fisik stock yard real-time.",
       },
-      { property: "og:title", content: "ORION: Onboard Reporting for Inventory & Operational Notifications" },
+      { property: "og:title", content: "ORION: Sistem Telemetri & Digital Twin Stok Kendaraan" },
       { property: "og:description", content: "Battery voltage, OBD-II data and yard presence for every stock unit." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -199,7 +200,7 @@ function Landing() {
                 ORION
               </span>
               <span className="hidden sm:inline-block text-[11px] text-muted-foreground/80 border-l border-border/70 ml-2.5 pl-2.5">
-                Onboard Reporting for Inventory &amp; Operational Notifications
+                Sistem Monitoring Baterai &amp; Telemetri Stock Yard
               </span>
             </div>
           </Link>
@@ -211,7 +212,7 @@ function Landing() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <Button asChild size="sm" className="h-8 px-3.5 text-xs font-medium bg-crimson hover:bg-crimson/90 text-white rounded-[2px] transition-colors">
+            <Button asChild size="sm" className="h-8 px-3.5 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors">
               <Link to="/dashboard">
                 Buka Konsol HMI
               </Link>
@@ -236,16 +237,6 @@ function Landing() {
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_25%_65%,_rgba(15,17,21,0.92)_0%,_rgba(15,17,21,0.55)_60%,_transparent_100%)]" />
 
         <div className="mx-auto w-full max-w-6xl px-5">
-          <div className="flex items-center gap-2.5 mb-3.5">
-            <span className="h-2 w-2 rounded-full bg-crimson" />
-            <span className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-foreground/90">
-              ORION Telemetry Platform
-            </span>
-            <span className="hidden sm:inline-block text-[11px] text-muted-foreground/75 border-l border-border/70 pl-2.5 num">
-              Onboard Reporting for Inventory &amp; Operational Notifications
-            </span>
-          </div>
-
           <h1 className="max-w-3xl font-display text-3xl font-semibold leading-tight tracking-tight sm:text-4xl md:text-5xl text-foreground">
             Sistem Telemetri &amp; Digital Twin Stok Kendaraan
           </h1>
@@ -254,29 +245,25 @@ function Landing() {
             Pengawasan voltase baterai 12V, pembacaan parameter OBD-II CAN bus, antrean prioritas pemanasan mesin, dan pelacakan unit fisik stock yard secara real-time.
           </p>
 
-          {/* Quick Hardware Spec Badges */}
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="panel px-3 py-1 text-[11px] font-medium text-foreground/80 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
-              ISO 15765-4 CAN 500k
-            </span>
-            <span className="panel px-3 py-1 text-[11px] font-medium text-foreground/80 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
-              High-Side AO3401A Sensing
-            </span>
-            <span className="panel px-3 py-1 text-[11px] font-medium text-foreground/80 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber" />
-              DS3231SN RTC Buffer
-            </span>
-            <span className="panel px-3 py-1 text-[11px] font-medium text-foreground/80 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-dim" />
-              Arus Tidur &lt; 500 µA
-            </span>
+          {/* Structured Industrial Technical Specification Strip */}
+          <div className="mt-6 inline-flex flex-wrap items-center divide-y sm:divide-y-0 sm:divide-x divide-border/70 rounded-[2px] border border-border bg-card/60 p-1 text-xs">
+            <div className="px-3 py-1 font-mono text-[11px] text-foreground">
+              <span className="text-muted-foreground mr-1.5">CAN:</span>ISO 15765-4 500k
+            </div>
+            <div className="px-3 py-1 font-mono text-[11px] text-foreground">
+              <span className="text-muted-foreground mr-1.5">Sensing:</span>High-Side AO3401A
+            </div>
+            <div className="px-3 py-1 font-mono text-[11px] text-foreground">
+              <span className="text-muted-foreground mr-1.5">Buffer:</span>DS3231SN RTC
+            </div>
+            <div className="px-3 py-1 font-mono text-[11px] text-foreground">
+              <span className="text-muted-foreground mr-1.5">Sleep:</span>&lt; 500 µA
+            </div>
           </div>
 
           {/* Varied CTAs: Primary launch action + Secondary signal pipeline anchor + Fleet status pill */}
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Button asChild className="h-11 px-6 font-medium bg-crimson hover:bg-crimson/90 text-white shadow-lg shadow-crimson/25 transition-all rounded-[2px]">
+            <Button asChild className="h-11 px-6 font-medium bg-foreground hover:bg-foreground/90 text-background shadow-lg transition-all rounded-[2px]">
               <Link to="/dashboard">
                 Luncurkan Workbench HMI
               </Link>
@@ -300,7 +287,7 @@ function Landing() {
         <div className="mx-auto max-w-6xl px-5">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-border">
             <div className="max-w-2xl">
-              <span className="label-hmi text-crimson">Arsitektur Instrumentasi &amp; Sinyal</span>
+              <span className="label-hmi text-muted-foreground">Arsitektur Instrumentasi &amp; Sinyal</span>
               <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl text-foreground">
                 Diagram Alur Sinyal Hardware Industri
               </h2>
@@ -315,26 +302,39 @@ function Landing() {
             </div>
           </div>
 
-          {/* 5-Stage Interconnected Hardware Flow Cards */}
+          {/* 5-Stage Interconnected Hardware Flow Cards with Hierarchical Core Highlight */}
           <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {HARDWARE_PIPELINE.map((p, idx) => {
               const Icon = p.Icon;
+              const isCoreUnit = p.step === "03";
               return (
                 <div
                   key={p.step}
-                  className="panel p-4 flex flex-col justify-between relative group hover:border-crimson/50 transition-colors"
+                  className={cn(
+                    "panel p-4 flex flex-col justify-between relative group transition-all duration-200",
+                    isCoreUnit
+                      ? "border-foreground/50 bg-card/90 ring-1 ring-foreground/25 shadow-md lg:-translate-y-1.5"
+                      : "hover:border-foreground/40",
+                  )}
                 >
                   <div>
                     {/* Stage Header */}
                     <div className="flex items-center justify-between pb-3 border-b border-border/70">
-                      <span className="num text-xs font-bold text-crimson">{p.step} / 05</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="num text-xs font-bold text-foreground">{p.step} / 05</span>
+                        {isCoreUnit && (
+                          <span className="rounded-[2px] border border-border bg-foreground/10 px-1 py-0.2 num text-[8.5px] font-semibold uppercase text-foreground">
+                            Edge Node
+                          </span>
+                        )}
+                      </div>
                       <span className="label-hmi text-[9px] text-muted-foreground">{p.domain}</span>
                     </div>
 
                     {/* Stage Title & Icon */}
                     <div className="mt-3.5 flex items-center gap-2">
-                      <div className="rounded-sm bg-card p-1.5 border border-border shrink-0">
-                        <Icon size={14} className="text-foreground" />
+                      <div className={cn("rounded-sm p-1.5 border shrink-0", isCoreUnit ? "bg-foreground/10 border-foreground/40 text-foreground" : "bg-card border-border text-foreground")}>
+                        <Icon size={14} />
                       </div>
                       <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-foreground leading-snug">
                         {p.stageName}
@@ -355,7 +355,7 @@ function Landing() {
                     <div className="mt-3 space-y-1">
                       {p.signals.map((sig) => (
                         <div key={sig} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                          <span className="h-1 w-1 rounded-full bg-crimson shrink-0" />
+                          <span className="h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
                           <span className="truncate">{sig}</span>
                         </div>
                       ))}
@@ -386,16 +386,16 @@ function Landing() {
                 <span className="label-hmi text-[10px] text-muted-foreground">SIGNAL BUS:</span>
                 <span className="text-foreground font-medium">OBD-II Pin 16 (12V)</span>
                 <span className="text-muted-foreground font-mono">──[1A Fuse &amp; TVS]──&gt;</span>
-                <span className="text-cyan font-medium">AO3401A (40ms Pulse)</span>
+                <span className="text-foreground font-medium">AO3401A (40ms Pulse)</span>
                 <span className="text-muted-foreground font-mono">──[ADC Pin 34]──&gt;</span>
-                <span className="text-amber font-medium">ESP32 &amp; DS3231</span>
+                <span className="text-foreground font-medium">ESP32 &amp; DS3231</span>
                 <span className="text-muted-foreground font-mono">──[Wi-Fi 802.11n]──&gt;</span>
-                <span className="text-emerald font-medium">AP-GUDANG-01</span>
+                <span className="text-foreground font-medium">AP-GUDANG-01</span>
                 <span className="text-muted-foreground font-mono">──[REST API]──&gt;</span>
-                <span className="text-crimson font-medium">MySQL &amp; HMI 3D</span>
+                <span className="text-foreground font-medium">MySQL &amp; HMI 3D</span>
               </div>
               <div className="text-muted-foreground text-[10px] shrink-0">
-                SOP Blueprint v3.3, Firmware v1.4.2
+                SOP Blueprint v3.3, Firmware v1.5.0
               </div>
             </div>
           </div>
@@ -407,7 +407,7 @@ function Landing() {
         <div className="mx-auto max-w-6xl px-5">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-border">
             <div className="max-w-2xl">
-              <span className="label-hmi text-crimson">Standar Operasional Prosedur</span>
+              <span className="label-hmi text-muted-foreground">Standar Operasional Prosedur</span>
               <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl text-foreground">
                 Matriks Ambang Batas Baterai &amp; Toleransi Yard
               </h2>
@@ -508,7 +508,7 @@ function Landing() {
                   <div className="mt-2 flex items-baseline gap-2">
                     <span className="num text-xl font-bold text-foreground">{spec.val}</span>
                   </div>
-                  <div className="num text-[11px] text-cyan mt-1">{spec.sub}</div>
+                  <div className="num text-[11px] text-muted-foreground mt-1">{spec.sub}</div>
                   <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
                     {spec.desc}
                   </p>
@@ -533,7 +533,7 @@ function Landing() {
             <div className="mt-6 space-y-3">
               {FEATURES.map((feat) => (
                 <div key={feat} className="flex items-start gap-3">
-                  <CheckCircle2 size={16} className="mt-0.5 text-emerald shrink-0" />
+                  <CheckCircle2 size={16} className="mt-0.5 text-muted-foreground shrink-0" />
                   <span className="text-xs text-foreground/90">{feat}</span>
                 </div>
               ))}
@@ -559,7 +559,7 @@ function Landing() {
               </div>
 
               <div className="space-y-3 pt-2">
-                <Button asChild className="h-11 w-full justify-center px-5 text-xs font-semibold uppercase tracking-wider bg-crimson hover:bg-crimson/90 text-white rounded-[2px] transition-colors">
+                <Button asChild className="h-11 w-full justify-center px-5 text-xs font-semibold uppercase tracking-wider bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors">
                   <Link to="/dashboard">
                     Masuk ke HMI Workspace
                   </Link>
@@ -583,7 +583,7 @@ function Landing() {
                 ORION
               </span>
               <span className="num text-[11px] text-muted-foreground">
-                v3.3 (Onboard Reporting for Inventory &amp; Operational Notifications)
+                v3.3 (Sistem Telemetri &amp; PDI Stock Yard)
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[11px]">

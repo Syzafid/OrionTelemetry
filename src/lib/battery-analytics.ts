@@ -1,7 +1,7 @@
 import type { VehicleUnit } from "@/data/mockTelemetry";
 import { voltageHistory } from "@/data/mockTelemetry";
 
-export type PredictionTone = "emerald" | "amber" | "crimson" | "cyan";
+export type PredictionTone = "emerald" | "amber" | "crimson";
 
 export interface BatteryHistoryPoint {
   t: string;
@@ -53,8 +53,8 @@ export function computeBatteryPrediction(
     engineOn || safeCurrentV >= 13.5
       ? 100
       : Math.round(
-          Math.max(0, Math.min(100, ((compensatedV25 - 11.60) / (12.70 - 11.60)) * 100)),
-        );
+        Math.max(0, Math.min(100, ((compensatedV25 - 11.60) / (12.70 - 11.60)) * 100)),
+      );
 
   // Arrhenius thermal self-discharge acceleration factor (Q10 = 2 above 25°C)
   const thermalFactor =
@@ -136,7 +136,7 @@ export function computeBatteryPrediction(
       slopeMvPerHour,
       ttcHours: null,
       statusText: `Charging (${displayMv})`,
-      tone: "cyan",
+      tone: "emerald",
       compensatedV25,
       tempCompensatedSocPct,
       thermalFactor,

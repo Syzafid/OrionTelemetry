@@ -136,7 +136,7 @@ export function buildFormattedExcelPrettier(
 </head>
 <body>
 <table>
-  <tr><td colspan="15" class="banner-title">ORION — ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS</td></tr>
+  <tr><td colspan="15" class="banner-title">ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD</td></tr>
   <tr><td colspan="15" class="banner-sub">STOCK YARD INVENTORY TELEMETRY &amp; BATTERY HEALTH AUDIT REPORT</td></tr>
   <tr><td colspan="15" class="banner-meta">Export Timestamp: ${escHtml(exportedAt)} | Unit Filter: ${escHtml(filterLabel)} | Standard: SOP C.1 &amp; PDI Readiness</td></tr>
   <tr><td colspan="15" style="border:none;height:10px;"></td></tr>

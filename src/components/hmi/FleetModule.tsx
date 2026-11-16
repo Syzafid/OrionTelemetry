@@ -45,7 +45,7 @@ import * as m from "motion/react-m";
 import { DURATION, EASE_EXIT, EASE_STANDARD, SPRING_LAYOUT } from "@/lib/motion-tokens";
 import { CriticalFlash, ResolveCheck, useChartIntroOnly, useCriticalEdges } from "./motion-bits";
 
-const HEX = { emerald: "#10B981", crimson: "#E60012", amber: "#F59E0B", cyan: "#06B6D4", dim: "#6B7684" };
+const HEX = { emerald: "#10B981", crimson: "#E60012", amber: "#F59E0B", dim: "#6B7684" };
 const WARMUP_TARGET_SEC = 600; // 10 minutes SOP alternator charge
 const CARDS_PER_DECK = 3;
 
@@ -53,7 +53,6 @@ const PREDICTION_BADGE_STYLE: Record<PredictionTone, string> = {
   emerald: "border-emerald/40 bg-emerald/10 text-emerald",
   amber: "border-amber/40 bg-amber/10 text-amber",
   crimson: "border-crimson/50 bg-crimson/15 text-crimson",
-  cyan: "border-cyan/40 bg-cyan/10 text-cyan",
 };
 
 const TICKET_BADGE_STYLE: Record<TicketStatus, string> = {
@@ -134,6 +133,7 @@ export function FleetModule() {
     dispatchWarmup,
     tickets,
     updateTicketStatus,
+    setActiveModule,
   } = useTelemetry();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,6 +147,10 @@ export function FleetModule() {
   const [pdiUnitId, setPdiUnitId] = useState<string | null>(null);
   const [pdiTimestamp, setPdiTimestamp] = useState<string>("");
   const [copiedUnitId, setCopiedUnitId] = useState<string | null>(null);
+  const [resolvingTicketUnitId, setResolvingTicketUnitId] = useState<string | null>(null);
+  const [techAction, setTechAction] = useState("Pengisian Daya Aki (Battery Charger 2 Jam)");
+  const [techName, setTechName] = useState("Teknisi Shift Pagi");
+  const [techNotes, setTechNotes] = useState("Tegangan baterai berhasil dinaikkan ke kondisi aman (> 12.40V) dan siap verifikasi PDI.");
 
   // Reset deck page and scroll track to start whenever filter, search, or sort changes
   useEffect(() => {
@@ -415,7 +419,7 @@ export function FleetModule() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Bay, Model, VIN, or DTC (e.g. P0133)..."
               aria-label="Search fleet by Bay, Model, VIN, Unit ID, or DTC code"
-              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-9 pr-8 py-2 num text-xs text-foreground outline-none placeholder:text-dim focus:border-cyan"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-9 pr-8 py-2 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
             />
             {searchQuery && (
               <button
@@ -433,7 +437,7 @@ export function FleetModule() {
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
-                { id: "ALL", label: "All", count: counts.ALL, tone: "cyan" },
+                { id: "ALL", label: "All", count: counts.ALL, tone: "dim" },
                 { id: "CRITICAL", label: "Critical", count: counts.CRITICAL, tone: "crimson" },
                 { id: "WARNING", label: "Low Warning", count: counts.WARNING, tone: "amber" },
                 { id: "HEALTHY", label: "Healthy / Charging", count: counts.HEALTHY, tone: "emerald" },
@@ -448,7 +452,9 @@ export function FleetModule() {
                   className={cn(
                     "num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-3 py-1.5 text-[11px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     active
-                      ? cn("border-current bg-current/15 font-semibold", `text-${f.tone}`)
+                      ? f.tone === "dim"
+                        ? "border-foreground/60 bg-foreground/10 font-semibold text-foreground"
+                        : cn("border-current bg-current/15 font-semibold", `text-${f.tone}`)
                       : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -465,14 +471,14 @@ export function FleetModule() {
               <ArrowUpDown
                 size={13}
                 strokeWidth={1.75}
-                className="pointer-events-none absolute left-2.5 text-cyan"
+                className="pointer-events-none absolute left-2.5 text-muted-foreground"
                 aria-hidden="true"
               />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as FleetSortMode)}
                 aria-label="Sort fleet units by triage priority"
-                className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground outline-none focus:border-cyan"
+                className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground outline-none focus:border-foreground/60"
               >
                 <option value="PRIORITY">Sort: Priority Triage</option>
                 <option value="LOWEST_V">Sort: Lowest Battery (V)</option>
@@ -481,25 +487,18 @@ export function FleetModule() {
               </select>
             </label>
 
-            <button
-              type="button"
-              onClick={() => setFleetScale(fleetScale === 3 ? 12 : 3)}
-              className={cn(
-                "num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                fleetScale === 12
-                  ? "border-cyan/60 bg-cyan/15 text-cyan"
-                  : "border-border bg-secondary/50 text-foreground hover:border-cyan hover:text-cyan",
-              )}
-              title="Toggle antara 3 Unit Inti Hardware dan 12 Unit Simulasi Skalabilitas Gudang"
+            <div
+              className="num inline-flex min-h-[44px] items-center gap-1.5 rounded-[2px] border border-border bg-secondary/30 px-3 py-1.5 text-[11px] text-muted-foreground"
+              title="Total 12 unit kendaraan terdaftar di armada yard"
             >
-              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span>Fleet Scale: {fleetScale} Units</span>
-            </button>
+              <Layers size={13} strokeWidth={1.75} className="shrink-0 text-foreground" aria-hidden="true" />
+              <span>Armada: {units.length} Unit</span>
+            </div>
 
             <button
               type="button"
               onClick={() => handleExportExcel("ALL")}
-              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title="Ekspor Laporan Eksekutif Excel berwarna untuk seluruh unit"
             >
               <FileSpreadsheet size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -510,7 +509,7 @@ export function FleetModule() {
             <button
               type="button"
               onClick={() => handleExportCsv("ALL")}
-              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title="Ekspor data mentah CSV seluruh unit"
             >
               <Download size={12} strokeWidth={1.75} aria-hidden="true" />
@@ -538,9 +537,9 @@ export function FleetModule() {
                     className={cn(
                       "num inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10.5px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                       isSelected
-                        ? "border-crimson bg-crimson/15 font-semibold text-foreground"
+                        ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                         : isOnCurrentDeck
-                          ? "border-cyan/50 bg-cyan/10 font-medium text-foreground"
+                          ? "border-foreground/35 bg-secondary/50 font-medium text-foreground"
                           : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                     )}
                     title={`${u.model} ${u.trim} (${fmtV(u.telemetry.v_bat)}V)`}
@@ -563,7 +562,7 @@ export function FleetModule() {
                   type="button"
                   disabled={safeDeckPage <= 0}
                   onClick={() => handlePageChange(safeDeckPage - 1)}
-                  className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <ChevronLeft size={14} strokeWidth={1.75} aria-hidden="true" />
                   <span>Prev</span>
@@ -572,7 +571,7 @@ export function FleetModule() {
                   type="button"
                   disabled={safeDeckPage >= totalPages - 1}
                   onClick={() => handlePageChange(safeDeckPage + 1)}
-                  className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span>Next</span>
                   <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
@@ -598,7 +597,7 @@ export function FleetModule() {
           <button
             type="button"
             onClick={resetFilters}
-            className="num inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[2px] border border-cyan/50 bg-cyan/15 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-cyan transition-colors hover:bg-cyan/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="num inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[2px] border border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <RotateCcw size={14} strokeWidth={1.75} aria-hidden="true" />
             <span>Reset Search &amp; Filters</span>
@@ -658,7 +657,7 @@ export function FleetModule() {
                   "lg:w-[calc((100%-2rem)/3)] lg:snap-start lg:h-full lg:min-h-0",
                   isCritical && "border-crimson/70 bg-crimson/[0.03] shadow-md shadow-crimson/10",
                   isWarmup && "border-emerald/60 bg-emerald/[0.03]",
-                  isSelected && "ring-1 ring-cyan",
+                  isSelected && "ring-1 ring-foreground/60",
                 )}
               >
                 <CriticalFlash flashKey={criticalFlashes[u.unit_id] ?? 0} />
@@ -666,10 +665,10 @@ export function FleetModule() {
                 <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-crimson">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-foreground">
                         #{String(globalRank).padStart(2, "0")}
                       </span>
-                      <span className="num text-xs font-semibold text-crimson">BAY {u.bay}</span>
+                      <span className="num text-xs font-semibold text-foreground">BAY {u.bay}</span>
                       <span className="num text-[10.5px] text-muted-foreground truncate">({u.unit_id})</span>
                     </div>
                     <h3 className="mt-1 font-display text-sm font-semibold uppercase tracking-wider text-foreground truncate">
@@ -780,7 +779,7 @@ export function FleetModule() {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[10px] text-muted-foreground">
                       <span className="flex items-center gap-1 text-foreground/90">
-                        <Thermometer size={11} strokeWidth={1.75} className="text-cyan" aria-hidden="true" />
+                        <Thermometer size={11} strokeWidth={1.75} className="text-muted-foreground" aria-hidden="true" />
                         <span>
                           25&deg;C Comp: <strong className="text-foreground">{prediction.compensatedV25.toFixed(2)}V</strong> ({prediction.tempCompensatedSocPct}% SOC)
                         </span>
@@ -796,7 +795,7 @@ export function FleetModule() {
                     <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
-                          <Wrench size={12} strokeWidth={1.75} className="text-cyan" aria-hidden="true" />
+                          <Wrench size={12} strokeWidth={1.75} className="text-muted-foreground" aria-hidden="true" />
                           <span>{unitTicket ? `Ticket ${unitTicket.ticket_code}` : "Maintenance Triage"}</span>
                         </span>
                         <span
@@ -854,19 +853,12 @@ export function FleetModule() {
                           disabled={unitTicket?.status === "RESOLVED"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            updateTicketStatus(
-                              u.unit_id,
-                              "RESOLVED",
-                              unitTicket?.assigned_to && unitTicket.assigned_to !== "Unassigned"
-                                ? unitTicket.assigned_to
-                                : "Tech Shift A",
-                              "Battery charged & ECU verified ready for PDI.",
-                            );
+                            setResolvingTicketUnitId(u.unit_id);
                           }}
                           className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <ClipboardCheck size={12} strokeWidth={1.75} aria-hidden="true" />
-                          <span>Resolve</span>
+                          <span>Tutup Tiket...</span>
                         </button>
                       </div>
                     </div>
@@ -979,16 +971,12 @@ export function FleetModule() {
                         e.stopPropagation();
                         selectUnit(u.unit_id);
                         dispatchWarmup(u.unit_id);
-                        setWarmupStartTimes((prev) => ({ ...prev, [u.unit_id]: Date.now() }));
-                        if (dataSource === "SIMULATOR") {
-                          setTimeout(() => simulate("WARMUP"), 0);
-                        }
                       }}
                       className="flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-amber/60 bg-amber/10 py-2 num text-[11px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Flame size={14} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
                       <span>
-                        {u.status_label === "Warm-Up Dispatched" ? "Staf Telah Dikirim" : "Dispatch Pemanasan Mesin"}
+                        {u.status_label === "Warm-Up Dispatched" ? "Staf Telah Ditugaskan" : "Tugaskan Pemanasan (Memo)"}
                       </span>
                     </button>
                   )}
@@ -1000,7 +988,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         handleExportExcel(u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-cyan/40 bg-cyan/10 px-1.5 py-2 text-[10px] font-medium text-cyan transition-colors hover:bg-cyan/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Unduh Laporan Excel Terformat (.xls)"
                     >
                       <FileSpreadsheet size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
@@ -1012,7 +1000,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         handleExportCsv(u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Unduh Log Mentah CSV"
                     >
                       <Download size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
@@ -1027,8 +1015,8 @@ export function FleetModule() {
                       className={cn(
                         "num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border px-1.5 py-2 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                         isCopied
-                          ? "border-emerald/60 bg-emerald/15 text-emerald font-semibold"
-                          : "border-border bg-secondary/40 text-foreground hover:border-cyan hover:text-cyan",
+                          ? "border-foreground/60 bg-secondary text-foreground font-semibold"
+                          : "border-border bg-secondary/40 text-foreground hover:border-foreground/60 hover:bg-secondary",
                       )}
                       title={`Salin URL Deep-Link untuk ${u.unit_id}`}
                     >
@@ -1045,7 +1033,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         openPdiModal(u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/40 bg-emerald/10 px-1.5 py-2 text-[10px] font-medium text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <FileCheck2 size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
                       <span>PDI Cert</span>
@@ -1073,6 +1061,29 @@ export function FleetModule() {
             onClose={() => setPdiUnitId(null)}
             onExportExcel={() => handleExportExcel(pdiUnit.unit_id)}
             onExportCsv={() => handleExportCsv(pdiUnit.unit_id)}
+          />
+        )}
+        {resolvingTicketUnitId && (
+          <TicketResolutionModal
+            unitId={resolvingTicketUnitId}
+            bay={units.find((u) => u.unit_id === resolvingTicketUnitId)?.bay ?? ""}
+            model={units.find((u) => u.unit_id === resolvingTicketUnitId)?.model ?? ""}
+            techAction={techAction}
+            setTechAction={setTechAction}
+            techName={techName}
+            setTechName={setTechName}
+            techNotes={techNotes}
+            setTechNotes={setTechNotes}
+            onConfirm={() => {
+              updateTicketStatus(
+                resolvingTicketUnitId,
+                "RESOLVED",
+                techName,
+                `[TINDAKAN: ${techAction}] ${techNotes}`,
+              );
+              setResolvingTicketUnitId(null);
+            }}
+            onClose={() => setResolvingTicketUnitId(null)}
           />
         )}
       </AnimatePresence>
@@ -1110,11 +1121,6 @@ function PdiCertificateModal({
     setTimeout(() => setDeepLinkCopied(false), 2000);
   };
 
-  const isOverallPassed =
-    t.v_bat >= 12.20 &&
-    t.dtc_cnt === 0 &&
-    t.shunt_sleep_ua <= 500;
-
   const checklist = [
     {
       parameter: "Battery Open-Circuit Voltage",
@@ -1141,12 +1147,20 @@ function PdiCertificateModal({
       passed: t.dtc_cnt === 0 && (t.dtc === "NONE" || !t.dtc),
     },
     {
+      parameter: "TWAI / CAN-bus Communication Link",
+      reading: t.can_ok ? "ONLINE (Active ACK)" : "OFFLINE / Check Wiring",
+      target: "ONLINE / OK",
+      passed: Boolean(t.can_ok),
+    },
+    {
       parameter: "DS3231SN Thermal & Arrhenius Load",
       reading: `${t.rtc_temp_c.toFixed(1)} °C (${prediction.thermalFactor.toFixed(2)}x Factor)`,
       target: "< 60.0 °C",
       passed: t.rtc_temp_c < 60.0,
     },
   ];
+
+  const isOverallPassed = checklist.every((item) => item.passed);
 
   return (
     <m.div
@@ -1179,8 +1193,8 @@ function PdiCertificateModal({
               className="print-only-logo h-12 w-12 shrink-0 rounded-[8px]"
             />
             <div className="min-w-0 flex-1">
-              <div className="num text-[10px] font-semibold uppercase tracking-widest text-crimson">
-                ORION: ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS
+              <div className="num text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD
               </div>
               <h2 id="pdi-cert-title" className="font-display text-base sm:text-lg font-semibold uppercase tracking-wider text-foreground mt-0.5">
                 PRE-DELIVERY INSPECTION (PDI) &amp; BATTERY HEALTH CERTIFICATE
@@ -1204,8 +1218,8 @@ function PdiCertificateModal({
                 className={cn(
                   "print-hidden num mt-1.5 inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   deepLinkCopied
-                    ? "border-emerald/60 bg-emerald/15 text-emerald"
-                    : "border-cyan/50 bg-cyan/10 text-cyan hover:bg-cyan/20",
+                    ? "border-foreground/60 bg-secondary text-foreground"
+                    : "border-border bg-secondary/50 text-foreground hover:border-foreground/60 hover:bg-secondary",
                 )}
               >
                 {deepLinkCopied ? (
@@ -1339,7 +1353,7 @@ function PdiCertificateModal({
           <button
             type="button"
             onClick={onExportExcel}
-            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-cyan/50 bg-cyan/15 px-3.5 py-2 text-xs font-semibold text-cyan transition-colors hover:bg-cyan/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-border bg-secondary/60 px-3.5 py-2 text-xs font-semibold text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FileSpreadsheet size={15} strokeWidth={1.75} aria-hidden="true" />
             <span>Export Excel Report</span>
@@ -1347,7 +1361,7 @@ function PdiCertificateModal({
           <button
             type="button"
             onClick={onExportCsv}
-            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-border bg-secondary/60 px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-border bg-secondary/60 px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Download size={15} strokeWidth={1.75} aria-hidden="true" />
             <span>Download Unit CSV</span>
@@ -1355,10 +1369,158 @@ function PdiCertificateModal({
           <button
             type="button"
             onClick={() => window.print()}
-            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-emerald/50 bg-emerald/15 px-4 py-2 text-xs font-semibold text-emerald transition-colors hover:bg-emerald/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-foreground/50 bg-secondary px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:border-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Printer size={15} strokeWidth={1.75} aria-hidden="true" />
             <span>Print / Save PDF</span>
+          </button>
+        </div>
+      </m.div>
+    </m.div>
+  );
+}
+
+interface TicketModalProps {
+  unitId: string;
+  bay: string;
+  model: string;
+  techAction: string;
+  setTechAction: (v: string) => void;
+  techName: string;
+  setTechName: (v: string) => void;
+  techNotes: string;
+  setTechNotes: (v: string) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+function TicketResolutionModal({
+  unitId,
+  bay,
+  model,
+  techAction,
+  setTechAction,
+  techName,
+  setTechName,
+  techNotes,
+  setTechNotes,
+  onConfirm,
+  onClose,
+}: TicketModalProps) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <m.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ticket-resolve-title"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
+      exit={{ opacity: 0, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <m.div
+        className="panel relative w-full max-w-lg border border-border bg-card p-4 sm:p-6 shadow-2xl"
+        initial={{ opacity: 0, scale: 0.98, y: -8 }}
+        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
+        exit={{ opacity: 0, scale: 0.98, y: -4, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
+      >
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck size={18} className="text-emerald" />
+            <h2 id="ticket-resolve-title" className="font-display text-sm font-semibold text-foreground uppercase tracking-wider">
+              Form Penanganan &amp; Penutupan Tiket Pemeliharaan
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Tutup formulir"
+            className="inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center rounded-[2px] border border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3.5 num text-xs">
+          <div className="rounded-[2px] border border-border bg-background/50 p-3 flex items-center justify-between">
+            <div>
+              <div className="label-hmi text-[10px]">Target Unit &amp; Lokasi</div>
+              <div className="font-bold text-foreground mt-0.5">{bay} — {model}</div>
+            </div>
+            <div className="text-right">
+              <div className="label-hmi text-[10px]">Unit ID</div>
+              <div className="text-muted-foreground mt-0.5">{unitId}</div>
+            </div>
+          </div>
+
+          <div>
+            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+              Nama Teknisi Penanggung Jawab
+            </label>
+            <input
+              type="text"
+              value={techName}
+              onChange={(e) => setTechName(e.target.value)}
+              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Contoh: Teknisi Shift Pagi"
+            />
+          </div>
+
+          <div>
+            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+              Tindakan Perbaikan yang Dilakukan
+            </label>
+            <select
+              value={techAction}
+              onChange={(e) => setTechAction(e.target.value)}
+              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="Pengisian Daya Baterai (Charger 2 Jam)">Pengisian Daya Baterai (Charger 2 Jam)</option>
+              <option value="Jumper Starter &amp; Pemanasan 10 Menit">Jumper Starter &amp; Pemanasan 10 Menit</option>
+              <option value="Penggantian Unit Baterai Baru (GS Astra 55D23L)">Penggantian Unit Baterai Baru (GS Astra 55D23L)</option>
+              <option value="Pembersihan Sulfasi &amp; Pengencangan Terminal">Pembersihan Sulfasi &amp; Pengencangan Terminal</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+              Catatan Handover &amp; Verifikasi Hasil
+            </label>
+            <textarea
+              value={techNotes}
+              onChange={(e) => setTechNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Deskripsi hasil penanganan..."
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-[2px] border border-border bg-secondary/50 px-4 py-2 num text-xs font-medium text-foreground hover:bg-secondary"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="inline-flex min-h-[40px] cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border border-emerald/60 bg-emerald/15 px-4 py-2 num text-xs font-semibold text-emerald hover:bg-emerald/25"
+          >
+            <ClipboardCheck size={14} />
+            <span>Sahkan &amp; Tutup Tiket</span>
           </button>
         </div>
       </m.div>

@@ -10,7 +10,7 @@ const C = {
   crimson: "#E60012",
   emerald: "#10B981",
   amber: "#F59E0B",
-  cyan: "#06B6D4",
+  steel: "#64748B",
   line: "#9FB3C8",
   hair: "#1E222B",
   floor: "#0B0D11",
@@ -134,7 +134,7 @@ function Wheel({ position, mode, flip }: { position: [number, number, number]; m
 function Suv({ mode }: { mode: Mode }) {
   const g = useSuvGeometry();
   const ghost = mode === "DEPARTED";
-  const dashed = useMemo(() => new THREE.LineDashedMaterial({ color: C.cyan, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.85 }), []);
+  const dashed = useMemo(() => new THREE.LineDashedMaterial({ color: C.steel, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.85 }), []);
   const solid = useMemo(() => new THREE.LineBasicMaterial({ color: C.line, transparent: true, opacity: 0.75 }), []);
   const bodyLines = useRef<THREE.LineSegments>(null);
   const cabinLines = useRef<THREE.LineSegments>(null);
@@ -153,15 +153,15 @@ function Suv({ mode }: { mode: Mode }) {
   return (
     <group>
       <mesh geometry={g.bodyGeo}>
-        <meshPhysicalMaterial color={ghost ? C.cyan : "#7C8EA3"} transparent opacity={shell} roughness={0.2} metalness={0.4} depthWrite={false} side={THREE.DoubleSide} />
+        <meshPhysicalMaterial color={ghost ? C.steel : "#7C8EA3"} transparent opacity={shell} roughness={0.2} metalness={0.4} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={g.cabinGeo}>
-        <meshPhysicalMaterial color={ghost ? C.cyan : "#5E7186"} transparent opacity={shell * 0.8} roughness={0.1} metalness={0.5} depthWrite={false} side={THREE.DoubleSide} />
+        <meshPhysicalMaterial color={ghost ? C.steel : "#5E7186"} transparent opacity={shell * 0.8} roughness={0.1} metalness={0.5} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <lineSegments ref={bodyLines} geometry={g.bodyEdges} material={ghost ? dashed : solid} />
       <lineSegments ref={cabinLines} geometry={g.cabinEdges} material={ghost ? dashed : solid} />
       <lineSegments geometry={g.accentGeo}>
-        <lineBasicMaterial color={ghost ? C.cyan : C.line} transparent opacity={0.35} />
+        <lineBasicMaterial color={ghost ? C.steel : C.line} transparent opacity={0.35} />
       </lineSegments>
       {/* roof rails */}
       {[-1, 1].map((s) => (
@@ -183,7 +183,7 @@ function Suv({ mode }: { mode: Mode }) {
         <group key={s}>
           <mesh position={[2.42, 0.9, s * 0.68]}>
             <boxGeometry args={[0.04, 0.05, 0.36]} />
-            <meshBasicMaterial color={ghost ? C.cyan : "#E8F4FF"} />
+            <meshBasicMaterial color={ghost ? C.steel : "#E8F4FF"} />
           </mesh>
           <mesh position={[-2.44, 0.98, s * 0.72]}>
             <boxGeometry args={[0.04, 0.16, 0.22]} />
@@ -337,12 +337,12 @@ function Beacon() {
     <Billboard position={[-0.8, 2.2, 0]}>
       <mesh>
         <circleGeometry args={[0.06, 16]} />
-        <meshBasicMaterial color={C.cyan} toneMapped={false} />
+        <meshBasicMaterial color={C.amber} toneMapped={false} />
       </mesh>
       {[0, 1, 2].map((i) => (
         <mesh key={i} ref={(el) => { arcs.current[i] = el; }} rotation-z={Math.PI / 4}>
           <ringGeometry args={[0.28, 0.31, 32, 1, 0, Math.PI / 2]} />
-          <meshBasicMaterial color={C.cyan} transparent toneMapped={false} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={C.amber} transparent toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
       ))}
     </Billboard>
@@ -352,13 +352,13 @@ function Beacon() {
 function Harness({ mode }: { mode: Mode }) {
   const warm = mode === "WARMUP";
   const crit = mode === "CRITICAL";
-  const flow = warm ? C.emerald : crit ? C.crimson : C.cyan;
+  const flow = warm ? C.emerald : crit ? C.crimson : C.line;
   const speed = warm ? 1.1 : crit ? 0.12 : 0.2;
   return (
     <group>
       <NodeBox pos={NODES.battery} color={crit ? C.crimson : C.emerald} pulse={crit} />
       <NodeBox pos={NODES.alternator} color={warm ? C.amber : "#6B7684"} pulse={warm} size={0.17} />
-      <NodeBox pos={NODES.ecu} color={warm ? C.cyan : "#6B7684"} size={0.11} />
+      <NodeBox pos={NODES.ecu} color={warm ? C.emerald : "#6B7684"} size={0.11} />
       <NodeBox pos={NODES.obd} color={C.crimson} size={0.1} />
       <FlowPath
         from={NODES.battery}
@@ -371,8 +371,8 @@ function Harness({ mode }: { mode: Mode }) {
       {warm && (
         <>
           <FlowPath from={NODES.alternator} to={NODES.battery} lift={0.2} color={flow} speed={speed * 1.4} count={9} />
-          <FlowPath from={NODES.ecu} to={NODES.obd} lift={-0.05} color={C.cyan} speed={0.6} count={4} />
-          <FlowPath from={NODES.alternator} to={NODES.ecu} lift={0.25} color={C.cyan} speed={0.4} count={4} />
+          <FlowPath from={NODES.ecu} to={NODES.obd} lift={-0.05} color={C.line} speed={0.6} count={4} />
+          <FlowPath from={NODES.alternator} to={NODES.ecu} lift={0.25} color={C.emerald} speed={0.4} count={4} />
           <ThermalAura pos={NODES.alternator} />
         </>
       )}
@@ -415,12 +415,12 @@ export default function Stage3D({ unit, active }: { unit: VehicleUnit; active: b
       gl={{ antialias: true, alpha: true }}
     >
       <fog attach="fog" args={["#07080A", 9, 20]} />
-      <ambientLight intensity={0.35} />
+      <ambientLight intensity={0.4} />
       <spotLight position={[0, 8, 0]} angle={0.6} penumbra={0.8} intensity={60} color="#ffffff" />
-      <directionalLight position={[-4, 3, -3]} intensity={0.6} color={C.cyan} />
+      <directionalLight position={[-4, 3, -3]} intensity={0.6} color="#E2E8F0" />
       <Environment resolution={64}>
         <Lightformer intensity={2} position={[0, 5, 0]} scale={[10, 10, 1]} rotation-x={Math.PI / 2} />
-        <Lightformer intensity={1} color="#8bb" position={[-5, 1, -1]} rotation-y={Math.PI / 2} scale={[20, 1, 1]} />
+        <Lightformer intensity={1} color="#CBD5E1" position={[-5, 1, -1]} rotation-y={Math.PI / 2} scale={[20, 1, 1]} />
         <Lightformer intensity={0.8} color="#E60012" position={[5, 1, 1]} rotation-y={-Math.PI / 2} scale={[20, 0.5, 1]} />
       </Environment>
 

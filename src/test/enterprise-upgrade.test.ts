@@ -95,7 +95,10 @@ describe("Enterprise Upgrade #2: QR Code Matrix & URL Deep-Linking", () => {
 
     const parsed02 = parseDeepLinkParams("?unit=MITSUBISHI-STOCK-02&module=diagnostics");
     expect(parsed02.unitId).toBe("MITSUBISHI-STOCK-02");
-    expect(parsed02.moduleId).toBe("03");
+    expect(parsed02.moduleId).toBe("04");
+
+    const parsedWarm = parseDeepLinkParams("?unit=MITSUBISHI-STOCK-01&module=warmup");
+    expect(parsedWarm.moduleId).toBe("03");
     expect(parsed02.requires12Scale).toBe(false);
 
     const invalid = parseDeepLinkParams("?unit=UNKNOWN-99&module=invalid");
