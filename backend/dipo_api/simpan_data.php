@@ -1,7 +1,8 @@
 <?php
 /**
  * ORION Telemetry System - ESP32 Node Ingest & Piggyback ACK Endpoint (POST)
- * Firmware Contract: v1.4.1 (20 fields, Dual-Format Single Object or Burst Array)
+ * Firmware Contract: v1.5.0 (35 fields: 20 core + 15 Read-Only OBD-II Mode 01/03/07, Dual-Format Single Object or Burst Array)
+ * Policy: 100% Read-Only ECU (STRICT_MODE_01_03_07_ONLY_NO_MODE_04)
  * Endpoint: http://localhost/dipo_api/simpan_data.php
  *
  * Implements:
@@ -106,6 +107,7 @@ function ensureTelemetrySchema(PDO $pdo, bool $force = false): void {
         if ($slopeColInfo && stripos((string)$slopeColInfo['Type'], 'decimal(10,6)') !== false) {
             $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.3580");
         }
+        ensureObd2ReadOnlyColumns($pdo, $force);
         markOrionSchemaReady();
     } catch (Exception $ignored) {
         // Jangan gagalkan request jika user DB tidak punya hak DDL
@@ -166,8 +168,8 @@ foreach ($records as $r) {
         'can_ok'         => (!isset($r['can_ok']) || !empty($r['can_ok'])) ? 1 : 0,
         'engine_on'      => !empty($r['engine_on']) ? 1 : 0,
         'crit_alert'     => !empty($r['crit_alert']) ? 1 : 0,
-        'rpm'            => (int)($r['rpm'] ?? -1),
-        'temp_c'         => (int)($r['temp_c'] ?? -99),
+        'rpm'            => (int)($r['rpm'] ?? 0),
+        'temp_c'         => (int)($r['temp_c'] ?? 0),
         'dtc_cnt'        => (int)($r['dtc_cnt'] ?? 0),
         'dtc'            => (string)($r['dtc'] ?? 'NONE'),
         'rssi'           => (int)($r['rssi'] ?? -60),
@@ -175,6 +177,22 @@ foreach ($records as $r) {
         'buffer_used'    => isset($r['buffer_used']) ? (int)$r['buffer_used'] : (isset($payload['buffer_used']) ? (int)$payload['buffer_used'] : 0),
         'active_ms'      => (int)($r['active_ms'] ?? 1500),
         'daily_mah'      => round((float)($r['daily_mah'] ?? 0.0), 2),
+        // 15 Parameter OBD-II Read-Only (Mode 0x01 / Mode 0x03 / 0x07)
+        'speed_kmh'      => max(0, min(255, (int)($r['speed_kmh'] ?? 0))),
+        'iat_c'          => max(-40, min(215, (int)($r['iat_c'] ?? 0))),
+        'map_kpa'        => max(0, min(255, (int)($r['map_kpa'] ?? 0))),
+        'load_pct'       => round((float)($r['load_pct'] ?? 0.0), 1),
+        'tps_pct'        => round((float)($r['tps_pct'] ?? 0.0), 1),
+        'ign_deg'        => round((float)($r['ign_deg'] ?? 0.0), 1),
+        'maf_gs'         => round((float)($r['maf_gs'] ?? 0.0), 2),
+        'run_time_s'     => max(0, (int)($r['run_time_s'] ?? 0)),
+        'fuel_pct'       => round((float)($r['fuel_pct'] ?? 0.0), 1),
+        'fuel_rate_lh'   => round((float)($r['fuel_rate_lh'] ?? 0.0), 2),
+        'o2_v'           => round((float)($r['o2_v'] ?? 0.0), 2),
+        'stft_pct'       => round((float)($r['stft_pct'] ?? 0.0), 1),
+        'mil_on'         => !empty($r['mil_on']) ? 1 : 0,
+        'ecu_v'          => round((float)($r['ecu_v'] ?? 0.0), 2),
+        'dist_clr_km'    => max(0, (int)($r['dist_clr_km'] ?? 0)),
     ];
 }
 
@@ -190,11 +208,17 @@ $sqlInsertLog = "
     INSERT INTO `telemetry_logs` (
         `unit_id`, `seq`, `boot`, `ts_epoch`, `v_bat`, `adc_raw_mv`, `rtc_temp_c`,
         `shunt_sleep_ua`, `can_ok`, `engine_on`, `crit_alert`, `rpm`, `temp_c`, `dtc_cnt`,
-        `dtc`, `rssi`, `sleep_cfg`, `buffer_used`, `active_ms`, `daily_mah`, `created_at`
+        `dtc`, `rssi`, `sleep_cfg`, `buffer_used`, `active_ms`, `daily_mah`,
+        `speed_kmh`, `iat_c`, `map_kpa`, `load_pct`, `tps_pct`, `ign_deg`, `maf_gs`, `run_time_s`,
+        `fuel_pct`, `fuel_rate_lh`, `o2_v`, `stft_pct`, `mil_on`, `ecu_v`, `dist_clr_km`,
+        `created_at`
     ) VALUES (
         :unit_id, :seq, :boot, :ts_epoch, :v_bat, :adc_raw_mv, :rtc_temp_c,
         :shunt_sleep_ua, :can_ok, :engine_on, :crit_alert, :rpm, :temp_c, :dtc_cnt,
-        :dtc, :rssi, :sleep_cfg, :buffer_used, :active_ms, :daily_mah, NOW()
+        :dtc, :rssi, :sleep_cfg, :buffer_used, :active_ms, :daily_mah,
+        :speed_kmh, :iat_c, :map_kpa, :load_pct, :tps_pct, :ign_deg, :maf_gs, :run_time_s,
+        :fuel_pct, :fuel_rate_lh, :o2_v, :stft_pct, :mil_on, :ecu_v, :dist_clr_km,
+        NOW()
     )
     ON DUPLICATE KEY UPDATE
         `ts_epoch`       = VALUES(`ts_epoch`),
@@ -214,6 +238,21 @@ $sqlInsertLog = "
         `buffer_used`    = VALUES(`buffer_used`),
         `active_ms`      = VALUES(`active_ms`),
         `daily_mah`      = VALUES(`daily_mah`),
+        `speed_kmh`      = VALUES(`speed_kmh`),
+        `iat_c`          = VALUES(`iat_c`),
+        `map_kpa`        = VALUES(`map_kpa`),
+        `load_pct`       = VALUES(`load_pct`),
+        `tps_pct`        = VALUES(`tps_pct`),
+        `ign_deg`        = VALUES(`ign_deg`),
+        `maf_gs`         = VALUES(`maf_gs`),
+        `run_time_s`     = VALUES(`run_time_s`),
+        `fuel_pct`       = VALUES(`fuel_pct`),
+        `fuel_rate_lh`   = VALUES(`fuel_rate_lh`),
+        `o2_v`           = VALUES(`o2_v`),
+        `stft_pct`       = VALUES(`stft_pct`),
+        `mil_on`         = VALUES(`mil_on`),
+        `ecu_v`          = VALUES(`ecu_v`),
+        `dist_clr_km`    = VALUES(`dist_clr_km`),
         `created_at`     = NOW()
 ";
 
@@ -269,6 +308,21 @@ try {
             ':buffer_used'    => $rec['buffer_used'],
             ':active_ms'      => $rec['active_ms'],
             ':daily_mah'      => $rec['daily_mah'],
+            ':speed_kmh'      => $rec['speed_kmh'],
+            ':iat_c'          => $rec['iat_c'],
+            ':map_kpa'        => $rec['map_kpa'],
+            ':load_pct'       => $rec['load_pct'],
+            ':tps_pct'        => $rec['tps_pct'],
+            ':ign_deg'        => $rec['ign_deg'],
+            ':maf_gs'         => $rec['maf_gs'],
+            ':run_time_s'     => $rec['run_time_s'],
+            ':fuel_pct'       => $rec['fuel_pct'],
+            ':fuel_rate_lh'   => $rec['fuel_rate_lh'],
+            ':o2_v'           => $rec['o2_v'],
+            ':stft_pct'       => $rec['stft_pct'],
+            ':mil_on'         => $rec['mil_on'],
+            ':ecu_v'          => $rec['ecu_v'],
+            ':dist_clr_km'    => $rec['dist_clr_km'],
         ]);
 
         $insertedCount++;
@@ -349,6 +403,21 @@ try {
                     `last_boot`     = :last_boot,
                     `last_seq`      = :last_seq,
                     `last_ts_epoch` = :last_ts_epoch,
+                    `speed_kmh`     = :speed_kmh,
+                    `iat_c`         = :iat_c,
+                    `map_kpa`       = :map_kpa,
+                    `load_pct`      = :load_pct,
+                    `tps_pct`       = :tps_pct,
+                    `ign_deg`       = :ign_deg,
+                    `maf_gs`        = :maf_gs,
+                    `run_time_s`    = :run_time_s,
+                    `fuel_pct`      = :fuel_pct,
+                    `fuel_rate_lh`  = :fuel_rate_lh,
+                    `o2_v`          = :o2_v,
+                    `stft_pct`      = :stft_pct,
+                    `mil_on`        = :mil_on,
+                    `ecu_v`         = :ecu_v,
+                    `dist_clr_km`   = :dist_clr_km,
                     `last_seen`     = NOW()
                 WHERE `unit_id` = :uid
             ";
@@ -365,6 +434,21 @@ try {
                 ':last_boot'     => $incomingBoot,
                 ':last_seq'      => $incomingSeq,
                 ':last_ts_epoch' => $incomingTs,
+                ':speed_kmh'     => $latestRecord['speed_kmh'],
+                ':iat_c'         => $latestRecord['iat_c'],
+                ':map_kpa'       => $latestRecord['map_kpa'],
+                ':load_pct'      => $latestRecord['load_pct'],
+                ':tps_pct'       => $latestRecord['tps_pct'],
+                ':ign_deg'       => $latestRecord['ign_deg'],
+                ':maf_gs'        => $latestRecord['maf_gs'],
+                ':run_time_s'    => $latestRecord['run_time_s'],
+                ':fuel_pct'      => $latestRecord['fuel_pct'],
+                ':fuel_rate_lh'  => $latestRecord['fuel_rate_lh'],
+                ':o2_v'          => $latestRecord['o2_v'],
+                ':stft_pct'      => $latestRecord['stft_pct'],
+                ':mil_on'        => $latestRecord['mil_on'],
+                ':ecu_v'         => $latestRecord['ecu_v'],
+                ':dist_clr_km'   => $latestRecord['dist_clr_km'],
                 ':uid'           => $primaryUnitId,
             ]);
 

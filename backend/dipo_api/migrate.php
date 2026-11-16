@@ -1,11 +1,12 @@
 <?php
 /**
- * ORION Telemetry System - Production Schema & Seed Verification Endpoint
+ * ORION Telemetry System - Production Schema & Read-Only OBD-II Migration Endpoint
  * Endpoint: https://oriontelemetry.tech/dipo_api/migrate.php
  *
  * Ensures all 6 core tables (`vehicles`, `telemetry_logs`, `node_configs`,
- * `movement_events`, `system_events`, `maintenance_tickets`) and initial seed rows
- * (including `MITSUBISHI-STOCK-01`) exist on JawsDB MySQL / local MySQL.
+ * `movement_events`, `system_events`, `maintenance_tickets`), compatibility view
+ * `vehicle_units`, the 15 Read-Only OBD-II columns (Mode 0x01 / 0x03 / 0x07 only),
+ * and initial seed rows (`MITSUBISHI-STOCK-01`..`12`) exist without overwriting data.
  */
 
 /** @var PDO $pdo */
@@ -13,6 +14,7 @@ $pdo = require __DIR__ . '/db.php';
 
 try {
     $initResult = ensureOrionDatabaseInitialized($pdo, true);
+    $obdMigration = ensureObd2ReadOnlyColumns($pdo, true);
     $dbNameRow = $pdo->query("SELECT DATABASE() AS `db`, @@session.time_zone AS `tz`")->fetch();
 
     $counts = [];
@@ -25,12 +27,17 @@ try {
     }
 
     sendJson([
-        'status'    => 'OK',
-        'database'  => $dbNameRow['db'] ?? null,
-        'time_zone' => $dbNameRow['tz'] ?? null,
-        'php_tz'    => date_default_timezone_get(),
-        'migrated'  => $initResult['migrated'] ?? false,
-        'tables'    => $counts,
+        'status'               => 'OK',
+        'database'             => $dbNameRow['db'] ?? null,
+        'time_zone'            => $dbNameRow['tz'] ?? null,
+        'php_tz'               => date_default_timezone_get(),
+        'migrated'             => $initResult['migrated'] ?? false,
+        'obd2_readonly_policy' => 'STRICT_MODE_01_03_07_ONLY_NO_MODE_04',
+        'vehicle_units_view'   => $obdMigration['view_ready'],
+        'obd2_columns_added'   => $obdMigration['added'],
+        'obd2_columns_count'   => count($obdMigration['verified']),
+        'obd2_columns_verified'=> $obdMigration['verified'],
+        'tables'               => $counts,
     ]);
 } catch (Exception $e) {
     sendJson([

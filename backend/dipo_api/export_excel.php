@@ -239,10 +239,10 @@ try {
 
     // BAGIAN 1: HEADER BANNER
     echo '<table>' . "\n";
-    echo '  <tr><td colspan="15" class="banner-title">ORION — ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS</td></tr>' . "\n";
-    echo '  <tr><td colspan="15" class="banner-sub">STOCK YARD INVENTORY TELEMETRY &amp; BATTERY HEALTH AUDIT REPORT</td></tr>' . "\n";
-    echo '  <tr><td colspan="15" class="banner-meta">Export Timestamp: ' . escXml($dateHuman) . ' | Unit Filter: ' . escXml($unitFilterLabel) . ' | Max Rows: ' . (int)$limit . ' | Standard: SOP C.1 &amp; PDI Readiness</td></tr>' . "\n";
-    echo '  <tr><td colspan="15" style="border:none;height:10px;"></td></tr>' . "\n";
+    echo '  <tr><td colspan="21" class="banner-title">ORION — ONBOARD REPORTING FOR INVENTORY &amp; OPERATIONAL NOTIFICATIONS</td></tr>' . "\n";
+    echo '  <tr><td colspan="21" class="banner-sub">STOCK YARD INVENTORY TELEMETRY &amp; BATTERY HEALTH AUDIT REPORT</td></tr>' . "\n";
+    echo '  <tr><td colspan="21" class="banner-meta">Export Timestamp: ' . escXml($dateHuman) . ' | Unit Filter: ' . escXml($unitFilterLabel) . ' | Max Rows: ' . (int)$limit . ' | Standard: SOP C.1 &amp; PDI Readiness (100% Read-Only ECU)</td></tr>' . "\n";
+    echo '  <tr><td colspan="21" style="border:none;height:10px;"></td></tr>' . "\n";
 
     // BAGIAN 2: EXECUTIVE FLEET SUMMARY
     echo '  <tr><td colspan="10" class="section-hdr">1. Executive Fleet Health &amp; PDI Summary</td></tr>' . "\n";
@@ -275,10 +275,10 @@ try {
         </tr>' . "\n";
     }
 
-    echo '  <tr><td colspan="15" style="border:none;height:14px;"></td></tr>' . "\n";
+    echo '  <tr><td colspan="21" style="border:none;height:14px;"></td></tr>' . "\n";
 
     // BAGIAN 3: CHRONOLOGICAL TELEMETRY LOGS
-    echo '  <tr><td colspan="15" class="section-hdr">2. Chronological Telemetry Logs (Wake-Cycle History)</td></tr>' . "\n";
+    echo '  <tr><td colspan="21" class="section-hdr">2. Chronological Telemetry Logs (Wake-Cycle &amp; OBD-II Read-Only History)</td></tr>' . "\n";
     echo '  <tr class="tbl-hdr">
         <th>Log ID</th>
         <th>Timestamp</th>
@@ -291,7 +291,13 @@ try {
         <th>Sleep Current (&micro;A)</th>
         <th>Engine Status</th>
         <th>RPM</th>
+        <th>Speed (km/h)</th>
         <th>Coolant (&deg;C)</th>
+        <th>Engine Load (%)</th>
+        <th>Fuel Level (%)</th>
+        <th>Fuel Rate (L/h)</th>
+        <th>ECU Voltage (V)</th>
+        <th>MIL Status</th>
         <th>OBD-II DTC</th>
         <th>Wi-Fi RSSI (dBm)</th>
         <th>Sync Buffer</th>
@@ -300,9 +306,18 @@ try {
     foreach ($logRows as $idx => $r) {
         $isCrit = ((int)$r['crit_alert'] === 1) || ((float)$r['v_bat'] < 11.80);
         $rowCls = $isCrit ? 'row-red' : (($idx % 2 === 1) ? 'row-even' : '');
-        $engStatus = ((int)$r['engine_on'] === 1) ? 'RUNNING (WARM-UP)' : 'STANDBY (SLEEP)';
-        $rpmText = ((int)$r['rpm'] >= 0) ? (string)(int)$r['rpm'] : 'OFF';
-        $tempText = ((int)$r['temp_c'] > -40) ? ((int)$r['temp_c'] . ' C') : 'OFF';
+        $isEngineOn = ((int)$r['engine_on'] === 1);
+        $engStatus = $isEngineOn ? 'RUNNING (WARM-UP)' : 'STANDBY (SLEEP)';
+        $rpmVal = (int)($r['rpm'] ?? 0);
+        $tempVal = (int)($r['temp_c'] ?? 0);
+        $rpmText = ($isEngineOn && $rpmVal > 0) ? (string)$rpmVal : 'OFF';
+        $tempText = ($isEngineOn && $tempVal > 0) ? ($tempVal . ' C') : 'OFF';
+        $speedText = (string)(int)($r['speed_kmh'] ?? 0);
+        $loadText = number_format((float)($r['load_pct'] ?? 0.0), 1, '.', '');
+        $fuelPctText = number_format((float)($r['fuel_pct'] ?? 0.0), 1, '.', '');
+        $fuelRateText = number_format((float)($r['fuel_rate_lh'] ?? 0.0), 2, '.', '');
+        $ecuVText = number_format((float)($r['ecu_v'] ?? 0.0), 2, '.', '');
+        $milText = !empty($r['mil_on']) ? 'MIL ON' : 'OFF';
         $bufText = isset($r['buffer_used']) ? ((int)$r['buffer_used'] . ' slots') : '0 slots';
 
         echo '  <tr' . ($rowCls ? ' class="' . $rowCls . '"' : '') . '>
@@ -317,7 +332,13 @@ try {
             <td class="num">' . (int)$r['shunt_sleep_ua'] . '</td>
             <td class="center">' . $engStatus . '</td>
             <td class="num">' . escXml($rpmText) . '</td>
+            <td class="num">' . escXml($speedText) . '</td>
             <td class="num">' . escXml($tempText) . '</td>
+            <td class="num">' . escXml($loadText) . '</td>
+            <td class="num">' . escXml($fuelPctText) . '</td>
+            <td class="num">' . escXml($fuelRateText) . '</td>
+            <td class="num">' . escXml($ecuVText) . '</td>
+            <td class="center">' . escXml($milText) . '</td>
             <td class="center">' . escXml((string)$r['dtc']) . '</td>
             <td class="num">' . (int)$r['rssi'] . '</td>
             <td class="num">' . escXml($bufText) . '</td>

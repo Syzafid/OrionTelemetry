@@ -79,7 +79,7 @@ function sendJson($data, int $statusCode = 200): void {
 
 if (!function_exists('orionSchemaLockFile')) {
     function orionSchemaLockFile(): string {
-        return sys_get_temp_dir() . '/orion_schema_v143.ok';
+        return sys_get_temp_dir() . '/orion_schema_v150.ok';
     }
 }
 
@@ -319,12 +319,101 @@ if (!function_exists('ensureOrionDatabaseInitialized')) {
 
         @file_put_contents($initLock, (string)time());
         markOrionSchemaReady();
+        ensureObd2ReadOnlyColumns($pdo, $force);
         return ['migrated' => true, 'reason' => 'executed_schema_production'];
+    }
+}
+
+if (!function_exists('orionObd2ColumnDefinitions')) {
+    /**
+     * Canonical list of the 15 Read-Only OBD-II v1.5.0 telemetry columns.
+     *
+     * @return array<string, string>
+     */
+    function orionObd2ColumnDefinitions(): array {
+        return [
+            'speed_kmh'    => "SMALLINT NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x0D Vehicle Speed (km/h)'",
+            'iat_c'        => "SMALLINT NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x0F Intake Air Temp (C)'",
+            'map_kpa'      => "SMALLINT NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x0B Manifold Absolute Pressure (kPa)'",
+            'load_pct'     => "DECIMAL(5,1) NOT NULL DEFAULT 0.0 COMMENT 'OBD-II Mode 01 PID 0x04 Engine Load (%)'",
+            'tps_pct'      => "DECIMAL(5,1) NOT NULL DEFAULT 0.0 COMMENT 'OBD-II Mode 01 PID 0x11 Throttle Position (%)'",
+            'ign_deg'      => "DECIMAL(5,1) NOT NULL DEFAULT 0.0 COMMENT 'OBD-II Mode 01 PID 0x0E Ignition Timing Advance (deg)'",
+            'maf_gs'       => "DECIMAL(6,2) NOT NULL DEFAULT 0.00 COMMENT 'OBD-II Mode 01 PID 0x10 Mass Air Flow (g/s)'",
+            'run_time_s'   => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x1F Engine Run Time (s)'",
+            'fuel_pct'     => "DECIMAL(5,1) NOT NULL DEFAULT 0.0 COMMENT 'OBD-II Mode 01 PID 0x2F Fuel Tank Level (%)'",
+            'fuel_rate_lh' => "DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'OBD-II Mode 01 PID 0x5E / MAF Fuel Rate (L/h)'",
+            'o2_v'         => "DECIMAL(4,2) NOT NULL DEFAULT 0.00 COMMENT 'OBD-II Mode 01 PID 0x14 O2 Sensor Voltage (V)'",
+            'stft_pct'     => "DECIMAL(5,1) NOT NULL DEFAULT 0.0 COMMENT 'OBD-II Mode 01 PID 0x06 Short Term Fuel Trim (%)'",
+            'mil_on'       => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x01 Bit A7 MIL Check Engine Status (Read-Only)'",
+            'ecu_v'        => "DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'OBD-II Mode 01 PID 0x42 Control Module Voltage (V)'",
+            'dist_clr_km'  => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'OBD-II Mode 01 PID 0x31 Distance Since Codes Cleared (km)'",
+        ];
+    }
+}
+
+if (!function_exists('ensureObd2ReadOnlyColumns')) {
+    /**
+     * Idempotently ensures the 15 Read-Only OBD-II columns exist on both
+     * `telemetry_logs` and `vehicles` (plus compatibility view `vehicle_units`).
+     *
+     * @return array{added: string[], verified: string[], view_ready: bool}
+     */
+    function ensureObd2ReadOnlyColumns(PDO $pdo, bool $force = false): array {
+        $activeDb = '';
+        try {
+            $activeDb = (string)($pdo->query("SELECT DATABASE()")->fetchColumn() ?: 'default');
+        } catch (Exception $ignored) {
+            $activeDb = 'default';
+        }
+        $lockFile = sys_get_temp_dir() . '/orion_obd2_cols_' . substr(md5($activeDb), 0, 8) . '.ok';
+
+        $columns = orionObd2ColumnDefinitions();
+        $added = [];
+        $verified = [];
+        $viewReady = false;
+
+        if (!$force && is_file($lockFile)) {
+            foreach (['telemetry_logs', 'vehicles'] as $table) {
+                foreach (array_keys($columns) as $col) {
+                    $verified[] = "{$table}.{$col}";
+                }
+            }
+            return ['added' => $added, 'verified' => $verified, 'view_ready' => true];
+        }
+
+        foreach (['telemetry_logs', 'vehicles'] as $table) {
+            $existing = [];
+            $stmtCols = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+            foreach ($stmtCols->fetchAll() as $row) {
+                if (!empty($row['Field'])) {
+                    $existing[(string)$row['Field']] = true;
+                }
+            }
+
+            foreach ($columns as $col => $ddl) {
+                if (!isset($existing[$col])) {
+                    $pdo->exec("ALTER TABLE `{$table}` ADD COLUMN `{$col}` {$ddl}");
+                    $added[] = "{$table}.{$col}";
+                }
+                $verified[] = "{$table}.{$col}";
+            }
+        }
+
+        try {
+            $pdo->exec("CREATE OR REPLACE VIEW `vehicle_units` AS SELECT * FROM `vehicles`");
+            $viewReady = true;
+        } catch (Exception $ignored) {
+            $viewReady = false;
+        }
+
+        @file_put_contents($lockFile, (string)time());
+        return ['added' => $added, 'verified' => $verified, 'view_ready' => $viewReady];
     }
 }
 
 try {
     ensureOrionDatabaseInitialized($pdo);
+    ensureObd2ReadOnlyColumns($pdo);
 } catch (Exception $ignored) {
     // Non-blocking fallback so partial DB grants do not abort requests
 }

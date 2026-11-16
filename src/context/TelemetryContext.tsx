@@ -322,12 +322,17 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     (id: string, code: string | null) => {
       patchUnit(id, (u) => ({
         ...u,
-        telemetry: { ...u.telemetry, dtc: code ?? "NONE", dtc_cnt: code ? 1 : 0 },
+        telemetry: {
+          ...u.telemetry,
+          dtc: code ?? "NONE",
+          dtc_cnt: code ? 1 : 0,
+          mil_on: Boolean(code),
+        },
       }));
       if (code) {
-        appendLocalAudit(id, "DTC_ALERT", "CRITICAL", `OBD-II Mode 03 diagnostic fault code ${code} detected`);
+        appendLocalAudit(id, "DTC_ALERT", "CRITICAL", `OBD-II Mode 03 read-only diagnostic fault code ${code} detected`);
       } else {
-        appendLocalAudit(id, "DTC_CLEARED", "INFO", "OBD-II Mode 04 clear fault memory executed (0 active DTC)");
+        appendLocalAudit(id, "DTC_SANDBOX_PREVIEW", "INFO", "Sandbox Mode 03 read preview restored to nominal (100% Read-Only ECU policy)");
       }
     },
     [patchUnit, appendLocalAudit],

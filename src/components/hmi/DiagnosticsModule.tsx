@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, CircuitBoard, Search, ShieldCheck, X } from "lucide-react";
+import { Activity, AlertTriangle, CircuitBoard, Fuel, Lock, Search, ShieldCheck, X, Zap } from "lucide-react";
 import { useSpring } from "motion/react";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { DTC_LIBRARY, WARMUP_SESSION, WIRING, voltageHistory } from "@/data/mockTelemetry";
@@ -149,6 +149,80 @@ export function DiagnosticsModule() {
     [units, nodeFilter],
   );
 
+  const milActive = Boolean(t.mil_on) || t.dtc_cnt > 0;
+  const speedKmh = t.speed_kmh ?? 0;
+  const iatC = t.iat_c ?? 0;
+  const mapKpa = t.map_kpa ?? 0;
+  const loadPct = t.load_pct ?? 0;
+  const tpsPct = t.tps_pct ?? 0;
+  const ignDeg = t.ign_deg ?? 0;
+  const mafGs = t.maf_gs ?? 0;
+  const runTimeS = t.run_time_s ?? 0;
+  const fuelPct = t.fuel_pct ?? 0;
+  const fuelRateLh = t.fuel_rate_lh ?? 0;
+  const o2V = t.o2_v ?? 0;
+  const stftPct = t.stft_pct ?? 0;
+  const ecuV = t.ecu_v ?? 0;
+  const distClrKm = t.dist_clr_km ?? 0;
+  const ecuVoltageDelta = t.engine_on && ecuV > 0 ? Math.abs(t.v_bat - ecuV) : null;
+
+  const powertrainMetrics = [
+    {
+      label: "Vehicle Speed",
+      pid: "010D",
+      val: sleeping ? "----" : `${speedKmh}`,
+      unit: sleeping ? "" : "km/h",
+      barPct: sleeping ? 0 : Math.min(100, (speedKmh / 160) * 100),
+      barTone: "bg-cyan",
+    },
+    {
+      label: "Intake Air Temp",
+      pid: "010F",
+      val: sleeping ? "----" : `${iatC}`,
+      unit: sleeping ? "" : "°C",
+    },
+    {
+      label: "Manifold Press",
+      pid: "010B",
+      val: sleeping ? "----" : `${mapKpa}`,
+      unit: sleeping ? "" : "kPa",
+    },
+    {
+      label: "Engine Load",
+      pid: "0104",
+      val: sleeping ? "----" : loadPct.toFixed(1),
+      unit: sleeping ? "" : "%",
+      barPct: sleeping ? 0 : Math.min(100, Math.max(0, loadPct)),
+      barTone: loadPct > 80 ? "bg-amber" : "bg-emerald",
+    },
+    {
+      label: "Throttle Pos",
+      pid: "0111",
+      val: sleeping ? "----" : tpsPct.toFixed(1),
+      unit: sleeping ? "" : "%",
+      barPct: sleeping ? 0 : Math.min(100, Math.max(0, tpsPct)),
+      barTone: "bg-cyan",
+    },
+    {
+      label: "Ignition Timing",
+      pid: "010E",
+      val: sleeping ? "----" : `${ignDeg >= 0 ? "+" : ""}${ignDeg.toFixed(1)}`,
+      unit: sleeping ? "" : "°",
+    },
+    {
+      label: "Mass Air Flow",
+      pid: "0110",
+      val: sleeping ? "----" : mafGs.toFixed(2),
+      unit: sleeping ? "" : "g/s",
+    },
+    {
+      label: "Engine Run Time",
+      pid: "011F",
+      val: sleeping ? "----" : `${runTimeS}`,
+      unit: sleeping ? "" : "s",
+    },
+  ];
+
   return (
     <div className="module-diagnostics flex h-full min-h-0 flex-1 flex-col gap-3">
       {/* Sticky Single-Row Target Node Selector Bar (shrink-0) */}
@@ -274,158 +348,310 @@ export function DiagnosticsModule() {
       </div>
 
       <div className="diagnostics-details grid min-h-0 flex-1 gap-3 [&>*]:min-w-0 lg:grid-cols-[1fr_1.6fr]">
-        <Panel title="Stored DTC (Mode 03)" code="03" right={<Led tone={hasDtc ? "crimson" : "emerald"} pulse={hasDtc} />}>
-          <div className={cn("border p-3.5 sm:p-4", hasDtc ? "border-crimson/60 bg-crimson/5" : "border-emerald/40 bg-emerald/5")}>
-            <div className="flex items-center gap-3">
-              {hasDtc ? (
-                <AlertTriangle className="text-crimson" strokeWidth={1.5} aria-hidden="true" />
-              ) : (
-                <ShieldCheck className="text-emerald" strokeWidth={1.5} aria-hidden="true" />
-              )}
-              <div className={cn("num text-lg font-medium", hasDtc ? "text-crimson" : "text-emerald")}>
-                {t.dtc_cnt} DTC ({hasDtc ? t.dtc : "System Nominal"})
+        {/* Left Column: Panel 3 (Read-Only DTC Monitor) + Panel 2 (Fuel & Emission Readiness) */}
+        <div className="grid min-h-0 gap-3 [&>*]:min-w-0 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
+          <Panel
+            title="Read-Only DTC Monitor (Mode 03 / 07)"
+            code="03"
+            right={
+              <div className="flex items-center gap-2">
+                <span className="num inline-flex items-center gap-1 rounded-[2px] border border-cyan/40 bg-cyan/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-cyan">
+                  <Lock size={10} strokeWidth={2} aria-hidden="true" />
+                  100% READ-ONLY
+                </span>
+                <Led tone={hasDtc || milActive ? "crimson" : "emerald"} pulse={hasDtc || milActive} />
               </div>
-            </div>
-            {dtc && (
-              <div className="mt-3 space-y-1.5">
-                <div className="font-display text-sm uppercase tracking-widest">{dtc.title}</div>
-                <div className="label-hmi">{dtc.system}</div>
-                <p className="num text-xs leading-relaxed text-muted-foreground">{dtc.detail}</p>
-                <div className="num text-[10px] text-muted-foreground">RAW: 43 01 01 15 (Frame 0x7E8)</div>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => injectDtc(selected.unit_id, hasDtc ? null : "P0115")}
-            type="button"
-            className="mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center border border-border py-2.5 num text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:border-crimson hover:text-crimson focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            }
           >
-            {hasDtc ? "Clear Preview (Restore Nominal)" : "Inject Test Fault (P0115)"}
-          </button>
-          <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">SN65HVD230</span>
-              <span className={cn("text-right", t.can_ok === false ? "text-crimson" : "text-emerald")}>
-                {t.can_ok === false ? "Loopback Fault (TWAI ERR)" : "Bus Healthy (TWAI Loopback OK)"}
-              </span>
+            <div className={cn("border p-3", hasDtc ? "border-crimson/60 bg-crimson/5" : "border-emerald/40 bg-emerald/5")}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  {hasDtc ? (
+                    <AlertTriangle className="shrink-0 text-crimson" strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <ShieldCheck className="shrink-0 text-emerald" strokeWidth={1.5} aria-hidden="true" />
+                  )}
+                  <div className={cn("num text-base font-medium", hasDtc ? "text-crimson" : "text-emerald")}>
+                    {t.dtc_cnt} DTC ({hasDtc ? t.dtc : "System Nominal"})
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "num rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                    milActive
+                      ? "border-crimson/60 bg-crimson/15 text-crimson"
+                      : "border-emerald/40 bg-emerald/10 text-emerald",
+                  )}
+                >
+                  {milActive ? "MIL ON" : "MIL OFF"}
+                </span>
+              </div>
+              {dtc ? (
+                <div className="mt-2.5 space-y-1">
+                  <div className="font-display text-xs uppercase tracking-widest text-foreground">{dtc.title}</div>
+                  <div className="label-hmi text-[10px]">{dtc.system}</div>
+                  <p className="num text-[11px] leading-relaxed text-muted-foreground">{dtc.detail}</p>
+                  <div className="num text-[10px] text-muted-foreground">MODE 03 READ: {t.dtc} (Frame 0x7E8)</div>
+                </div>
+              ) : hasDtc ? (
+                <div className="mt-2 num text-[11px] text-muted-foreground">
+                  Stored fault code <span className="font-semibold text-crimson">{t.dtc}</span> reported via passive OBD-II Mode 03/07 poll.
+                </div>
+              ) : null}
             </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">CAN Bus Speed</span>
-              <span className="text-right">500 kbps (0 RX Errors)</span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">Power Isolation</span>
-              <span className={sleeping ? "text-cyan" : "text-emerald"}>
-                {sleeping ? "Gated (Deep Sleep)" : "Active (Conducting)"}
-              </span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">Input Protection (B2/C2/F4)</span>
-              <span className="text-right text-emerald">1A Fuse, 1N5819 &amp; SMBJ15A TVS</span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">MP1584 Buck Regulator</span>
-              <span className="text-right text-emerald">3.30 V Locked (Modular Header)</span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">High-Side ADC Switch (GPIO27)</span>
-              <span className="text-right text-cyan">AO3401A #1 &amp; 10V Zener ({t.adc_raw_mv} mV)</span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">CAN Power Gate (GPIO26)</span>
-              <span className={cn("text-right", t.engine_on ? "text-emerald" : "text-cyan")}>
-                {t.engine_on ? "Active (3.30 V)" : "Gated (0.00 V)"}
-              </span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">DS3231SN RTC (0x68)</span>
-              <span className="text-right text-emerald">
-                {t.rtc_temp_c.toFixed(1)} °C Die ({t.shunt_sleep_ua} µA Shunt)
-              </span>
-            </div>
-            <div className="flex items-start justify-between gap-3 num text-[11px]">
-              <span className="shrink-0 text-muted-foreground">Thermal Comp (25°C / Arrhenius)</span>
-              <span className={cn("text-right font-medium", thermalPred.thermalFactor > 1.35 ? "text-amber" : "text-cyan")}>
-                25°C Comp: {thermalPred.compensatedV25.toFixed(2)}V ({thermalPred.tempCompensatedSocPct}% SOC) | Thermal Load: {thermalPred.thermalFactor.toFixed(2)}x @ {t.rtc_temp_c.toFixed(1)}°C
-              </span>
-            </div>
-          </div>
-        </Panel>
 
-        <Panel
-          title="OBD-II Harness & Node Pinout Matrix"
-          code="HW"
-          right={
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="num text-[9px] uppercase tracking-wider sm:hidden">Swipe</span>
-              <CircuitBoard size={14} strokeWidth={1.5} aria-hidden="true" />
+            <div className="mt-2.5 flex items-start gap-2 rounded-[2px] border border-cyan/35 bg-cyan/5 px-2.5 py-2 num text-[10px] text-cyan">
+              <Lock size={12} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                ECU WRITE LOCK: 100% READ-ONLY POLICY (Mode 01 / 03 / 07 only — OBD-II Mode 04 write/clear disabled by firmware &amp; HMI).
+              </span>
             </div>
-          }
-        >
-          <div className="relative">
-            <div className="card-scroll overflow-x-auto">
-              <table className="w-full min-w-[540px] text-left">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["WIRE", "SIGNAL PATH", "FUNCTION", "READING", "STATUS"].map((h) => (
-                      <th key={h} className="label-hmi py-2 pr-3 font-normal">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {WIRING.map((w) => {
-                    const gated = sleeping && (w.id === "W-04" || w.id === "W-06" || w.id === "W-07");
-                    let liveReading = w.reading;
-                    let liveStatus: "OK" | "WARN" | "FAULT" = w.status;
 
-                    if (w.id === "W-01") {
-                      liveReading = `${t.v_bat.toFixed(2)} V`;
-                      liveStatus = t.crit_alert ? "WARN" : "OK";
-                    } else if (w.id === "W-04") {
-                      liveReading = sleeping ? "0.00 V (OFF)" : "PULSED 40ms";
-                    } else if (w.id === "W-05") {
-                      liveReading = `${t.adc_raw_mv} mV`;
-                    } else if (w.id === "W-06") {
-                      liveReading = t.engine_on ? "ACTIVE / 3.3V" : "GATED / 3.3V";
-                    } else if (w.id === "W-07") {
-                      liveReading = t.can_ok === false ? "LOOPBACK ERR" : "500 kbps";
-                      liveStatus = t.can_ok === false ? "FAULT" : "OK";
-                    } else if (w.id === "W-08") {
-                      liveReading = `${t.rtc_temp_c.toFixed(2)} °C`;
-                    }
+            {dataSource === "SIMULATOR" && (
+              <button
+                onClick={() => injectDtc(selected.unit_id, hasDtc ? null : "P0102")}
+                type="button"
+                className="mt-2.5 flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-[2px] border border-border px-3 py-2 num text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {hasDtc ? "Restore Nominal Sandbox Preview (Sim)" : "Simulate Mode 03 Fault (P0102)"}
+              </button>
+            )}
+          </Panel>
 
-                    const statusTone =
-                      liveStatus === "FAULT"
-                        ? "crimson"
-                        : liveStatus === "WARN"
-                          ? "amber"
-                          : gated
-                            ? "cyan"
-                            : "emerald";
+          <Panel
+            title="Fuel & Emission Readiness (Mode 01 Read-Only)"
+            code="FUEL"
+            right={
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "num inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                    milActive
+                      ? "border-crimson/60 bg-crimson/15 text-crimson"
+                      : "border-emerald/40 bg-emerald/10 text-emerald",
+                  )}
+                >
+                  <Led tone={milActive ? "crimson" : "emerald"} pulse={milActive} />
+                  {milActive ? "MIL ON (CHECK ENGINE)" : "MIL OFF (READY)"}
+                </span>
+                <Fuel size={14} strokeWidth={1.5} className="text-muted-foreground" aria-hidden="true" />
+              </div>
+            }
+          >
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="col-span-2 rounded-[2px] border border-border bg-background/50 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="label-hmi text-[10px]">Fuel Tank Level</div>
+                    <div className="num text-[9.5px] text-crimson">Mode 01, PID 012F</div>
+                  </div>
+                  <div className={cn("num text-lg font-semibold", fuelPct > 0 && fuelPct < 20 ? "text-amber" : "text-foreground")}>
+                    {fuelPct.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-[1px] bg-muted">
+                  <div
+                    className={cn("h-full transition-all duration-300", fuelPct < 20 ? "bg-amber" : "bg-emerald")}
+                    style={{ width: `${Math.min(100, Math.max(0, fuelPct))}%` }}
+                  />
+                </div>
+              </div>
 
-                    return (
-                      <tr key={w.id} className="border-b border-border/60 align-top">
-                        <td className="num py-2 pr-3 text-xs font-semibold text-crimson">{w.wire}</td>
-                        <td className="num py-2 pr-3 text-[11px] text-foreground">{w.path}</td>
-                        <td className="label-hmi py-2 pr-3 text-[10px]">{w.signal}</td>
-                        <td className="num py-2 pr-3 text-[11px] text-muted-foreground">{liveReading}</td>
-                        <td className="py-2">
-                          <span className="flex items-center gap-1.5 num text-[10px]">
-                            <Led tone={statusTone} />
-                            {liveStatus !== "OK" ? liveStatus : gated ? "SLEEP" : liveStatus}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
+                <div className="label-hmi text-[10px]">Fuel Rate</div>
+                <div className="num text-[9.5px] text-crimson">PID 015E / MAF</div>
+                <div className="num mt-1 text-base font-medium text-foreground">
+                  {sleeping ? "----" : fuelRateLh.toFixed(2)}
+                  {!sleeping && <span className="ml-1 text-[10.5px] text-muted-foreground">L/h</span>}
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
+                <div className="label-hmi text-[10px]">O2 Sensor (B1S1)</div>
+                <div className="num text-[9.5px] text-crimson">PID 0114</div>
+                <div className="num mt-1 text-base font-medium text-foreground">
+                  {sleeping ? "----" : o2V.toFixed(2)}
+                  {!sleeping && <span className="ml-1 text-[10.5px] text-muted-foreground">V</span>}
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
+                <div className="label-hmi text-[10px]">Short Term Trim</div>
+                <div className="num text-[9.5px] text-crimson">PID 0106</div>
+                <div className={cn("num mt-1 text-base font-medium", !sleeping && Math.abs(stftPct) > 10 ? "text-amber" : "text-foreground")}>
+                  {sleeping ? "----" : `${stftPct > 0 ? "+" : ""}${stftPct.toFixed(1)}`}
+                  {!sleeping && <span className="ml-1 text-[10.5px] text-muted-foreground">%</span>}
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
+                <div className="label-hmi text-[10px]">Check Engine MIL</div>
+                <div className="num text-[9.5px] text-crimson">PID 0101 Bit A7</div>
+                <div className={cn("num mt-1 text-sm font-semibold", milActive ? "text-crimson" : "text-emerald")}>
+                  {milActive ? "MIL ACTIVE" : "NOMINAL"}
+                </div>
+              </div>
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card via-card/70 to-transparent sm:hidden" />
-          </div>
-        </Panel>
+          </Panel>
+        </div>
+
+        {/* Right Column: Panel 1 (Powertrain Telemetry) + Panel 4 (Electrical, Distance & CAN Harness) */}
+        <div className="grid min-h-0 gap-3 [&>*]:min-w-0 lg:grid-rows-[minmax(0,1fr)_minmax(0,1.25fr)]">
+          <Panel
+            title="Powertrain Telemetry (Mode 01 Read-Only)"
+            code="PWR"
+            right={
+              <div className="flex items-center gap-2">
+                <span className={cn("num text-[10px] font-semibold uppercase", sleeping ? "text-cyan" : "text-emerald")}>
+                  {sleeping ? "ENGINE OFF (----)" : "LIVE ECU STREAM"}
+                </span>
+                <Activity size={14} strokeWidth={1.5} className="text-muted-foreground" aria-hidden="true" />
+              </div>
+            }
+          >
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              {powertrainMetrics.map((m) => (
+                <div key={m.pid} className="rounded-[2px] border border-border bg-background/45 p-2.5 flex flex-col justify-between">
+                  <div>
+                    <div className="label-hmi text-[10px]">{m.label}</div>
+                    <div className="num text-[9.5px] text-crimson">PID {m.pid}</div>
+                  </div>
+                  <div className="mt-2">
+                    <div className={cn("num text-lg leading-none font-medium", sleeping ? "text-muted-foreground" : "text-foreground")}>
+                      {m.val}
+                      {m.unit && <span className="ml-1 text-[10.5px] font-normal text-muted-foreground">{m.unit}</span>}
+                    </div>
+                    {typeof m.barPct === "number" && (
+                      <div className="mt-2 h-1 w-full overflow-hidden rounded-[1px] bg-muted">
+                        <div className={cn("h-full transition-all duration-300", m.barTone)} style={{ width: `${m.barPct}%` }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Electrical, Distance & CAN Harness (Mode 01 & HW)"
+            code="ELEC"
+            right={
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span className="num text-[10px] text-cyan">{t.can_ok === false ? "TWAI FAULT" : "TWAI 500 kbps"}</span>
+                <Zap size={14} strokeWidth={1.5} className="text-amber" aria-hidden="true" />
+                <CircuitBoard size={14} strokeWidth={1.5} aria-hidden="true" />
+              </div>
+            }
+          >
+            {/* Electrical & Distance Top Strip */}
+            <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <div className="rounded-[2px] border border-border bg-background/50 p-2.5">
+                <div className="label-hmi text-[10px]">ECU Module Voltage</div>
+                <div className="num text-[9.5px] text-crimson">Mode 01, PID 0142</div>
+                <div className="num mt-1 text-base font-medium text-foreground">
+                  {sleeping || ecuV <= 0 ? "----" : ecuV.toFixed(2)}
+                  {!sleeping && ecuV > 0 && <span className="ml-1 text-[10.5px] text-muted-foreground">V</span>}
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/50 p-2.5">
+                <div className="label-hmi text-[10px]">Dist Since Cleared</div>
+                <div className="num text-[9.5px] text-crimson">Mode 01, PID 0131</div>
+                <div className="num mt-1 text-base font-medium text-foreground">
+                  {distClrKm.toLocaleString("id-ID")}
+                  <span className="ml-1 text-[10.5px] text-muted-foreground">km</span>
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/50 p-2.5">
+                <div className="label-hmi text-[10px]">Pin 16 Bat / Δ ECU</div>
+                <div className="num text-[9.5px] text-muted-foreground">
+                  {ecuVoltageDelta !== null ? `Δ ${ecuVoltageDelta.toFixed(2)} V drop` : `${t.adc_raw_mv} mV ADC`}
+                </div>
+                <div className={cn("num mt-1 text-base font-medium", t.crit_alert ? "text-crimson" : "text-emerald")}>
+                  {t.v_bat.toFixed(2)}
+                  <span className="ml-1 text-[10.5px] text-muted-foreground">V</span>
+                </div>
+              </div>
+
+              <div className="rounded-[2px] border border-border bg-background/50 p-2.5">
+                <div className="label-hmi text-[10px]">25°C Comp &amp; RTC</div>
+                <div className="num text-[9.5px] text-muted-foreground">
+                  {thermalPred.thermalFactor.toFixed(2)}x @ {t.rtc_temp_c.toFixed(1)}°C
+                </div>
+                <div className="num mt-1 text-base font-medium text-cyan">
+                  {thermalPred.compensatedV25.toFixed(2)}V
+                  <span className="ml-1 text-[10.5px] text-muted-foreground">({thermalPred.tempCompensatedSocPct}%)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Hardware Pinout Matrix */}
+            <div className="relative border-t border-border pt-2.5">
+              <div className="card-scroll overflow-x-auto">
+                <table className="w-full min-w-[540px] text-left">
+                  <thead>
+                    <tr className="border-b border-border">
+                      {["WIRE", "SIGNAL PATH", "FUNCTION", "READING", "STATUS"].map((h) => (
+                        <th key={h} className="label-hmi py-2 pr-3 font-normal">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WIRING.map((w) => {
+                      const gated = sleeping && (w.id === "W-04" || w.id === "W-06" || w.id === "W-07");
+                      let liveReading = w.reading;
+                      let liveStatus: "OK" | "WARN" | "FAULT" = w.status;
+
+                      if (w.id === "W-01") {
+                        liveReading = `${t.v_bat.toFixed(2)} V`;
+                        liveStatus = t.crit_alert ? "WARN" : "OK";
+                      } else if (w.id === "W-04") {
+                        liveReading = sleeping ? "0.00 V (OFF)" : "PULSED 40ms";
+                      } else if (w.id === "W-05") {
+                        liveReading = `${t.adc_raw_mv} mV`;
+                      } else if (w.id === "W-06") {
+                        liveReading = t.engine_on ? "ACTIVE / 3.3V" : "GATED / 3.3V";
+                      } else if (w.id === "W-07") {
+                        liveReading = t.can_ok === false ? "LOOPBACK ERR" : "500 kbps";
+                        liveStatus = t.can_ok === false ? "FAULT" : "OK";
+                      } else if (w.id === "W-08") {
+                        liveReading = `${t.rtc_temp_c.toFixed(2)} °C`;
+                      }
+
+                      const statusTone =
+                        liveStatus === "FAULT"
+                          ? "crimson"
+                          : liveStatus === "WARN"
+                            ? "amber"
+                            : gated
+                              ? "cyan"
+                              : "emerald";
+
+                      return (
+                        <tr key={w.id} className="border-b border-border/60 align-top">
+                          <td className="num py-2 pr-3 text-xs font-semibold text-crimson">{w.wire}</td>
+                          <td className="num py-2 pr-3 text-[11px] text-foreground">{w.path}</td>
+                          <td className="label-hmi py-2 pr-3 text-[10px]">{w.signal}</td>
+                          <td className="num py-2 pr-3 text-[11px] text-muted-foreground">{liveReading}</td>
+                          <td className="py-2">
+                            <span className="flex items-center gap-1.5 num text-[10px]">
+                              <Led tone={statusTone} />
+                              {liveStatus !== "OK" ? liveStatus : gated ? "SLEEP" : liveStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card via-card/70 to-transparent sm:hidden" />
+            </div>
+          </Panel>
+        </div>
       </div>
     </div>
   );

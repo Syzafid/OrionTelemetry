@@ -31,7 +31,7 @@
 // ======================== KONFIGURASI JARINGAN & SERVER ======================
 const char* WIFI_SSID     = "POCOF6";       // <-- SSID WiFi/Hotspot
 const char* WIFI_PASS     = "88888888";     // <-- Password WiFi
-const char* API_ENDPOINT  = "https://oriontelemetry.tech/dipo_api/simpan_data.php";
+const char* API_ENDPOINT  = "https://www.oriontelemetry.tech/dipo_api/simpan_data.php";
 // Fallback Heroku URL    : "https://<nama-app-heroku>.herokuapp.com/dipo_api/simpan_data.php"
 // Fallback LAN Lokal     : "http://10.73.83.110/dipo_api/simpan_data.php"
 const char* UNIT_ID       = "MITSUBISHI-STOCK-01";
@@ -54,24 +54,46 @@ const char* UNIT_ID       = "MITSUBISHI-STOCK-01";
 #define TIER2_MAX_RECORDS 2000                   // 2.000 Slot x 40 Byte = 80 KB
 #define FLUSH_BATCH_SIZE  20                     // Maksimum pengiriman per HTTP Batch POST
 
-// Struktur Rekaman Telemetri Padat (Tetap 40 Byte per Slot, reserved -> can_ok)
+// Struktur Rekaman Telemetri Padat 88-Byte (Kelompok 32-bit -> 16-bit -> 8-bit)
 struct __attribute__((packed)) TelemetryItem {
+  // 1. Kelompok 32-bit (15 field x 4B = 60B | Offset 0..59)
   uint32_t seq;
   uint32_t boot;
   uint32_t ts_epoch;
   float    v_bat;
-  uint16_t adc_raw_mv;
   float    rtc_temp_c;
+  float    load_pct;       // PID 0x04 Engine Load (%)
+  float    tps_pct;        // PID 0x11 Throttle Position (%)
+  float    ign_deg;        // PID 0x0E Ignition Timing Advance (deg)
+  float    maf_gs;         // PID 0x10 Mass Air Flow (g/s)
+  uint32_t run_time_s;     // PID 0x1F Engine Run Time (s)
+  float    fuel_pct;       // PID 0x2F Fuel Tank Level (%)
+  float    fuel_rate_lh;   // PID 0x5E / MAF Fuel Rate (L/h)
+  float    o2_v;           // PID 0x14 O2 Sensor Voltage (V)
+  float    stft_pct;       // PID 0x06 Short Term Fuel Trim (%)
+  float    ecu_v;          // PID 0x42 Control Module Voltage (V)
+
+  // 2. Kelompok 16-bit (6 field x 2B = 12B | Offset 60..71)
+  uint16_t adc_raw_mv;
   uint16_t shunt_sleep_ua;
+  uint16_t rpm;            // PID 0x0C Engine RPM
+  uint16_t dist_clr_km;    // PID 0x31 Distance Since Codes Cleared (km)
+  int16_t  iat_c;          // PID 0x0F Intake Air Temp (C)
+  uint16_t map_kpa;        // PID 0x0B Manifold Absolute Pressure (kPa)
+
+  // 3. Kelompok 8-bit & char[8] (8B + 8 x 1B = 16B | Offset 72..87)
+  char     dtc[8];
   uint8_t  engine_on;
   uint8_t  crit_alert;
-  uint16_t rpm;
-  uint8_t  temp_c;
+  uint8_t  temp_c;         // PID 0x05 Coolant Temp (C)
   uint8_t  dtc_cnt;
-  char     dtc[8];
   int8_t   rssi;
-  uint8_t  can_ok;   // Menggantikan 'reserved': menyimpan status CAN saat sampel diambil
+  uint8_t  can_ok;
+  uint8_t  speed_kmh;      // PID 0x0D Vehicle Speed (km/h)
+  uint8_t  mil_on;         // PID 0x01 Bit A7 Check Engine MIL (Read-Only)
 };
+
+static_assert(sizeof(TelemetryItem) == 88, "TelemetryItem size must be 88 bytes");
 
 // Tier 1: Bertahan melewati Deep Sleep di RTC Slow Memory
 RTC_DATA_ATTR TelemetryItem tier1RtcBuf[TIER1_RTC_CAP];
@@ -79,6 +101,7 @@ RTC_DATA_ATTR uint8_t       tier1Count     = 0;
 RTC_DATA_ATTR uint32_t      rtcBootCount   = 0;
 RTC_DATA_ATTR uint32_t      rtcSeqCounter  = 0;
 RTC_DATA_ATTR bool          rtcInitialized = false;
+RTC_DATA_ATTR uint16_t      rtcStructSize  = 0;
 
 // Tier 2: Pointer Ring Buffer di NVS + Data di LittleFS Flash
 Preferences nvsStore;
@@ -142,6 +165,11 @@ void initAndLoadNvsState() {
     // Bangun dari Deep Sleep: pastikan tetap sinkron dengan NVS
     if (rtcBootCount < nvsBoot) rtcBootCount = nvsBoot;
     if (rtcSeqCounter < nvsSeq) rtcSeqCounter = nvsSeq;
+  }
+
+  if (rtcStructSize != sizeof(TelemetryItem)) {
+    tier1Count    = 0;
+    rtcStructSize = sizeof(TelemetryItem);
   }
 
   Serial.printf("[NVS OK] Boot #%lu | Seq Awal: %lu | Slope: %.6f | Offset: %.4f | CritV: %.2fV | Sleep: %s\n",
@@ -284,16 +312,38 @@ void initTier2LittleFS() {
   tier2Tail  = nvsStore.getUShort("t2_tail", 0);
   tier2Count = nvsStore.getUShort("t2_cnt",  0);
 
-  if (!LittleFS.exists(TIER2_FILE_PATH)) {
+  uint16_t savedStructSize = nvsStore.getUShort("t2_ssz", 0);
+  bool exists = LittleFS.exists(TIER2_FILE_PATH);
+  size_t fileSize = 0;
+  if (exists) {
+    File chk = LittleFS.open(TIER2_FILE_PATH, "r");
+    if (chk) {
+      fileSize = chk.size();
+      chk.close();
+    }
+  }
+
+  bool sizeMismatch = (savedStructSize != sizeof(TelemetryItem)) ||
+                      (fileSize % sizeof(TelemetryItem) != 0) ||
+                      (tier2Count > TIER2_MAX_RECORDS);
+
+  if (!exists || sizeMismatch) {
+    if (exists && sizeMismatch) {
+      LittleFS.remove(TIER2_FILE_PATH);
+      Serial.printf("[FLASH MIGRATE] Struct antrean berubah (%uB -> %uB / file=%uB). Mereset /tier2_queue.bin...\n",
+                    savedStructSize, (unsigned)sizeof(TelemetryItem), (unsigned)fileSize);
+    }
     File f = LittleFS.open(TIER2_FILE_PATH, "w");
     if (f) f.close();
+    tier1Count = 0;
     tier2Head = tier2Tail = tier2Count = 0;
     nvsStore.putUShort("t2_head", 0);
     nvsStore.putUShort("t2_tail", 0);
     nvsStore.putUShort("t2_cnt",  0);
+    nvsStore.putUShort("t2_ssz",  (uint16_t)sizeof(TelemetryItem));
   }
-  Serial.printf("[FLASH OK] ORION LittleFS Tier-2 Siap! Antrean Non-Volatile saat boot: %u/%u slot\n",
-                tier2Count, TIER2_MAX_RECORDS);
+  Serial.printf("[FLASH OK] ORION LittleFS Tier-2 Siap (%uB/slot)! Antrean Non-Volatile saat boot: %u/%u slot\n",
+                (unsigned)sizeof(TelemetryItem), tier2Count, TIER2_MAX_RECORDS);
 }
 
 void spilloverTier1ToLittleFS() {
@@ -367,8 +417,206 @@ void commitFlushedLittleFSBatch(uint8_t flushedCount) {
   nvsStore.putUShort("t2_cnt",  tier2Count);
 }
 
+// ==================== HELPER OBD-II CAN BUS 100% READ-ONLY ===================
+// KEBIJAKAN MUTLAK: Hanya mengizinkan Mode 0x01 (Live Sensor) & Mode 0x03/0x07 (Read DTC).
+// Mode 0x04 (Clear DTC) dan segala bentuk penulisan ECU DILARANG KERAS.
+bool queryObdPid(uint8_t mode, uint8_t pid, uint8_t *respData, uint8_t &respLen, uint32_t timeoutMs = 20) {
+  respLen = 0;
+  if (mode != 0x01 && mode != 0x03 && mode != 0x07) {
+    return false;
+  }
+
+  twai_message_t stale;
+  while (twai_receive(&stale, 0) == ESP_OK) {}
+
+  twai_message_t txMsg = {};
+  txMsg.identifier = 0x7DF;
+  txMsg.extd = 0;
+  txMsg.rtr  = 0;
+  txMsg.data_length_code = 8;
+  for (int i = 0; i < 8; i++) txMsg.data[i] = 0xCC;
+
+  if (mode == 0x03 || mode == 0x07) {
+    txMsg.data[0] = 0x01;
+    txMsg.data[1] = mode;
+  } else {
+    txMsg.data[0] = 0x02;
+    txMsg.data[1] = mode;
+    txMsg.data[2] = pid;
+  }
+
+  if (twai_transmit(&txMsg, pdMS_TO_TICKS(15)) != ESP_OK) {
+    return false;
+  }
+
+  uint32_t tStart = millis();
+  while ((millis() - tStart) < timeoutMs) {
+    twai_message_t rxMsg;
+    if (twai_receive(&rxMsg, pdMS_TO_TICKS(5)) == ESP_OK) {
+      if (rxMsg.identifier >= 0x7E8 && rxMsg.identifier <= 0x7EF && rxMsg.data_length_code >= 3) {
+        uint8_t frameType = rxMsg.data[0] & 0xF0;
+        if (frameType != 0x00) continue; // Single-frame ISO 15765-4 response
+        uint8_t pciLen = rxMsg.data[0] & 0x0F;
+        uint8_t expectedRespMode = mode + 0x40;
+
+        if (rxMsg.data[1] != expectedRespMode) continue;
+
+        if (mode == 0x01) {
+          if (rxMsg.data[2] != pid || pciLen < 3) continue;
+          uint8_t payloadBytes = pciLen - 2;
+          if (payloadBytes > 5) payloadBytes = 5;
+          for (uint8_t i = 0; i < payloadBytes; i++) {
+            respData[i] = rxMsg.data[3 + i];
+          }
+          respLen = payloadBytes;
+          return true;
+        } else {
+          uint8_t payloadBytes = (pciLen >= 1) ? (pciLen - 1) : 0;
+          if (payloadBytes > 6) payloadBytes = 6;
+          for (uint8_t i = 0; i < payloadBytes; i++) {
+            respData[i] = rxMsg.data[2 + i];
+          }
+          respLen = payloadBytes;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+void decodeObdDtcBytes(uint8_t b1, uint8_t b2, char *outStr, size_t maxLen) {
+  static const char prefixes[4] = { 'P', 'C', 'B', 'U' };
+  char prefix = prefixes[(b1 >> 6) & 0x03];
+  uint8_t d1 = (b1 >> 4) & 0x03;
+  uint8_t d2 = b1 & 0x0F;
+  uint8_t d3 = (b2 >> 4) & 0x0F;
+  uint8_t d4 = b2 & 0x0F;
+  snprintf(outStr, maxLen, "%c%u%X%X%X", prefix, d1, d2, d3, d4);
+}
+
+bool pollRealEcuObd2(TelemetryItem &pkt) {
+  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NORMAL);
+  twai_timing_config_t  t_config = TWAI_TIMING_CONFIG_500KBITS();
+  twai_filter_config_t  f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+  if (twai_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
+    return false;
+  }
+  if (twai_start() != ESP_OK) {
+    twai_driver_uninstall();
+    return false;
+  }
+
+  uint8_t d[8] = {0};
+  uint8_t len = 0;
+  bool hasPid01 = queryObdPid(0x01, 0x01, d, len, 20);
+  uint8_t rpmBuf[8] = {0};
+  uint8_t rpmLen = 0;
+  bool hasPid0C = queryObdPid(0x01, 0x0C, rpmBuf, rpmLen, 20);
+
+  if (!hasPid01 && !hasPid0C) {
+    twai_stop();
+    twai_driver_uninstall();
+    return false;
+  }
+
+  if (hasPid01 && len >= 1) {
+    pkt.mil_on  = (d[0] & 0x80) ? 1 : 0;
+    pkt.dtc_cnt = d[0] & 0x7F;
+  }
+  if (hasPid0C && rpmLen >= 2) {
+    pkt.rpm = (uint16_t)(((uint16_t)rpmBuf[0] * 256U + (uint16_t)rpmBuf[1]) / 4U);
+  }
+  if (queryObdPid(0x01, 0x05, d, len) && len >= 1) {
+    pkt.temp_c = (d[0] > 40) ? (uint8_t)(d[0] - 40) : 0;
+  }
+  if (queryObdPid(0x01, 0x0D, d, len) && len >= 1) {
+    pkt.speed_kmh = d[0];
+  }
+  if (queryObdPid(0x01, 0x0F, d, len) && len >= 1) {
+    pkt.iat_c = (int16_t)d[0] - 40;
+  }
+  if (queryObdPid(0x01, 0x0B, d, len) && len >= 1) {
+    pkt.map_kpa = (uint16_t)d[0];
+  }
+  if (queryObdPid(0x01, 0x04, d, len) && len >= 1) {
+    pkt.load_pct = ((float)d[0] * 100.0f) / 255.0f;
+  }
+  if (queryObdPid(0x01, 0x11, d, len) && len >= 1) {
+    pkt.tps_pct = ((float)d[0] * 100.0f) / 255.0f;
+  }
+  if (queryObdPid(0x01, 0x0E, d, len) && len >= 1) {
+    pkt.ign_deg = ((float)d[0] / 2.0f) - 64.0f;
+  }
+  if (queryObdPid(0x01, 0x10, d, len) && len >= 2) {
+    pkt.maf_gs = (((float)d[0] * 256.0f) + (float)d[1]) / 100.0f;
+  }
+  if (queryObdPid(0x01, 0x1F, d, len) && len >= 2) {
+    pkt.run_time_s = ((uint32_t)d[0] << 8) | (uint32_t)d[1];
+  }
+  if (queryObdPid(0x01, 0x2F, d, len) && len >= 1) {
+    pkt.fuel_pct = ((float)d[0] * 100.0f) / 255.0f;
+  }
+  if (queryObdPid(0x01, 0x5E, d, len) && len >= 2) {
+    pkt.fuel_rate_lh = (((float)d[0] * 256.0f) + (float)d[1]) * 0.05f;
+  } else {
+    pkt.fuel_rate_lh = (pkt.maf_gs > 0.0f) ? ((pkt.maf_gs * 3600.0f) / (14.7f * 740.0f)) : 0.0f;
+  }
+  if (queryObdPid(0x01, 0x14, d, len) && len >= 1) {
+    pkt.o2_v = (float)d[0] / 200.0f;
+  }
+  if (queryObdPid(0x01, 0x06, d, len) && len >= 1) {
+    pkt.stft_pct = ((float)d[0] - 128.0f) * (100.0f / 128.0f);
+  }
+  if (queryObdPid(0x01, 0x42, d, len) && len >= 2) {
+    pkt.ecu_v = (((float)d[0] * 256.0f) + (float)d[1]) / 1000.0f;
+  } else {
+    pkt.ecu_v = pkt.v_bat;
+  }
+  if (queryObdPid(0x01, 0x31, d, len) && len >= 2) {
+    pkt.dist_clr_km = ((uint16_t)d[0] << 8) | (uint16_t)d[1];
+  }
+
+  // Mode 0x03 Read-Only Stored DTCs
+  if (queryObdPid(0x03, 0x00, d, len, 20) && len >= 3 && d[0] > 0 && (d[1] != 0 || d[2] != 0)) {
+    decodeObdDtcBytes(d[1], d[2], pkt.dtc, sizeof(pkt.dtc));
+    if (pkt.dtc_cnt == 0) pkt.dtc_cnt = d[0];
+  } else if (pkt.dtc_cnt == 0) {
+    strncpy(pkt.dtc, "NONE", sizeof(pkt.dtc));
+    pkt.dtc[sizeof(pkt.dtc) - 1] = '\0';
+  }
+
+  twai_stop();
+  twai_driver_uninstall();
+  return true;
+}
+
+bool runCanTransceiverLoopbackTest() {
+  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NO_ACK);
+  twai_timing_config_t  t_config = TWAI_TIMING_CONFIG_500KBITS();
+  twai_filter_config_t  f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+  bool ok = false;
+  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
+    if (twai_start() == ESP_OK) {
+      twai_message_t txMsg = {};
+      txMsg.identifier = 0x7DF;
+      txMsg.self = 1; // Self-reception loopback test via WCMCU-230
+      txMsg.data_length_code = 8;
+      txMsg.data[0] = 0x02; txMsg.data[1] = 0x01; txMsg.data[2] = 0x0C;
+      ok = (twai_transmit(&txMsg, pdMS_TO_TICKS(25)) == ESP_OK);
+      twai_stop();
+    }
+    twai_driver_uninstall();
+  }
+  return ok;
+}
+
 // ==================== SAMPLING ADC PULSA 40ms & CAN TWAI =====================
 void sampleBatteryAndCan(TelemetryItem &pkt) {
+  static uint32_t simEngineStartMs = 0;
+
   // 1. Aktifkan sakelar Q3+Q2 (GPIO 27 = HIGH) selama 40ms untuk mengisi kapasitor C1
   digitalWrite(PIN_GATE_ADC, HIGH);
   delay(40);
@@ -380,80 +628,113 @@ void sampleBatteryAndCan(TelemetryItem &pkt) {
   digitalWrite(PIN_GATE_ADC, LOW); // Matikan kembali jalur pembagi tegangan (0 uA drain)
   uint16_t rawMv = (uint16_t)(mvSum / 16);
 
-  // 2. Nyalakan sakelar P-MOSFET CAN (GPIO 26 = LOW -> X8 = 3.3V) & Uji Transceiver
-  digitalWrite(PIN_GATE_CAN, LOW);
-  delay(20); // Tunggu kapasitor filter 10uF (U8) di jalur 3V3_CAN stabil
-
-  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NO_ACK);
-  twai_timing_config_t  t_config = TWAI_TIMING_CONFIG_500KBITS();
-  twai_filter_config_t  f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
-  canLoopbackOk = false;
-  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
-    if (twai_start() == ESP_OK) {
-      twai_message_t txMsg = {};
-      txMsg.identifier = 0x7DF;
-      txMsg.self = 1; // Self-reception loopback test via WCMCU-230
-      txMsg.data_length_code = 8;
-      txMsg.data[0] = 0x02; txMsg.data[1] = 0x01; txMsg.data[2] = 0x0C;
-      canLoopbackOk = (twai_transmit(&txMsg, pdMS_TO_TICKS(25)) == ESP_OK);
-      twai_stop();
-    }
-    twai_driver_uninstall();
-  }
-  digitalWrite(PIN_GATE_CAN, HIGH); // Matikan kembali daya WCMCU-230 (X8 = 0V)
-  pkt.can_ok = canLoopbackOk ? 1 : 0; // Simpan status CAN langsung ke dalam paket!
-
-  // 3. Evaluasi tegangan baterai riil vs generator gelombang simulasi
+  // 2. Evaluasi tegangan baterai riil vs generator gelombang simulasi awal
   float phase = (millis() % 60000UL) / 60000.0f * TWO_PI;
   if (rawMv > 400) {
     pkt.adc_raw_mv = rawMv;
     pkt.v_bat      = (rawMv * cfgAdcSlopeM) + cfgAdcOffsetC;
     pkt.engine_on  = (pkt.v_bat >= 13.20f) ? 1 : 0;
-    pkt.rpm        = pkt.engine_on ? 1350 : 0;
-    pkt.temp_c     = pkt.engine_on ? 86 : 0;
   } else {
     if (currentWaveMode == WAVE_ALTERNATOR_CHARGE) {
       pkt.v_bat      = 14.12f + 0.14f * sinf(phase * 3.0f);
       pkt.engine_on  = 1;
-      pkt.rpm        = (uint16_t)(1350 + 220 * sinf(phase * 4.0f));
-      pkt.temp_c     = (uint8_t)(86 + 3 * sinf(phase));
     } else if (currentWaveMode == WAVE_PARASITIC_DRAIN) {
       pkt.v_bat      = 11.62f + 0.08f * sinf(phase * 2.0f);
       pkt.engine_on  = 0;
-      pkt.rpm        = 0;
-      pkt.temp_c     = 0;
     } else {
       pkt.v_bat      = 12.58f + 0.04f * sinf(phase);
       pkt.engine_on  = 0;
-      pkt.rpm        = 0;
-      pkt.temp_c     = 0;
     }
     pkt.adc_raw_mv = (uint16_t)((pkt.v_bat - cfgAdcOffsetC) / cfgAdcSlopeM);
   }
 
-  pkt.crit_alert     = (pkt.v_bat < cfgCritVoltage || simDtcActive) ? 1 : 0;
-  pkt.shunt_sleep_ua = (currentWaveMode == WAVE_PARASITIC_DRAIN) ? 620 : 410;
-  pkt.dtc_cnt        = simDtcActive ? 1 : 0;
-  strncpy(pkt.dtc, simDtcActive ? "P0133" : "NONE", sizeof(pkt.dtc));
+  // 3. Nyalakan sakelar P-MOSFET CAN (GPIO 26 = LOW -> X8 = 3.3V)
+  digitalWrite(PIN_GATE_CAN, LOW);
+  delay(20); // Tunggu kapasitor filter 10uF (U8) di jalur 3V3_CAN stabil
+
+  bool ecuConnected = pollRealEcuObd2(pkt);
+  if (ecuConnected) {
+    canLoopbackOk = true;
+    if (pkt.rpm > 0) pkt.engine_on = 1;
+  } else {
+    // Bench Test tanpa ECU mobil nyata -> validasi kesehatan fisik WCMCU-230 via loopback
+    canLoopbackOk = runCanTransceiverLoopbackTest();
+
+    if (pkt.engine_on == 1) {
+      if (simEngineStartMs == 0) simEngineStartMs = millis();
+      pkt.rpm          = (rawMv > 400)
+                           ? (uint16_t)(1350 + 45 * sinf(phase * 4.0f))
+                           : (uint16_t)(1350 + 220 * sinf(phase * 4.0f));
+      pkt.speed_kmh    = 0; // Pemanasan mesin stasioner di tempat
+      pkt.temp_c       = (uint8_t)(86 + 3 * sinf(phase));
+      pkt.iat_c        = (int16_t)(38 + 2 * sinf(phase));
+      pkt.map_kpa      = (uint16_t)(34 + 2 * sinf(phase * 2.0f));
+      pkt.load_pct     = 21.5f + 1.8f * sinf(phase * 2.0f);
+      pkt.tps_pct      = 14.2f + 0.6f * sinf(phase * 3.0f);
+      pkt.ign_deg      = 12.5f + 1.2f * sinf(phase * 2.0f);
+      pkt.maf_gs       = 3.85f + 0.25f * sinf(phase * 2.0f);
+      pkt.fuel_rate_lh = (pkt.maf_gs * 3600.0f) / (14.7f * 740.0f);
+      pkt.o2_v         = 0.68f + 0.18f * sinf(phase * 6.0f);
+      pkt.stft_pct     = 1.6f + 0.9f * sinf(phase * 4.0f);
+      pkt.run_time_s   = ((millis() - simEngineStartMs) / 1000UL) + 12UL;
+      pkt.ecu_v        = pkt.v_bat - 0.08f;
+    } else {
+      simEngineStartMs = 0;
+      pkt.rpm          = 0;
+      pkt.speed_kmh    = 0;
+      pkt.temp_c       = 0;
+      pkt.iat_c        = 0;
+      pkt.map_kpa      = 0;
+      pkt.load_pct     = 0.0f;
+      pkt.tps_pct      = 0.0f;
+      pkt.ign_deg      = 0.0f;
+      pkt.maf_gs       = 0.0f;
+      pkt.fuel_rate_lh = 0.0f;
+      pkt.o2_v         = 0.0f;
+      pkt.stft_pct     = 0.0f;
+      pkt.run_time_s   = 0;
+      pkt.ecu_v        = 0.0f;
+    }
+
+    pkt.fuel_pct    = 74.5f;
+    pkt.dist_clr_km = 1420;
+    pkt.mil_on      = simDtcActive ? 1 : 0;
+    pkt.dtc_cnt     = simDtcActive ? 1 : 0;
+    strncpy(pkt.dtc, simDtcActive ? "P0133" : "NONE", sizeof(pkt.dtc));
+    pkt.dtc[sizeof(pkt.dtc) - 1] = '\0';
+  }
+
+  digitalWrite(PIN_GATE_CAN, HIGH); // Matikan kembali daya WCMCU-230 (X8 = 0V)
+  pkt.can_ok = canLoopbackOk ? 1 : 0;
+
+  pkt.crit_alert     = (pkt.v_bat < cfgCritVoltage || simDtcActive || pkt.dtc_cnt > 0) ? 1 : 0;
+  pkt.shunt_sleep_ua = (pkt.engine_on == 1) ? 0 : ((currentWaveMode == WAVE_PARASITIC_DRAIN) ? 620 : 410);
 }
 
 // ==================== PENGIRIMAN HTTP/HTTPS POST & BURST FLUSH ===============
 String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining) {
-  char buf[512];
+  char buf[1024];
   snprintf(buf, sizeof(buf),
     "{\"unit_id\":\"%s\",\"seq\":%lu,\"boot\":%lu,\"ts_epoch\":%lu,"
     "\"v_bat\":%.2f,\"adc_raw_mv\":%u,\"rtc_temp_c\":%.2f,"
     "\"shunt_sleep_ua\":%u,\"engine_on\":%s,\"crit_alert\":%s,"
     "\"rpm\":%u,\"temp_c\":%u,\"dtc_cnt\":%u,\"dtc\":\"%s\","
     "\"rssi\":%d,\"sleep_cfg\":\"%s\",\"buffer_used\":%u,"
-    "\"can_ok\":%s,\"active_ms\":1840,\"daily_mah\":4.82}",
+    "\"can_ok\":%s,\"active_ms\":1840,\"daily_mah\":4.82,"
+    "\"speed_kmh\":%u,\"iat_c\":%d,\"map_kpa\":%u,\"load_pct\":%.1f,"
+    "\"tps_pct\":%.1f,\"ign_deg\":%.1f,\"maf_gs\":%.2f,\"run_time_s\":%lu,"
+    "\"fuel_pct\":%.1f,\"fuel_rate_lh\":%.2f,\"o2_v\":%.2f,\"stft_pct\":%.1f,"
+    "\"mil_on\":%u,\"ecu_v\":%.2f,\"dist_clr_km\":%u}",
     UNIT_ID, (unsigned long)p.seq, (unsigned long)p.boot, (unsigned long)p.ts_epoch,
     p.v_bat, p.adc_raw_mv, p.rtc_temp_c,
     p.shunt_sleep_ua, p.engine_on ? "true" : "false", p.crit_alert ? "true" : "false",
     p.rpm, p.temp_c, p.dtc_cnt, p.dtc,
     (int)p.rssi, cfgSleepMode.c_str(), totalBufRemaining,
-    p.can_ok ? "true" : "false"
+    p.can_ok ? "true" : "false",
+    p.speed_kmh, (int)p.iat_c, p.map_kpa, p.load_pct,
+    p.tps_pct, p.ign_deg, p.maf_gs, (unsigned long)p.run_time_s,
+    p.fuel_pct, p.fuel_rate_lh, p.o2_v, p.stft_pct,
+    p.mil_on, p.ecu_v, p.dist_clr_km
   );
   return String(buf);
 }
@@ -483,6 +764,7 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
   if (count == 1) {
     payload = buildSingleRecordJson(items[0], totalRemaining);
   } else {
+    payload.reserve((size_t)count * 720U);
     payload = "[";
     for (uint8_t i = 0; i < count; i++) {
       if (i > 0) payload += ",";

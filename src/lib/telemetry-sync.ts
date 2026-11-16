@@ -3,8 +3,10 @@ import type { TelemetryPayload, VehicleUnit } from "@/data/mockTelemetry";
 const NUM_KEYS = [
   "seq", "boot", "ts_epoch", "v_bat", "rpm", "temp_c", "dtc_cnt", "rssi",
   "sleep_cfg", "active_ms", "daily_mah", "rtc_temp_c", "adc_raw_mv", "shunt_sleep_ua",
+  "speed_kmh", "iat_c", "map_kpa", "load_pct", "tps_pct", "ign_deg", "maf_gs", "run_time_s",
+  "fuel_pct", "fuel_rate_lh", "o2_v", "stft_pct", "ecu_v", "dist_clr_km",
 ] as const;
-const BOOL_KEYS = ["engine_on", "crit_alert", "can_ok"] as const;
+const BOOL_KEYS = ["engine_on", "crit_alert", "can_ok", "mil_on"] as const;
 const STR_KEYS = ["dtc"] as const;
 
 type PayloadPatch = Partial<TelemetryPayload>;

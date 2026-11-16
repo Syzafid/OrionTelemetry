@@ -169,4 +169,51 @@ describe("applyRemoteUpdate (live API merge)", () => {
     expect(resPartial[2]).toBe(before[2]);
     expect(resPartial[1]!.telemetry.v_bat).toBeCloseTo(before[1]!.telemetry.v_bat - 0.15, 2);
   });
+
+  it("merges all 15 v1.5.0 Read-Only OBD-II fields with strict typing and structural sharing", () => {
+    const before = clone();
+    const obdPayload = {
+      unit_id: TARGET,
+      engine_on: true,
+      rpm: 1450,
+      temp_c: 86,
+      speed_kmh: 28,
+      iat_c: 34,
+      map_kpa: 68,
+      load_pct: 37.5,
+      tps_pct: 24.5,
+      ign_deg: 16.5,
+      maf_gs: 11.45,
+      run_time_s: 185,
+      fuel_pct: 74.5,
+      fuel_rate_lh: 3.79,
+      o2_v: 0.72,
+      stft_pct: 2.3,
+      mil_on: true,
+      ecu_v: 14.08,
+      dist_clr_km: 1420,
+    };
+
+    const next = applyRemoteUpdate(before, obdPayload, UNITS[0]!.unit_id);
+    expect(next).not.toBe(before);
+    const t = next.find((u) => u.unit_id === TARGET)!.telemetry;
+    expect(t.speed_kmh).toBe(28);
+    expect(t.iat_c).toBe(34);
+    expect(t.map_kpa).toBe(68);
+    expect(t.load_pct).toBe(37.5);
+    expect(t.tps_pct).toBe(24.5);
+    expect(t.ign_deg).toBe(16.5);
+    expect(t.maf_gs).toBe(11.45);
+    expect(t.run_time_s).toBe(185);
+    expect(t.fuel_pct).toBe(74.5);
+    expect(t.fuel_rate_lh).toBe(3.79);
+    expect(t.o2_v).toBe(0.72);
+    expect(t.stft_pct).toBe(2.3);
+    expect(t.mil_on).toBe(true);
+    expect(t.ecu_v).toBe(14.08);
+    expect(t.dist_clr_km).toBe(1420);
+
+    // Repeating identical OBD-II values keeps exact references
+    expect(applyRemoteUpdate(next, obdPayload, UNITS[0]!.unit_id)).toBe(next);
+  });
 });

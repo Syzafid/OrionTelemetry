@@ -40,6 +40,7 @@ try {
         'adc_raw_mv',
         'rtc_temp_c',
         'shunt_sleep_ua',
+        'can_ok',
         'engine_on',
         'crit_alert',
         'rpm',
@@ -48,16 +49,31 @@ try {
         'dtc',
         'rssi',
         'sleep_cfg',
+        'buffer_used',
         'active_ms',
         'daily_mah',
+        'speed_kmh',
+        'iat_c',
+        'map_kpa',
+        'load_pct',
+        'tps_pct',
+        'ign_deg',
+        'maf_gs',
+        'run_time_s',
+        'fuel_pct',
+        'fuel_rate_lh',
+        'o2_v',
+        'stft_pct',
+        'mil_on',
+        'ecu_v',
+        'dist_clr_km',
     ];
+
+    $selectCols = '`' . implode('`, `', $columns) . '`';
 
     if ($isAll) {
         $sql = "
-            SELECT `id`, `unit_id`, `seq`, `boot`, `ts_epoch`, `created_at`,
-                   `v_bat`, `adc_raw_mv`, `rtc_temp_c`, `shunt_sleep_ua`,
-                   `engine_on`, `crit_alert`, `rpm`, `temp_c`, `dtc_cnt`, `dtc`,
-                   `rssi`, `sleep_cfg`, `active_ms`, `daily_mah`
+            SELECT {$selectCols}
             FROM `telemetry_logs`
             ORDER BY `id` DESC
             LIMIT :limit
@@ -66,10 +82,7 @@ try {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     } else {
         $sql = "
-            SELECT `id`, `unit_id`, `seq`, `boot`, `ts_epoch`, `created_at`,
-                   `v_bat`, `adc_raw_mv`, `rtc_temp_c`, `shunt_sleep_ua`,
-                   `engine_on`, `crit_alert`, `rpm`, `temp_c`, `dtc_cnt`, `dtc`,
-                   `rssi`, `sleep_cfg`, `active_ms`, `daily_mah`
+            SELECT {$selectCols}
             FROM `telemetry_logs`
             WHERE `unit_id` = :unit_id
             ORDER BY `id` DESC

@@ -371,6 +371,30 @@ export function ShowroomModule({ active }: { active: boolean }) {
               value={`${t.can_ok === false ? "ERR" : "OK"} / ${t.rssi}dBm (#${t.seq ?? t.boot})`}
               tone={t.can_ok === false ? "crimson" : t.rssi < -85 ? "amber" : "dim"}
             />
+            <Stat
+              label="Speed / Load"
+              value={!t.engine_on ? "----" : (t.speed_kmh ?? 0)}
+              unit={!t.engine_on ? "" : `km/h · ${(t.load_pct ?? 0).toFixed(0)}%`}
+              tone={t.engine_on ? "cyan" : "dim"}
+            />
+            <Stat
+              label="Fuel / Rate"
+              value={`${(t.fuel_pct ?? 74.5).toFixed(0)}%`}
+              unit={!t.engine_on ? "/ ----" : `/ ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
+              tone={(t.fuel_pct ?? 74.5) < 20 ? "amber" : "dim"}
+            />
+            <Stat
+              label="ECU V / MIL"
+              value={!t.engine_on || !t.ecu_v || t.ecu_v <= 0 ? "----" : t.ecu_v.toFixed(2)}
+              unit={`${!t.engine_on || !t.ecu_v || t.ecu_v <= 0 ? "" : "V · "}${t.mil_on || t.dtc_cnt > 0 ? "MIL ON" : "MIL OFF"}`}
+              tone={t.mil_on || t.dtc_cnt > 0 ? "crimson" : "dim"}
+            />
+            <Stat
+              label="Dist Clr (0131)"
+              value={(t.dist_clr_km ?? 1420).toLocaleString("id-ID")}
+              unit="km"
+              tone="dim"
+            />
           </div>
         </Panel>
       </div>
