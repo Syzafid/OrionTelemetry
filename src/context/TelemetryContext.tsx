@@ -180,9 +180,16 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     try {
       const host = window.location.hostname;
       if (host && host !== "localhost" && host !== "127.0.0.1") {
+        const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+        const port = window.location.port;
+        const isDevPort = port === "8080" || port === "5173" || port === "3000";
+        const baseOrigin = isDevPort ? `${protocol}//${host}` : window.location.origin;
         setApiUrl((prev) =>
-          prev === DEFAULT_API_URL ? `http://${host}/dipo_api/get_data.php` : prev,
+          prev === DEFAULT_API_URL ? `${baseOrigin}/dipo_api/get_data.php` : prev,
         );
+        if (protocol === "https:" || host.endsWith(".tech") || host.endsWith(".herokuapp.com")) {
+          setDataSource("LIVE_API");
+        }
       }
 
       const resolved = parseDeepLinkParams(window.location.search);

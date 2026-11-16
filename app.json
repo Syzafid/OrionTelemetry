@@ -1,0 +1,21 @@
+{
+  "name": "ORION Telemetry Workbench",
+  "description": "Real-time IoT Stock Yard Telemetry & Digital Twin Workbench (Frontend + PHP API + JawsDB MySQL).",
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    },
+    {
+      "url": "heroku/php"
+    }
+  ],
+  "addons": [
+    "jawsdb:kitefin"
+  ],
+  "env": {
+    "CORS_ALLOWED_ORIGIN": {
+      "description": "Allowed origin for dashboard CORS headers (use * or https://oriontelemetry.tech).",
+      "value": "https://oriontelemetry.tech"
+    }
+  }
+}

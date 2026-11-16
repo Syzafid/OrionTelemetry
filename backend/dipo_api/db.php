@@ -153,7 +153,13 @@ if (!function_exists('parseSleepCfgSeconds')) {
     }
 }
 
-// 3. Database Configurations (Env / .env for Hosting with Local XAMPP/MAMP Fallback)
+// 3. Database Configurations (JAWSDB_URL / CLEARDB_DATABASE_URL / Env / .env with Local XAMPP/MAMP Fallback)
+$databaseUrl = orionEnv('JAWSDB_URL')
+    ?: orionEnv('JAWSDB_MARIA_URL')
+    ?: orionEnv('CLEARDB_DATABASE_URL')
+    ?: orionEnv('DATABASE_URL');
+
+$isCloudDatabaseUrl = false;
 $hasCustomDbEnv =
     orionEnv('DB_HOST') !== null ||
     orionEnv('DB_USER') !== null ||
@@ -166,11 +172,29 @@ $dbName = orionEnv('DB_NAME', 'dipo_telemetry') ?: 'dipo_telemetry';
 $dbUser = orionEnv('DB_USER', 'root') ?: 'root';
 $dbPass = orionEnv('DB_PASS', '') ?? '';
 
+if (!empty($databaseUrl)) {
+    $parsedUrl = parse_url($databaseUrl);
+    if (is_array($parsedUrl) && !empty($parsedUrl['host'])) {
+        $dbHost = (string)$parsedUrl['host'];
+        $dbPort = isset($parsedUrl['port']) ? (int)$parsedUrl['port'] : 3306;
+        $dbUser = isset($parsedUrl['user']) ? rawurldecode((string)$parsedUrl['user']) : $dbUser;
+        $dbPass = isset($parsedUrl['pass']) ? rawurldecode((string)$parsedUrl['pass']) : '';
+        if (!empty($parsedUrl['path'])) {
+            $parsedDbName = ltrim((string)$parsedUrl['path'], '/');
+            if ($parsedDbName !== '') {
+                $dbName = $parsedDbName;
+            }
+        }
+        $isCloudDatabaseUrl = true;
+        $hasCustomDbEnv = true;
+    }
+}
+
 if ($hasCustomDbEnv) {
     $connectionAttempts = [
         ['host' => $dbHost, 'port' => $dbPort, 'user' => $dbUser, 'pass' => $dbPass],
     ];
-    if (strtolower($dbHost) === 'localhost') {
+    if (!$isCloudDatabaseUrl && strtolower($dbHost) === 'localhost') {
         $connectionAttempts[] = ['host' => '127.0.0.1', 'port' => $dbPort, 'user' => $dbUser, 'pass' => $dbPass];
     }
 } else {
@@ -188,8 +212,8 @@ $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-    PDO::ATTR_PERSISTENT         => true,
-    PDO::ATTR_TIMEOUT            => 3,
+    PDO::ATTR_PERSISTENT         => !$isCloudDatabaseUrl,
+    PDO::ATTR_TIMEOUT            => 4,
 ];
 if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
     $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET time_zone = '+07:00'";
@@ -213,8 +237,96 @@ if (!$pdo) {
         'error' => 'DATABASE_CONNECTION_FAILED',
         'message' => "Unable to connect to MySQL database ({$dbHost}:{$dbPort}/{$dbName}).",
         'detail' => $lastError,
-        'hint' => 'Periksa DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS pada environment/.env server atau pastikan MySQL XAMPP sudah aktif.',
+        'hint' => 'Periksa JAWSDB_URL / DB_HOST / DB_USER / DB_PASS / DB_NAME pada Config Vars Heroku atau .env server.',
     ], 500);
+}
+
+if (!function_exists('ensureOrionDatabaseInitialized')) {
+    /**
+     * Auto-migrates production schema and initial seed data (`MITSUBISHI-STOCK-01`..`12`)
+     * when running against a freshly provisioned database (e.g. Heroku JawsDB MySQL).
+     *
+     * @return array{migrated: bool, reason: string}
+     */
+    function ensureOrionDatabaseInitialized(PDO $pdo, bool $force = false): array {
+        static $alreadyChecked = false;
+        if ($alreadyChecked && !$force) {
+            return ['migrated' => false, 'reason' => 'already_checked'];
+        }
+        $alreadyChecked = true;
+
+        $activeDb = '';
+        try {
+            $activeDb = (string)($pdo->query("SELECT DATABASE()")->fetchColumn() ?: 'default');
+        } catch (Exception $ignored) {
+            $activeDb = 'default';
+        }
+        $initLock = sys_get_temp_dir() . '/orion_init_' . substr(md5($activeDb), 0, 8) . '.ok';
+        if (!$force && is_file($initLock)) {
+            return ['migrated' => false, 'reason' => 'cached'];
+        }
+
+        $needsMigration = false;
+        try {
+            $hasVehicles = (bool)$pdo->query("SHOW TABLES LIKE 'vehicles'")->fetchColumn();
+            $hasLogs = (bool)$pdo->query("SHOW TABLES LIKE 'telemetry_logs'")->fetchColumn();
+            $hasConfigs = (bool)$pdo->query("SHOW TABLES LIKE 'node_configs'")->fetchColumn();
+            $hasMovements = (bool)$pdo->query("SHOW TABLES LIKE 'movement_events'")->fetchColumn();
+            $hasEvents = (bool)$pdo->query("SHOW TABLES LIKE 'system_events'")->fetchColumn();
+            $hasTickets = (bool)$pdo->query("SHOW TABLES LIKE 'maintenance_tickets'")->fetchColumn();
+
+            if (!$hasVehicles || !$hasLogs || !$hasConfigs || !$hasMovements || !$hasEvents || !$hasTickets) {
+                $needsMigration = true;
+            } else {
+                $count = (int)$pdo->query("SELECT COUNT(*) FROM `vehicles`")->fetchColumn();
+                if ($count === 0) {
+                    $needsMigration = true;
+                }
+            }
+        } catch (Exception $e) {
+            $needsMigration = true;
+        }
+
+        if (!$needsMigration) {
+            @file_put_contents($initLock, (string)time());
+            return ['migrated' => false, 'reason' => 'schema_present'];
+        }
+
+        $schemaFile = __DIR__ . '/schema_production.sql';
+        if (!is_file($schemaFile) || !is_readable($schemaFile)) {
+            return ['migrated' => false, 'reason' => 'missing_schema_production_sql'];
+        }
+
+        $sql = (string)file_get_contents($schemaFile);
+        $lines = preg_split('/\R/', $sql) ?: [];
+        $filtered = [];
+        foreach ($lines as $line) {
+            $trimmed = ltrim($line);
+            if ($trimmed === '' || strncmp($trimmed, '--', 2) === 0 || $trimmed[0] === '#') {
+                continue;
+            }
+            $filtered[] = $line;
+        }
+        $cleanSql = implode("\n", $filtered);
+        $statements = preg_split('/;\s*(?:\r?\n|$)/', $cleanSql) ?: [];
+
+        foreach ($statements as $stmtSql) {
+            $stmtSql = trim($stmtSql);
+            if ($stmtSql !== '') {
+                $pdo->exec($stmtSql);
+            }
+        }
+
+        @file_put_contents($initLock, (string)time());
+        markOrionSchemaReady();
+        return ['migrated' => true, 'reason' => 'executed_schema_production'];
+    }
+}
+
+try {
+    ensureOrionDatabaseInitialized($pdo);
+} catch (Exception $ignored) {
+    // Non-blocking fallback so partial DB grants do not abort requests
 }
 
 return $pdo;

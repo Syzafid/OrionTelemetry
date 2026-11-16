@@ -31,7 +31,9 @@
 // ======================== KONFIGURASI JARINGAN & SERVER ======================
 const char* WIFI_SSID     = "POCOF6";       // <-- SSID WiFi/Hotspot
 const char* WIFI_PASS     = "88888888";     // <-- Password WiFi
-const char* API_ENDPOINT  = "http://10.73.83.110/dipo_api/simpan_data.php";
+const char* API_ENDPOINT  = "https://oriontelemetry.tech/dipo_api/simpan_data.php";
+// Fallback Heroku URL    : "https://<nama-app-heroku>.herokuapp.com/dipo_api/simpan_data.php"
+// Fallback LAN Lokal     : "http://10.73.83.110/dipo_api/simpan_data.php"
 const char* UNIT_ID       = "MITSUBISHI-STOCK-01";
 
 // ======================== DEFINISI PIN HARDWARE ==============================
@@ -471,7 +473,7 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
   }
 
   http.setReuse(true);
-  http.setTimeout(2500);
+  http.setTimeout(urlStr.startsWith("https://") ? 5000 : 2500);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Orion-Node", UNIT_ID);
   if (isBurst) http.addHeader("X-Burst-Sync", "true");
