@@ -18,6 +18,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendJson(['error' => 'METHOD_NOT_ALLOWED', 'message' => 'Use GET method.'], 405);
 }
 
+// Micro-cache 1.5s untuk melindungi kuota MySQL JawsDB (3.600 query/jam) dari spam polling frontend
+$cacheFile = sys_get_temp_dir() . '/orion_get_data_cache.json';
+$cacheTtl = 1.5;
+$noCache = isset($_GET['nocache']) && $_GET['nocache'] === '1';
+if (!$noCache && is_file($cacheFile) && (microtime(true) - @filemtime($cacheFile)) < $cacheTtl) {
+    $cached = @file_get_contents($cacheFile);
+    if (!empty($cached)) {
+        http_response_code(200);
+        header("Content-Type: application/json; charset=utf-8");
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        header("X-Orion-Cache: HIT");
+        echo $cached;
+        exit(0);
+    }
+}
+
 try {
     // 1. Ambil seluruh unit kendaraan + selisih detik last_seen langsung via TIMESTAMPDIFF SQL
     $stmtVehicles = $pdo->query("
@@ -341,7 +358,7 @@ try {
         // Fallback kosong jika tabel belum ter-migrasi
     }
 
-    sendJson([
+    $finalPayload = [
         'status' => 'OK',
         'timestamp' => date('c'),
         'mass_disconnect_guard' => $isMassDisconnect,
@@ -351,7 +368,10 @@ try {
         'history' => $historyMap,
         'audit_logs' => $auditLogsList,
         'tickets' => $ticketsList,
-    ]);
+    ];
+
+    @file_put_contents($cacheFile, json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    sendJson($finalPayload);
 
 } catch (Exception $e) {
     sendJson([

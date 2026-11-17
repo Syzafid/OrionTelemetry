@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ORION — Onboard Reporting for Inventory & Operational Notifications
- * Firmware Version : v1.4.2 (NVS Persistent Seq/Config + Full Two-Tier Sync)
+ * Firmware Version : v1.6.0 (Dual-SSID Presence Handover + Monotonic Exit Lag)
  * Target Hardware  : ESP32 DevKit V1 + Expansion Base (PCB v1.0 / v3.3 & v2.0)
  * ============================================================================
  * Pinout Summary (PCB v1.0 / v3.3):
@@ -24,17 +24,39 @@
 #include "driver/twai.h"
 #include "esp_sleep.h"
 
+// Forward Declaration untuk Arduino IDE Preprocessor (C++ prototype resolver)
+struct TelemetryItem;
+
 // ======================== PILIH VERSI HARDWARE PCB ===========================
 // Pilih 1 untuk PCB v1.0 (R1=300k, R2=68k) atau 2 untuk PCB v2.0 (R1=100k, R2=27k)
 #define ORION_PCB_VERSION 1
 
 // ======================== KONFIGURASI JARINGAN & SERVER ======================
-const char* WIFI_SSID     = "POCOF6";       // <-- SSID WiFi/Hotspot
-const char* WIFI_PASS     = "88888888";     // <-- Password WiFi
+// Kredensial default untuk pengujian meja (development).
+// CATATAN KEAMANAN: Kredensial hardcoded ini hanya untuk pengembangan. Pada produksi penuh,
+// kredensial wajib diinjeksi via NVS (serta opsi verifikasi BSSID gudang pada fase rilis berikutnya).
+const char* DEFAULT_YARD_SSID = "POCOF6";             // SSID Gudang (Primary Yard AP)
+const char* DEFAULT_YARD_PASS = "88888888";           // Password SSID Gudang
+const char* DEFAULT_TECH_SSID = "POCOF5";  // SSID Hotspot Teknisi (Secondary)
+const char* DEFAULT_TECH_PASS = "88888888";       // Password Hotspot Teknisi
+
+String wifiYardSsid = DEFAULT_YARD_SSID;
+String wifiYardPass = DEFAULT_YARD_PASS;
+String wifiTechSsid = DEFAULT_TECH_SSID;
+String wifiTechPass = DEFAULT_TECH_PASS;
+
 const char* API_ENDPOINT  = "https://www.oriontelemetry.tech/dipo_api/simpan_data.php";
 // Fallback Heroku URL    : "https://<nama-app-heroku>.herokuapp.com/dipo_api/simpan_data.php"
 // Fallback LAN Lokal     : "http://10.73.83.110/dipo_api/simpan_data.php"
 const char* UNIT_ID       = "MITSUBISHI-STOCK-01";
+
+// ======================== ENUM ZONA JARINGAN =================================
+enum OrionNetZone : uint8_t {
+  NET_ZONE_UNKNOWN = 0, // "UNKNOWN" — Default untuk rekaman lama di flash / sebelum evaluasi pertama
+  NET_ZONE_YARD    = 1, // "YARD" — SSID Gudang terlihat dengan RSSI >= -85 dBm, baik asosiasi/internet berhasil maupun gagal
+  NET_ZONE_TECH    = 2, // "TECH_HOTSPOT" — SSID Gudang absen melewati batas debounce keluar + ESP32 terhubung ke Hotspot Teknisi
+  NET_ZONE_OFFLINE = 3  // "OFFLINE" — SSID Gudang absen melewati batas debounce keluar + Hotspot Teknisi tidak tersedia; unit di luar gudang dan merekam ke buffer
+};
 
 // ======================== DEFINISI PIN HARDWARE ==============================
 #define PIN_I2C_SDA       21
@@ -51,7 +73,7 @@ const char* UNIT_ID       = "MITSUBISHI-STOCK-01";
 // ======================== KONFIGURASI TWO-TIER BUFFER ========================
 #define TIER1_RTC_CAP     20                     // 20 Slot di RTC Slow SRAM
 #define TIER2_FILE_PATH   "/tier2_queue.bin"     // File biner permanen di LittleFS Flash
-#define TIER2_MAX_RECORDS 2000                   // 2.000 Slot x 40 Byte = 80 KB
+#define TIER2_MAX_RECORDS 2000                   // 2.000 Slot x 88 Byte = 176 KB
 #define FLUSH_BATCH_SIZE  20                     // Maksimum pengiriman per HTTP Batch POST
 
 // Struktur Rekaman Telemetri Padat 88-Byte (Kelompok 32-bit -> 16-bit -> 8-bit)
@@ -88,12 +110,42 @@ struct __attribute__((packed)) TelemetryItem {
   uint8_t  temp_c;         // PID 0x05 Coolant Temp (C)
   uint8_t  dtc_cnt;
   int8_t   rssi;
-  uint8_t  can_ok;
+  uint8_t  can_ok;         // Bit 0: CAN OK, Bits 1..2: OrionNetZone, Bits 3..7: exit_lag_steps (20s/step)
   uint8_t  speed_kmh;      // PID 0x0D Vehicle Speed (km/h)
   uint8_t  mil_on;         // PID 0x01 Bit A7 Check Engine MIL (Read-Only)
 };
 
 static_assert(sizeof(TelemetryItem) == 88, "TelemetryItem size must be 88 bytes");
+
+// 4 Fungsi Helper Wajib Bit-Packing pada Byte can_ok (Ukuran Struct Tetap 88-Byte)
+// Bit 0    (0x01): can_ok (0 = ERR, 1 = OK)
+// Bit 1..2 (0x06): OrionNetZone (0..3)
+// Bit 3..7 (0xF8): exit_lag_steps (0..31, resolusi 20 detik per step, jangkauan 0..620 detik)
+static inline uint8_t packCanZoneAndLag(bool canOk, uint8_t zone, uint8_t lagSteps20s) {
+  return (canOk ? 0x01 : 0x00) | ((zone & 0x03) << 1) | ((lagSteps20s & 0x1F) << 3);
+}
+
+static inline bool getRecordCanOk(const TelemetryItem &p) {
+  return (p.can_ok & 0x01) != 0;
+}
+
+static inline uint8_t getRecordNetZone(const TelemetryItem &p) {
+  return (p.can_ok >> 1) & 0x03;
+}
+
+static inline uint16_t getRecordExitLagSec(const TelemetryItem &p) {
+  return (uint16_t)((p.can_ok >> 3) & 0x1F) * 20U;
+}
+
+static inline const char* netZoneToString(uint8_t z) {
+  switch (z) {
+    case NET_ZONE_YARD:    return "YARD";
+    case NET_ZONE_TECH:    return "TECH_HOTSPOT";
+    case NET_ZONE_OFFLINE: return "OFFLINE";
+    case NET_ZONE_UNKNOWN:
+    default:               return "UNKNOWN";
+  }
+}
 
 // Tier 1: Bertahan melewati Deep Sleep di RTC Slow Memory
 RTC_DATA_ATTR TelemetryItem tier1RtcBuf[TIER1_RTC_CAP];
@@ -102,6 +154,24 @@ RTC_DATA_ATTR uint32_t      rtcBootCount   = 0;
 RTC_DATA_ATTR uint32_t      rtcSeqCounter  = 0;
 RTC_DATA_ATTR bool          rtcInitialized = false;
 RTC_DATA_ATTR uint16_t      rtcStructSize  = 0;
+
+// State Persistence Zona Jaringan di RTC Memory (Tahan Deep Sleep)
+RTC_DATA_ATTR uint8_t       rtcCurrentZone    = NET_ZONE_UNKNOWN;
+RTC_DATA_ATTR uint8_t       rtcYardMissCount  = 0;
+RTC_DATA_ATTR uint8_t       rtcYardHitCount   = 0;
+RTC_DATA_ATTR uint32_t      rtcFirstMissEpoch = 0;
+
+// Konfigurasi & Variabel Pengujian Serial Interaktif
+#define ORION_DEBUG_SERIAL 1
+
+#if ORION_DEBUG_SERIAL
+int8_t  simZoneOverride         = -1;
+uint8_t simTransitionLagPending = 0;
+#endif
+
+uint32_t lastZoneEvalMs    = 0;
+uint8_t  prevEngineOnState = 0;
+uint32_t engineStartTimeMs = 0;
 
 // Tier 2: Pointer Ring Buffer di NVS + Data di LittleFS Flash
 Preferences nvsStore;
@@ -134,7 +204,7 @@ bool     simDtcActive        = false;
 bool     rtcHardwareOk       = false;
 bool     canLoopbackOk       = false;
 uint32_t lastPollMs          = 0;
-uint32_t pollIntervalMs      = 2000;  // Default 2 detik saat live bench test
+uint32_t pollIntervalMs      = 5000;  // Default 5 detik sesuai ORION Hardware Blueprint (hemat kuota & stabil)
 uint32_t lastWifiRetryMs     = 0;
 const uint32_t WIFI_RETRY_MS = 15000; // Auto-reconnect tiap 15 detik
 
@@ -146,8 +216,17 @@ void initAndLoadNvsState() {
   cfgCritVoltage = nvsStore.getFloat("cfg_critv",  11.80f);
   cfgSleepMode   = nvsStore.getString("cfg_sleep", "6 Hours");
 
+  // Pulihkan override kredensial Dual-SSID dari NVS jika ada
+  wifiYardSsid = nvsStore.getString("yard_ssid", DEFAULT_YARD_SSID);
+  wifiYardPass = nvsStore.getString("yard_pass", DEFAULT_YARD_PASS);
+  wifiTechSsid = nvsStore.getString("tech_ssid", DEFAULT_TECH_SSID);
+  wifiTechPass = nvsStore.getString("tech_pass", DEFAULT_TECH_PASS);
+  if (wifiYardSsid.length() == 0) wifiYardSsid = DEFAULT_YARD_SSID;
+  if (wifiYardPass.length() == 0) wifiYardPass = DEFAULT_YARD_PASS;
+  if (wifiTechSsid.length() == 0) wifiTechSsid = DEFAULT_TECH_SSID;
+  if (wifiTechPass.length() == 0) wifiTechPass = DEFAULT_TECH_PASS;
+
   // 2. Pulihkan boot & seq secara monotonik (tahan cabut baterai / cold boot)
-  // Minimal seq=1000 agar selalu lebih baru dari last_seq pengujian sebelumnya di DB MySQL
   uint32_t nvsBoot = nvsStore.getULong("boot_cnt", 0);
   uint32_t nvsSeq  = nvsStore.getULong("seq_cnt",  1000);
   if (nvsSeq < 1000) {
@@ -175,6 +254,7 @@ void initAndLoadNvsState() {
   Serial.printf("[NVS OK] Boot #%lu | Seq Awal: %lu | Slope: %.6f | Offset: %.4f | CritV: %.2fV | Sleep: %s\n",
                 (unsigned long)rtcBootCount, (unsigned long)rtcSeqCounter,
                 cfgAdcSlopeM, cfgAdcOffsetC, cfgCritVoltage, cfgSleepMode.c_str());
+  Serial.printf("[NVS WIFI] Yard SSID: %s | Tech SSID: %s\n", wifiYardSsid.c_str(), wifiTechSsid.c_str());
 }
 
 uint32_t nextMonotonicSeq() {
@@ -312,6 +392,13 @@ void initTier2LittleFS() {
   tier2Tail  = nvsStore.getUShort("t2_tail", 0);
   tier2Count = nvsStore.getUShort("t2_cnt",  0);
 
+  // Periksa versi skema NVS: jika belum versi 2, naikkan ke v2 tanpa hapus file selama ukuran struct 88B
+  uint8_t schemaVer = nvsStore.getUChar("schema_ver", 1);
+  if (schemaVer != 2) {
+    nvsStore.putUChar("schema_ver", 2);
+    Serial.println("[NVS] Schema upgraded to v2 (bit-packed can_ok + net_zone + exit_lag)");
+  }
+
   uint16_t savedStructSize = nvsStore.getUShort("t2_ssz", 0);
   bool exists = LittleFS.exists(TIER2_FILE_PATH);
   size_t fileSize = 0;
@@ -381,8 +468,9 @@ void spilloverTier1ToLittleFS() {
 
 void enqueueOfflineRecord(const TelemetryItem &item) {
   tier1RtcBuf[tier1Count++] = item;
-  Serial.printf("[BUFFER] Disimpan ke Tier-1 RTC (%u/%u) | Total Antrean Offline: %u\n",
-                tier1Count, TIER1_RTC_CAP, (uint16_t)(tier1Count + tier2Count));
+  Serial.printf("[BUFFER] Disimpan ke Tier-1 RTC (%u/%u) [Zone: %s, Lag: %us] | Total Antrean Offline: %u\n",
+                tier1Count, TIER1_RTC_CAP, netZoneToString(getRecordNetZone(item)),
+                getRecordExitLagSec(item), (uint16_t)(tier1Count + tier2Count));
   if (tier1Count >= TIER1_RTC_CAP) {
     spilloverTier1ToLittleFS();
   }
@@ -613,6 +701,228 @@ bool runCanTransceiverLoopbackTest() {
   return ok;
 }
 
+// ==================== STATE MACHINE ZONA JARINGAN (4-STATE) ===================
+void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &outLagSteps) {
+  outLagSteps = 0;
+
+#if ORION_DEBUG_SERIAL
+  if (simZoneOverride != -1) {
+    outZone = (uint8_t)simZoneOverride;
+    outLagSteps = simTransitionLagPending;
+    simTransitionLagPending = 0; // Hanya diberikan pada paket pertama saat transisi
+    return;
+  }
+#endif
+
+  // 1. Pembersihan Counter Basi Saat Bangun Tidur / Evaluasi (>620 Detik)
+  if (rtcFirstMissEpoch > 0 && pkt.ts_epoch > rtcFirstMissEpoch && (pkt.ts_epoch - rtcFirstMissEpoch) > 620UL) {
+    rtcYardMissCount  = 0;
+    rtcFirstMissEpoch = 0;
+    Serial.println("[ZONE] Stale miss counter reset (>620s expired)");
+  }
+
+  // 2. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiYardSsid && WiFi.RSSI() >= -85) {
+    // Validasi kehadiran fisik di YARD tanpa memanggil WiFi.scanNetworks()
+    // Catatan Keamanan: Validasi SSID ini dapat diperkuat dengan verifikasi BSSID lock di NVS pada fase berikutnya.
+    rtcCurrentZone    = NET_ZONE_YARD;
+    rtcYardMissCount  = 0;
+    rtcYardHitCount   = 0;
+    rtcFirstMissEpoch = 0;
+    outZone           = NET_ZONE_YARD;
+    outLagSteps       = 0;
+    return;
+  }
+
+  // 3. Interval Evaluasi Scan Adaptif (15 / 30 / 60 / 180 Detik)
+  // Deteksi transisi mesin menyala (prevEngineOn == 0 && pkt.engine_on == 1)
+  if (prevEngineOnState == 0 && pkt.engine_on == 1) {
+    engineStartTimeMs = millis();
+    lastZoneEvalMs    = 0; // Paksa evaluasi segera saat mesin baru saja menyala
+    Serial.println("[ZONE TIMER] Transisi mesin menyala -> Paksa evaluasi scan segera (Jendela 15s aktif)");
+  }
+  prevEngineOnState = pkt.engine_on;
+
+  uint32_t evalIntervalMs = 180000UL; // Default 180s saat mesin mati dan masih terhubung ke Gudang
+  if (WiFi.status() != WL_CONNECTED) {
+    evalIntervalMs = 8000UL; // 8 detik saat koneksi terputus agar deteksi & handover ke Hotspot Teknisi responsif!
+  } else if (pkt.engine_on == 1) {
+    if ((millis() - engineStartTimeMs) <= 120000UL) {
+      evalIntervalMs = 15000UL; // 15 detik selama 120 detik pertama setelah mesin menyala
+    } else if (rtcCurrentZone != NET_ZONE_YARD) {
+      evalIntervalMs = 30000UL; // 30 detik saat di luar gudang dan mesin menyala
+    } else {
+      evalIntervalMs = 60000UL; // 60 detik saat di gudang dan mesin menyala
+    }
+  }
+
+  // Jika belum tiba waktu evaluasi scan dan bukan cold boot, pertahankan zona saat ini
+  if (rtcCurrentZone != NET_ZONE_UNKNOWN && (millis() - lastZoneEvalMs) < evalIntervalMs) {
+    outZone     = rtcCurrentZone;
+    outLagSteps = 0;
+    return;
+  }
+
+  // 4. Lakukan Scan Jaringan Aktif Cepat
+  int16_t yardRssi = -127;
+  int16_t techRssi = -127;
+
+  int nNetworks = WiFi.scanNetworks(false, false, false, 120);
+  for (int i = 0; i < nNetworks; i++) {
+    String s = WiFi.SSID(i);
+    int32_t r = WiFi.RSSI(i);
+    if (s == wifiYardSsid && r > yardRssi) yardRssi = (int16_t)r;
+    if (s == wifiTechSsid && r > techRssi) techRssi = (int16_t)r;
+  }
+  WiFi.scanDelete();
+  lastZoneEvalMs = millis();
+
+  // 5. Evaluasi Berdasarkan State Saat Ini
+  if (rtcCurrentZone == NET_ZONE_UNKNOWN) {
+    // COLD BOOT SEQUENCE:
+    if (yardRssi >= -85) {
+      rtcCurrentZone    = NET_ZONE_YARD;
+      rtcYardMissCount  = 0;
+      rtcYardHitCount   = 0;
+      rtcFirstMissEpoch = 0;
+      WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+      Serial.printf("[COLD BOOT] Yard SSID terdeteksi (%d dBm >= -85) -> NET_ZONE_YARD\n", yardRssi);
+    } else {
+      Serial.printf("[COLD BOOT] Yard SSID absen (%d dBm < -85). Mencoba Hotspot Teknisi...\n", yardRssi);
+      if (techRssi > -90) {
+        WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+        uint32_t t0 = millis();
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+      }
+      if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
+        rtcCurrentZone = NET_ZONE_TECH;
+        Serial.println("[COLD BOOT] Terhubung ke Hotspot Teknisi -> NET_ZONE_TECH");
+      } else {
+        rtcCurrentZone = NET_ZONE_OFFLINE;
+        Serial.println("[COLD BOOT] Hotspot Teknisi tidak tersedia -> NET_ZONE_OFFLINE");
+      }
+    }
+    outZone     = rtcCurrentZone;
+    outLagSteps = 0;
+    return;
+  }
+
+  if (rtcCurrentZone == NET_ZONE_YARD) {
+    // ATURAN 1: Larangan mutlak pindah ke Hotspot selama SSID Gudang terlihat >= -85 dBm
+    if (yardRssi >= -85) {
+      rtcYardMissCount  = 0;
+      rtcFirstMissEpoch = 0;
+      outZone           = NET_ZONE_YARD;
+      outLagSteps       = 0;
+      // DILARANG mencoba wifiTechSsid, cukup pastikan koneksi ke wifiYardSsid
+      if (WiFi.status() != WL_CONNECTED) {
+        WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+      }
+      return;
+    }
+
+    // ATURAN 2: Debounce Keluar (SSID Gudang absen / < -85 dBm)
+    rtcYardMissCount++;
+    if (rtcYardMissCount == 1) {
+      rtcFirstMissEpoch = pkt.ts_epoch;
+    }
+    Serial.printf("[ZONE DEBOUNCE] Yard SSID miss #%u (firstMissEpoch=%lu, RSSI=%d dBm)\n",
+                  rtcYardMissCount, (unsigned long)rtcFirstMissEpoch, yardRssi);
+
+    bool exitConfirmed = (rtcYardMissCount >= 3) || (rtcYardMissCount >= 2 && pkt.speed_kmh > 0);
+    if (exitConfirmed) {
+      // Transisi keluar sah!
+      uint32_t rawLag = (rtcFirstMissEpoch > 0 && pkt.ts_epoch > rtcFirstMissEpoch) ? (pkt.ts_epoch - rtcFirstMissEpoch) : 0;
+      if (rawLag <= 620UL) {
+        // Pembagian ke bawah (floor division) agar zone_exit_epoch tidak pernah mendahului rtcFirstMissEpoch
+        outLagSteps = (uint8_t)(rawLag / 20U);
+        if (outLagSteps > 31) outLagSteps = 31;
+      } else {
+        outLagSteps = 0; // Fallback ke ts_epoch di server jika lag > 620s
+      }
+
+      // Coba hubungkan ke Hotspot Teknisi
+      if (techRssi > -90) {
+        WiFi.disconnect();
+        WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+        uint32_t t0 = millis();
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+      }
+
+      if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
+        rtcCurrentZone = NET_ZONE_TECH;
+        Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us)\n",
+                      outLagSteps, (unsigned)(outLagSteps * 20U));
+      } else {
+        rtcCurrentZone = NET_ZONE_OFFLINE;
+        Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE | exit_lag=%u step (%us)\n",
+                      outLagSteps, (unsigned)(outLagSteps * 20U));
+      }
+
+      // Reset counter miss setelah transisi keluar disahkan
+      rtcFirstMissEpoch = 0;
+      rtcYardMissCount  = 0;
+      rtcYardHitCount   = 0;
+      outZone           = rtcCurrentZone;
+      return;
+    }
+
+    // Masih dalam masa debounce keluar: tetap YARD, lag = 0
+    outZone     = NET_ZONE_YARD;
+    outLagSteps = 0;
+    return;
+  }
+
+  // rtcCurrentZone != NET_ZONE_YARD (Sedang di luar gudang: TECH_HOTSPOT atau OFFLINE)
+  // ATURAN 3: Hysteresis Masuk (Ambang -75 dBm) & Cross-Reset
+  if (yardRssi >= -75) {
+    rtcYardHitCount++;
+    Serial.printf("[ZONE HYSTERESIS] Yard SSID hit #%u (RSSI: %d dBm >= -75)\n", rtcYardHitCount, yardRssi);
+    if (rtcYardHitCount >= 2) {
+      // Transisi masuk kembali ke YARD disahkan!
+      if (WiFi.status() == WL_CONNECTED && WiFi.SSID() != wifiYardSsid) {
+        WiFi.disconnect();
+      }
+      WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+
+      rtcCurrentZone    = NET_ZONE_YARD;
+      rtcYardHitCount   = 0;
+      rtcYardMissCount  = 0;
+      rtcFirstMissEpoch = 0;
+      outZone           = NET_ZONE_YARD;
+      outLagSteps       = 0; // Transisi masuk selalu lag=0
+      Serial.println("[ZONE TRANSITION] OUTSIDE -> YARD (Handover Confirmed, lag=0)");
+      return;
+    }
+  } else {
+    // Wajib cross-reset jika sinyal di bawah -75 dBm atau tidak terlihat
+    rtcYardHitCount = 0;
+  }
+
+  // Jika belum masuk gudang, periksa status hotspot teknisi
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
+    rtcCurrentZone = NET_ZONE_TECH;
+  } else if (techRssi > -90) {
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 3000) delay(100);
+    }
+    if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
+      rtcCurrentZone = NET_ZONE_TECH;
+    } else {
+      rtcCurrentZone = NET_ZONE_OFFLINE;
+    }
+  } else {
+    rtcCurrentZone = NET_ZONE_OFFLINE;
+  }
+
+  outZone     = rtcCurrentZone;
+  outLagSteps = 0;
+}
+
 // ==================== SAMPLING ADC PULSA 40ms & CAN TWAI =====================
 void sampleBatteryAndCan(TelemetryItem &pkt) {
   static uint32_t simEngineStartMs = 0;
@@ -705,22 +1015,46 @@ void sampleBatteryAndCan(TelemetryItem &pkt) {
   }
 
   digitalWrite(PIN_GATE_CAN, HIGH); // Matikan kembali daya WCMCU-230 (X8 = 0V)
-  pkt.can_ok = canLoopbackOk ? 1 : 0;
+  bool rawCanOk = canLoopbackOk;
 
   pkt.crit_alert     = (pkt.v_bat < cfgCritVoltage || simDtcActive || pkt.dtc_cnt > 0) ? 1 : 0;
   pkt.shunt_sleep_ua = (pkt.engine_on == 1) ? 0 : ((currentWaveMode == WAVE_PARASITIC_DRAIN) ? 620 : 410);
+
+  // 4. Urutan Eksplisit: Sampling Selesai -> Evaluasi Zona Jaringan -> Bit-Packing
+  uint8_t activeZone  = NET_ZONE_UNKNOWN;
+  uint8_t lagSteps20s = 0;
+  evaluateNetworkZone(pkt, activeZone, lagSteps20s);
+
+  // Kemas 3 informasi ke dalam byte can_ok sebagai langkah paling akhir:
+  pkt.can_ok = packCanZoneAndLag(rawCanOk, activeZone, lagSteps20s);
 }
 
 // ==================== PENGIRIMAN HTTP/HTTPS POST & BURST FLUSH ===============
+String sanitizeSsidHeader(const String &rawSsid) {
+  String clean = "";
+  clean.reserve(32);
+  for (size_t i = 0; i < rawSsid.length() && clean.length() < 32; i++) {
+    char c = rawSsid[i];
+    if (c >= 0x20 && c <= 0x7E) {
+      clean += c;
+    }
+  }
+  return clean.length() > 0 ? clean : "UNKNOWN";
+}
+
 String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining) {
   char buf[1024];
+  uint16_t exitLagSec = getRecordExitLagSec(p);
+  uint32_t zoneExitEpoch = (exitLagSec > 0 && p.ts_epoch > exitLagSec) ? (p.ts_epoch - exitLagSec) : 0UL;
+
   snprintf(buf, sizeof(buf),
     "{\"unit_id\":\"%s\",\"seq\":%lu,\"boot\":%lu,\"ts_epoch\":%lu,"
     "\"v_bat\":%.2f,\"adc_raw_mv\":%u,\"rtc_temp_c\":%.2f,"
     "\"shunt_sleep_ua\":%u,\"engine_on\":%s,\"crit_alert\":%s,"
     "\"rpm\":%u,\"temp_c\":%u,\"dtc_cnt\":%u,\"dtc\":\"%s\","
     "\"rssi\":%d,\"sleep_cfg\":\"%s\",\"buffer_used\":%u,"
-    "\"can_ok\":%s,\"active_ms\":1840,\"daily_mah\":4.82,"
+    "\"can_ok\":%s,\"net_zone\":\"%s\",\"zone_exit_epoch\":%lu,"
+    "\"active_ms\":1840,\"daily_mah\":4.82,"
     "\"speed_kmh\":%u,\"iat_c\":%d,\"map_kpa\":%u,\"load_pct\":%.1f,"
     "\"tps_pct\":%.1f,\"ign_deg\":%.1f,\"maf_gs\":%.2f,\"run_time_s\":%lu,"
     "\"fuel_pct\":%.1f,\"fuel_rate_lh\":%.2f,\"o2_v\":%.2f,\"stft_pct\":%.1f,"
@@ -730,7 +1064,9 @@ String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining)
     p.shunt_sleep_ua, p.engine_on ? "true" : "false", p.crit_alert ? "true" : "false",
     p.rpm, p.temp_c, p.dtc_cnt, p.dtc,
     (int)p.rssi, cfgSleepMode.c_str(), totalBufRemaining,
-    p.can_ok ? "true" : "false",
+    getRecordCanOk(p) ? "true" : "false",
+    netZoneToString(getRecordNetZone(p)),
+    (unsigned long)zoneExitEpoch,
     p.speed_kmh, (int)p.iat_c, p.map_kpa, p.load_pct,
     p.tps_pct, p.ign_deg, p.maf_gs, (unsigned long)p.run_time_s,
     p.fuel_pct, p.fuel_rate_lh, p.o2_v, p.stft_pct,
@@ -740,6 +1076,9 @@ String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining)
 }
 
 bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
+#if ORION_DEBUG_SERIAL
+  if (simZoneOverride == NET_ZONE_OFFLINE) return false;
+#endif
   if (simOfflineMode || WiFi.status() != WL_CONNECTED || count == 0) return false;
 
   HTTPClient http;
@@ -758,13 +1097,14 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Orion-Node", UNIT_ID);
   if (isBurst) http.addHeader("X-Burst-Sync", "true");
+  http.addHeader("X-Sync-SSID", sanitizeSsidHeader(WiFi.SSID()));
 
   uint16_t totalRemaining = tier1Count + tier2Count;
   String payload;
   if (count == 1) {
     payload = buildSingleRecordJson(items[0], totalRemaining);
   } else {
-    payload.reserve((size_t)count * 720U);
+    payload.reserve((size_t)count * 760U);
     payload = "[";
     for (uint8_t i = 0; i < count; i++) {
       if (i > 0) payload += ",";
@@ -796,7 +1136,8 @@ void flushAllOfflineBuffers() {
   while (tier2Count > 0) {
     uint8_t n = readOldestBatchFromLittleFS(batch, FLUSH_BATCH_SIZE);
     if (n == 0) break;
-    Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-2 LittleFS Flash...\n", n);
+    Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-2 LittleFS Flash (X-Sync-SSID: %s)...\n",
+                  n, sanitizeSsidHeader(WiFi.SSID()).c_str());
     if (postBatchRecords(batch, n, true)) {
       commitFlushedLittleFSBatch(n);
     } else {
@@ -805,7 +1146,8 @@ void flushAllOfflineBuffers() {
   }
 
   if (tier1Count > 0) {
-    Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-1 RTC SRAM...\n", tier1Count);
+    Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-1 RTC SRAM (X-Sync-SSID: %s)...\n",
+                  tier1Count, sanitizeSsidHeader(WiFi.SSID()).c_str());
     if (postBatchRecords(tier1RtcBuf, tier1Count, true)) {
       tier1Count = 0;
       Serial.println("[BURST SYNC OK] Seluruh antrean Tier-1 & Tier-2 berhasil dikuras (0 tersisa)!");
@@ -819,6 +1161,7 @@ void printOrionBanner() {
   Serial.println("  ORION — Onboard Reporting for Inventory & Operational Notifications");
   Serial.printf("  Hardware Architecture : PCB v%d.0 (ESP32 + DS3231SN + WCMCU-230)\n", ORION_PCB_VERSION);
   Serial.println("  Storage Architecture  : Tier-1 (20 RTC SRAM) + Tier-2 (2000 LittleFS)");
+  Serial.println("  Network Architecture  : 4-State Network Zone (Dual-SSID Presence Handover)");
   Serial.println("======================================================================");
   Serial.println("Perintah Interaktif Serial Monitor:");
   Serial.println("  [w] Mode Alternator Charging (14.1V, 1400 RPM)");
@@ -829,6 +1172,10 @@ void printOrionBanner() {
   Serial.println("  [b] Suntikkan 20 Paket Offline Sekaligus (Uji Spillover LittleFS)");
   Serial.println("  [s] Cetak Status Buffer Tier-1/Tier-2 & Kalibrasi NVS Aktif");
   Serial.println("  [r] Reset Parameter Kalibrasi NVS ke Default PCB");
+#if ORION_DEBUG_SERIAL
+  Serial.println("  [t] Siklus Uji Simulasi Zona (YARD -> TECH_HOTSPOT -> OFFLINE -> AUTO/BURST)");
+  Serial.println("  [m] Paksa Evaluasi Scan Jaringan WiFi Segera (Bypass Timer 15/30/60/180s)");
+#endif
   Serial.println("======================================================================\n");
 }
 
@@ -857,11 +1204,53 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false); // Nonaktifkan modem sleep agar latensi HTTP POST rendah & stabil
   WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.printf("[WIFI] Menghubungkan ke %s ", WIFI_SSID);
+
+  // Cold Boot Sequence untuk penentuan awal zona jaringan:
+  if (rtcCurrentZone == NET_ZONE_UNKNOWN) {
+    Serial.println("[WIFI COLD BOOT] Scanning jaringan untuk deteksi kehadiran SSID Gudang...");
+    int nNetworks = WiFi.scanNetworks(false, false, false, 120);
+    int16_t yardRssi = -127;
+    int16_t techRssi = -127;
+    for (int i = 0; i < nNetworks; i++) {
+      String s = WiFi.SSID(i);
+      int32_t r = WiFi.RSSI(i);
+      if (s == wifiYardSsid && r > yardRssi) yardRssi = (int16_t)r;
+      if (s == wifiTechSsid && r > techRssi) techRssi = (int16_t)r;
+    }
+    WiFi.scanDelete();
+
+    if (yardRssi >= -85) {
+      rtcCurrentZone    = NET_ZONE_YARD;
+      rtcYardMissCount  = 0;
+      rtcYardHitCount   = 0;
+      rtcFirstMissEpoch = 0;
+      Serial.printf("[WIFI COLD BOOT] SSID Gudang '%s' terdeteksi (%d dBm >= -85) -> NET_ZONE_YARD\n",
+                    wifiYardSsid.c_str(), yardRssi);
+      WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+    } else {
+      Serial.printf("[WIFI COLD BOOT] SSID Gudang absen (%d dBm < -85). Mencoba Hotspot Teknisi...\n", yardRssi);
+      if (techRssi > -90) {
+        WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+        uint32_t t0 = millis();
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+      }
+      if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
+        rtcCurrentZone = NET_ZONE_TECH;
+        Serial.printf("[WIFI COLD BOOT] Terhubung ke Hotspot Teknisi '%s' -> NET_ZONE_TECH\n", wifiTechSsid.c_str());
+      } else {
+        rtcCurrentZone = NET_ZONE_OFFLINE;
+        Serial.println("[WIFI COLD BOOT] Hotspot Teknisi tidak tersedia -> NET_ZONE_OFFLINE");
+      }
+    }
+  } else if (rtcCurrentZone == NET_ZONE_YARD) {
+    WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+  } else if (rtcCurrentZone == NET_ZONE_TECH) {
+    WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+  }
+
   uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 8000) {
-    delay(400);
+  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
+    delay(300);
     Serial.print(".");
   }
   Serial.println(WiFi.status() == WL_CONNECTED ? " TERHUBUNG!" : " OFFLINE (Mode Antrean Aktif)");
@@ -894,10 +1283,41 @@ void handleSerialCommands() {
         enqueueOfflineRecord(item);
       }
     }
+#if ORION_DEBUG_SERIAL
+    else if (c == 't') {
+      lastPollMs = 0; // Picu live poll segera
+      if (simZoneOverride == -1) {
+        simZoneOverride = NET_ZONE_YARD;
+        simTransitionLagPending = 0;
+        Serial.println("[TEST SIM] Zone forced: NET_ZONE_YARD (1)");
+      } else if (simZoneOverride == NET_ZONE_YARD) {
+        simZoneOverride = NET_ZONE_TECH;
+        simTransitionLagPending = 2; // Simulasikan lag 2 step (40 detik) pada paket pertama transisi keluar
+        Serial.println("[TEST SIM] Zone forced: NET_ZONE_TECH (2) | lagSteps20s=2 (40s exit lag)");
+      } else if (simZoneOverride == NET_ZONE_TECH) {
+        simZoneOverride = NET_ZONE_OFFLINE;
+        simTransitionLagPending = 0;
+        Serial.println("[TEST SIM] Zone forced: NET_ZONE_OFFLINE (3) | Enqueue to buffer");
+      } else {
+        simZoneOverride = -1;
+        simTransitionLagPending = 0;
+        Serial.println("[TEST SIM] Zone forced: RESET to AUTO/YARD (-1) | Triggering Burst Sync...");
+        flushAllOfflineBuffers();
+      }
+    }
+    else if (c == 'm') {
+      lastZoneEvalMs = 0; // Paksa scan jaringan alami segera
+      lastPollMs = 0;
+      Serial.println("[MANUAL SCAN] Memicu evaluasi scan jaringan alami segera (bypass timer)...");
+    }
+#endif
     else if (c == 's') {
-      Serial.printf("[STATUS] Boot: %lu | Seq: %lu | Tier-1 RTC: %u/20 | Tier-2 LittleFS: %u/%u | Total Antrean: %u\n",
+      Serial.printf("[STATUS] Boot: %lu | Seq: %lu | Zone: %s (RTC=%u, Miss=%u, Hit=%u, 1stMiss=%lu) | Tier-1 RTC: %u/20 | Tier-2 LittleFS: %u/%u | Total Antrean: %u\n",
                     (unsigned long)rtcBootCount, (unsigned long)rtcSeqCounter,
+                    netZoneToString(rtcCurrentZone), rtcCurrentZone, rtcYardMissCount, rtcYardHitCount, (unsigned long)rtcFirstMissEpoch,
                     tier1Count, tier2Count, TIER2_MAX_RECORDS, (uint16_t)(tier1Count + tier2Count));
+      Serial.printf("[WIFI CFG] Yard SSID='%s' | Tech SSID='%s'\n",
+                    wifiYardSsid.c_str(), wifiTechSsid.c_str());
       Serial.printf("[NVS CFG] Slope=%.6f | Offset=%.4f | CritV=%.2fV | Sleep=%s\n",
                     cfgAdcSlopeM, cfgAdcOffsetC, cfgCritVoltage, cfgSleepMode.c_str());
     }
@@ -919,12 +1339,16 @@ void handleSerialCommands() {
 void loop() {
   handleSerialCommands();
 
-  // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung ke Hotspot
+  // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung
   if (!simOfflineMode && WiFi.status() != WL_CONNECTED && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
     lastWifiRetryMs = millis();
     Serial.println("[WIFI] Mencoba menyambung ulang ke jaringan WiFi...");
     WiFi.disconnect();
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    if (rtcCurrentZone == NET_ZONE_TECH) {
+      WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+    } else {
+      WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
+    }
   }
 
   if (millis() - lastPollMs >= pollIntervalMs) {
@@ -943,25 +1367,33 @@ void loop() {
     sampleBatteryAndCan(pkt);
     pkt.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -95;
 
-    if (!simOfflineMode && WiFi.status() == WL_CONNECTED && (tier1Count > 0 || tier2Count > 0)) {
+    bool isOfflineMode = simOfflineMode ||
+#if ORION_DEBUG_SERIAL
+                         (simZoneOverride == NET_ZONE_OFFLINE) ||
+#endif
+                         (getRecordNetZone(pkt) == NET_ZONE_OFFLINE);
+
+    if (!isOfflineMode && WiFi.status() == WL_CONNECTED && (tier1Count > 0 || tier2Count > 0)) {
       flushAllOfflineBuffers();
     }
 
-    if (!simOfflineMode && WiFi.status() == WL_CONNECTED) {
+    if (!isOfflineMode && WiFi.status() == WL_CONNECTED) {
       if (postBatchRecords(&pkt, 1, false)) {
-        Serial.printf("[ORION LIVE] boot=%lu | seq=%lu | V=%.2fV (%umV) | RTC=%.2fC | CAN=%s | Buf=%u\n",
+        Serial.printf("[ORION LIVE] boot=%lu | seq=%lu | V=%.2fV (%umV) | Zone=%s | RTC=%.2fC | CAN=%s | Buf=%u\n",
                       (unsigned long)pkt.boot, (unsigned long)pkt.seq,
-                      pkt.v_bat, pkt.adc_raw_mv, pkt.rtc_temp_c,
-                      pkt.can_ok ? "OK" : "ERR", (uint16_t)(tier1Count + tier2Count));
+                      pkt.v_bat, pkt.adc_raw_mv, netZoneToString(getRecordNetZone(pkt)),
+                      pkt.rtc_temp_c,
+                      getRecordCanOk(pkt) ? "OK" : "ERR", (uint16_t)(tier1Count + tier2Count));
       } else {
         enqueueOfflineRecord(pkt);
       }
     } else {
       enqueueOfflineRecord(pkt);
-      Serial.printf("[ORION OFFLINE] boot=%lu | seq=%lu | V=%.2fV (%umV) | RTC=%.2fC | CAN=%s | Buf=%u\n",
+      Serial.printf("[ORION OFFLINE] boot=%lu | seq=%lu | V=%.2fV (%umV) | Zone=%s | RTC=%.2fC | CAN=%s | Buf=%u\n",
                     (unsigned long)pkt.boot, (unsigned long)pkt.seq,
-                    pkt.v_bat, pkt.adc_raw_mv, pkt.rtc_temp_c,
-                    pkt.can_ok ? "OK" : "ERR", (uint16_t)(tier1Count + tier2Count));
+                    pkt.v_bat, pkt.adc_raw_mv, netZoneToString(getRecordNetZone(pkt)),
+                    pkt.rtc_temp_c,
+                    getRecordCanOk(pkt) ? "OK" : "ERR", (uint16_t)(tier1Count + tier2Count));
     }
   }
 }

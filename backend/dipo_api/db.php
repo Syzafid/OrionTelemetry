@@ -494,11 +494,4 @@ if (!function_exists('ensureObd2ReadOnlyColumns')) {
     }
 }
 
-try {
-    ensureOrionDatabaseInitialized($pdo);
-    ensureObd2ReadOnlyColumns($pdo);
-} catch (Exception $ignored) {
-    // Non-blocking fallback so partial DB grants do not abort requests
-}
-
 return $pdo;

@@ -732,7 +732,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
 
     const id = setInterval(() => {
       void poll();
-    }, 750);
+    }, 3000);
 
     const tickerId = setInterval(() => {
       setAllUnits((us) => {

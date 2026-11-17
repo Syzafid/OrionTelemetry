@@ -114,7 +114,10 @@ function ensureTelemetrySchema(PDO $pdo, bool $force = false): void {
     }
 }
 
-ensureTelemetrySchema($pdo);
+// Schema checks are performed during migration (migrate.php). Bypassed in hot ingest path to protect JawsDB query quota.
+if (isset($_GET['migrate']) && $_GET['migrate'] === '1') {
+    ensureTelemetrySchema($pdo, true);
+}
 
 // 3. Baca Headers ESP32 v1.4.1 & Body Payload JSON
 $isBurstHeader = isset($_SERVER['HTTP_X_BURST_SYNC']) && strtolower(trim((string)$_SERVER['HTTP_X_BURST_SYNC'])) === 'true';
@@ -469,6 +472,7 @@ try {
     }
 
     $pdo->commit();
+    @unlink(sys_get_temp_dir() . '/orion_get_data_cache.json');
 
 } catch (Exception $e) {
     $pdo->rollBack();
