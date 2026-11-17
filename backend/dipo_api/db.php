@@ -243,7 +243,7 @@ if (!$pdo) {
 
 if (!function_exists('ensureOrionDatabaseInitialized')) {
     /**
-     * Auto-migrates production schema and initial seed data (`MITSUBISHI-STOCK-01`..`12`)
+     * Auto-migrates production schema and physical hardware unit (`MITSUBISHI-STOCK-01` only)
      * when running against a freshly provisioned database (e.g. Heroku JawsDB MySQL).
      *
      * @return array{migrated: bool, reason: string}
@@ -324,6 +324,89 @@ if (!function_exists('ensureOrionDatabaseInitialized')) {
     }
 }
 
+
+if (!function_exists('purgeOrionDummyUnits')) {
+    /**
+     * Purges legacy dummy vehicles and related records (e.g. STOCK-02 .. STOCK-12)
+     * from database tables (`vehicles`, `node_configs`, `telemetry_logs`, `movement_events`,
+     * `system_events`, `maintenance_tickets`), ensuring only the single physical
+     * hardware node `MITSUBISHI-STOCK-01` remains in production.
+     *
+     * @param PDO $pdo
+     * @param string $keepUnitId Default 'MITSUBISHI-STOCK-01'
+     * @return array{target_node: string, deleted: array<string, int|string>, seeded_vehicle?: int, seeded_config?: int}
+     */
+    function purgeOrionDummyUnits(PDO $pdo, string $keepUnitId = 'MITSUBISHI-STOCK-01'): array {
+        $result = [
+            'target_node' => $keepUnitId,
+            'deleted'     => [],
+        ];
+
+        // Safest cascade deletion order: child tables first, then parent tables
+        $tables = [
+            'telemetry_logs',
+            'movement_events',
+            'system_events',
+            'maintenance_tickets',
+            'node_configs',
+            'vehicles',
+        ];
+
+        foreach ($tables as $tbl) {
+            try {
+                $hasTable = (bool)$pdo->query("SHOW TABLES LIKE '{$tbl}'")->fetchColumn();
+                if ($hasTable) {
+                    $stmt = $pdo->prepare("DELETE FROM `{$tbl}` WHERE `unit_id` != ?");
+                    $stmt->execute([$keepUnitId]);
+                    $result['deleted'][$tbl] = $stmt->rowCount();
+                } else {
+                    $result['deleted'][$tbl] = 0;
+                }
+            } catch (Exception $e) {
+                $result['deleted'][$tbl] = 'error: ' . $e->getMessage();
+            }
+        }
+
+        // Ensure the single physical hardware unit exists in `vehicles`
+        try {
+            $hasVehStmt = $pdo->prepare("SELECT COUNT(*) FROM `vehicles` WHERE `unit_id` = ?");
+            $hasVehStmt->execute([$keepUnitId]);
+            if ((int)$hasVehStmt->fetchColumn() === 0) {
+                $stmtInsertVeh = $pdo->prepare("
+                    INSERT INTO `vehicles` 
+                      (`unit_id`, `bay`, `model`, `trim`, `vin`, `color`, `status_label`, `state`, `in_yard`, `online_status`, `v_bat`, `adc_raw_mv`, `rtc_temp_c`, `can_ok`, `rssi`, `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`, `last_seen`)
+                    VALUES
+                      (?, 'A-01', 'PAJERO SPORT', 'DAKAR 4x4', 'MMBGUKS10RH004121', 'Graphite Grey', 'Standby (Deep Sleep)', 'STANDBY', 1, 'ONLINE', 12.60, 2262, 31.20, 1, -44, 3, 41, 41, UNIX_TIMESTAMP(), NOW())
+                ");
+                $stmtInsertVeh->execute([$keepUnitId]);
+                $result['seeded_vehicle'] = 1;
+            }
+        } catch (Exception $e) {
+            $result['seeded_vehicle_error'] = $e->getMessage();
+        }
+
+        // Ensure the single physical hardware unit exists in `node_configs`
+        try {
+            $hasCfgStmt = $pdo->prepare("SELECT COUNT(*) FROM `node_configs` WHERE `unit_id` = ?");
+            $hasCfgStmt->execute([$keepUnitId]);
+            if ((int)$hasCfgStmt->fetchColumn() === 0) {
+                $stmtInsertCfg = $pdo->prepare("
+                    INSERT INTO `node_configs` 
+                      (`unit_id`, `sleep_cfg`, `fast_poll_s`, `crit_v`, `debounce_cnt`, `cal_slope`, `cal_offset`, `pending_ack`)
+                    VALUES
+                      (?, 300, 10, 11.80, 3, 0.005412, 0.069, 0)
+                ");
+                $stmtInsertCfg->execute([$keepUnitId]);
+                $result['seeded_config'] = 1;
+            }
+        } catch (Exception $e) {
+            $result['seeded_config_error'] = $e->getMessage();
+        }
+
+        return $result;
+    }
+}
+
 if (!function_exists('orionObd2ColumnDefinitions')) {
     /**
      * Canonical list of the 15 Read-Only OBD-II v1.5.0 telemetry columns.
