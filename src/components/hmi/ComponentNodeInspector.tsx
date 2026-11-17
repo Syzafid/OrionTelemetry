@@ -22,49 +22,159 @@ interface ChannelRow {
   waveformType: "battery" | "shunt" | "alternator" | "rpm" | "coolant" | "can" | "rtc" | "rf";
 }
 
+interface MiniWaveformProps {
+  type: ChannelRow["waveformType"];
+  tone: Tone;
+  active: boolean;
+  vBat: number;
+  adcRawMv: number;
+  engineOn: boolean;
+  rpm: number;
+  tempC: number;
+  canOk: boolean;
+  dtcCnt: number;
+  seq: number;
+  shuntUa: number;
+}
+
+/**
+ * Authentic Dynamic Waveform Generator (SAE J1979 / Automotive Scope)
+ * Real evidence over claims: wave points dynamically fluctuate with physical telemetry states.
+ */
 function MiniWaveform({
   type,
   tone,
   active,
-}: {
-  type: ChannelRow["waveformType"];
-  tone: Tone;
-  active: boolean;
-}) {
+  vBat,
+  adcRawMv,
+  engineOn,
+  rpm,
+  tempC,
+  canOk,
+  dtcCnt,
+  seq,
+  shuntUa,
+}: MiniWaveformProps) {
   const points = useMemo(() => {
     switch (type) {
-      case "battery":
-        // Slight analog jitter around nominal line
-        return "0,14 15,13 30,14 45,15 60,13 75,14 90,12 105,14 120,13 135,14 150,13";
-      case "shunt":
-        // Ultra-flat baseline with tiny microamp blips
-        return "0,18 25,18 50,17 75,18 80,14 85,18 115,18 135,18 150,18";
-      case "alternator":
-        // Alternator 3-phase rectified ripple wave
-        return active
-          ? "0,12 12,6 24,12 36,6 48,12 60,6 72,12 84,6 96,12 108,6 120,12 132,6 150,12"
-          : "0,20 150,20";
-      case "rpm":
-        // Crankshaft reluctance pulse train
-        return active
-          ? "0,18 15,18 18,4 22,20 35,18 38,4 42,20 55,18 58,4 62,20 75,18 78,4 82,20 95,18 98,4 102,20 120,18"
-          : "0,18 150,18";
-      case "coolant":
-        // Slow thermal curve
-        return "0,20 30,19 60,17 90,14 120,12 150,11";
-      case "can":
-        // Differential CAN-H / CAN-L bitstream square waves
-        return "0,16 10,16 10,6 20,6 20,16 35,16 35,6 45,6 45,16 60,16 60,6 75,6 75,16 90,16 100,6 110,16 130,16 130,6 140,6 140,16 150,16";
-      case "rtc":
-        // Ultra-stable reference line
-        return "0,12 30,12 60,12 90,12 120,12 150,12";
-      case "rf":
-        // RF beacon pulses
-        return "0,18 20,18 22,8 26,18 45,18 47,8 51,18 70,18 72,8 76,18 95,18 97,8 101,18 125,18 127,8 131,18 150,18";
+      case "battery": {
+        // Voltage level mapped to vertical axis (11.0V -> Y=21, 14.8V -> Y=4)
+        const clampedV = Math.max(11.0, Math.min(14.8, vBat));
+        const baseY = 21 - ((clampedV - 11.0) / 3.8) * 17;
+        const pts: string[] = [];
+        for (let i = 0; i <= 10; i++) {
+          const x = i * 15;
+          // Analog noise variation derived from raw ADC micro-jitter and packet sequence
+          const noise = Math.sin((i * 1.7) + (seq % 10) + (adcRawMv % 5)) * 1.4;
+          const y = Math.max(3, Math.min(22, baseY + noise));
+          pts.push(`${x},${y.toFixed(1)}`);
+        }
+        return pts.join(" ");
+      }
+
+      case "shunt": {
+        // Flatline sleep baseline with pulse spikes if leakage > 50 uA
+        if (engineOn) {
+          return "0,12 30,12 60,11 90,12 120,11 150,12";
+        }
+        const pts: string[] = [];
+        const isExcess = shuntUa > 50;
+        for (let i = 0; i <= 10; i++) {
+          const x = i * 15;
+          // Pulse at specific step when excess drain occurs
+          const y = isExcess && (i === 4 || i === 8) ? 10 : 18;
+          pts.push(`${x},${y}`);
+        }
+        return pts.join(" ");
+      }
+
+      case "alternator": {
+        // 3-phase rectified diode ripple scrolling with seq when active; flatline when off
+        if (!active || !engineOn) {
+          return "0,21 150,21";
+        }
+        const phase = (seq % 6) * 0.5;
+        const pts: string[] = [];
+        for (let i = 0; i <= 15; i++) {
+          const x = i * 10;
+          const ripple = Math.abs(Math.sin((i * 0.4) + phase)) * 7;
+          const y = 8 + ripple;
+          pts.push(`${x},${y.toFixed(1)}`);
+        }
+        return pts.join(" ");
+      }
+
+      case "rpm": {
+        // Crankshaft variable reluctance pulse train: frequency scales with RPM
+        if (!engineOn || rpm <= 0) {
+          return "0,18 150,18";
+        }
+        const period = Math.max(10, Math.min(30, Math.round(18000 / rpm)));
+        const pts: string[] = [];
+        for (let x = 0; x <= 150; x += 5) {
+          const mod = (x + (seq * 4)) % period;
+          let y = 18;
+          if (mod === 0) y = 4; // Positive reluctance spike
+          else if (mod === 5) y = 22; // Negative zero-crossing undershoot
+          pts.push(`${x},${y}`);
+        }
+        return pts.join(" ");
+      }
+
+      case "coolant": {
+        // NTC thermistor thermal curve height proportional to engine temperature
+        const clampedT = Math.max(30, Math.min(115, tempC > 0 ? tempC : 40));
+        const endY = 21 - ((clampedT - 30) / 85) * 16;
+        const pts: string[] = [];
+        for (let i = 0; i <= 8; i++) {
+          const x = i * 18.75;
+          const interp = 21 - ((21 - endY) * (i / 8));
+          pts.push(`${x.toFixed(0)},${interp.toFixed(1)}`);
+        }
+        return pts.join(" ");
+      }
+
+      case "can": {
+        // High-Speed CAN differential bitstream. Clean square packets if OK, glitch if fault
+        if (!canOk || dtcCnt > 0) {
+          return "0,16 15,16 15,6 20,6 25,22 35,16 60,16 65,4 70,22 90,16 120,16 150,16";
+        }
+        const pts: string[] = ["0,16"];
+        const bitPattern = [10, 10, 20, 15, 25, 20, 20, 30];
+        let currX = 0;
+        let isHigh = false;
+        for (const span of bitPattern) {
+          currX += span;
+          if (currX > 150) break;
+          isHigh = !isHigh;
+          const y = isHigh ? 6 : 16;
+          pts.push(`${currX},${isHigh ? 16 : 6} ${currX},${y}`);
+        }
+        pts.push("150,16");
+        return pts.join(" ");
+      }
+
+      case "rtc": {
+        // Ultra-stable TCXO reference baseline with micro temp flutter
+        const yBase = 12 + ((tempC > 0 ? tempC : 28) - 25) * 0.1;
+        return `0,${yBase.toFixed(1)} 150,${yBase.toFixed(1)}`;
+      }
+
+      case "rf": {
+        // Periodic telemetry beacon pulses
+        const pts: string[] = [];
+        for (let i = 0; i <= 10; i++) {
+          const x = i * 15;
+          const isPulse = (i + seq) % 4 === 0;
+          pts.push(`${x},${isPulse ? 6 : 18}`);
+        }
+        return pts.join(" ");
+      }
+
       default:
         return "0,15 150,15";
     }
-  }, [type, active]);
+  }, [type, active, vBat, adcRawMv, engineOn, rpm, tempC, canOk, dtcCnt, seq, shuntUa]);
 
   const strokeColor =
     tone === "crimson"
@@ -76,7 +186,7 @@ function MiniWaveform({
           : "oklch(0.50 0.015 260)";
 
   return (
-    <svg viewBox="0 0 150 24" className="h-6 w-28 shrink-0 select-none">
+    <svg viewBox="0 0 150 24" className="h-5 w-24 sm:h-6 sm:w-28 shrink-0 select-none">
       <polyline
         fill="none"
         stroke={strokeColor}
@@ -217,7 +327,7 @@ export function ComponentNodeInspector({
   return (
     <div
       className={cn(
-        "panel flex flex-col rounded-[2px] border border-border bg-card/80 p-3 sm:p-4 text-foreground",
+        "panel flex flex-col rounded-[2px] border border-border bg-card/90 p-3 sm:p-4 text-foreground",
         className,
       )}
     >
@@ -236,9 +346,72 @@ export function ComponentNodeInspector({
         </div>
       </div>
 
-      {/* High-Density Diagnostic Data Stream Matrix Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px] border-collapse num text-[11px]">
+      {/* Responsive Diagnostic Feed (Mobile View: Cards) */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {filteredRows.map((r) => (
+          <div
+            key={r.channelId}
+            className="rounded-[2px] border border-border/70 bg-background/60 p-2.5 num"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[9.5px] font-semibold text-foreground">
+                  {r.channelId}
+                </span>
+                <span className="text-[10px] font-medium text-foreground truncate max-w-[180px]">
+                  {r.parameter}
+                </span>
+              </div>
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                  r.tone === "crimson"
+                    ? "bg-crimson/15 text-crimson border border-crimson/30"
+                    : r.tone === "amber"
+                      ? "bg-amber/15 text-amber border border-amber/30"
+                      : r.tone === "emerald"
+                        ? "bg-emerald/15 text-emerald border border-emerald/30"
+                        : "bg-secondary text-muted-foreground border border-border",
+                )}
+              >
+                {r.status}
+              </span>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-foreground">{r.readout}</div>
+                {r.subReadout && (
+                  <div className="text-[9.5px] text-muted-foreground">{r.subReadout}</div>
+                )}
+              </div>
+              <div className="flex flex-col items-end">
+                <MiniWaveform
+                  type={r.waveformType}
+                  tone={r.tone}
+                  active={t.engine_on || isCharging}
+                  vBat={t.v_bat}
+                  adcRawMv={t.adc_raw_mv}
+                  engineOn={t.engine_on}
+                  rpm={t.rpm}
+                  tempC={t.temp_c}
+                  canOk={t.can_ok !== false}
+                  dtcCnt={t.dtc_cnt}
+                  seq={t.seq}
+                  shuntUa={t.shunt_sleep_ua}
+                />
+                <span className="mt-0.5 text-[8.5px] text-muted-foreground">
+                  Ambang: {r.range}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Diagnostic Matrix Table */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full border-collapse num text-[11px]">
           <thead>
             <tr className="border-b border-border/70 text-left label-hmi text-[9.5px] text-muted-foreground">
               <th className="py-1.5 pr-2 font-medium">CH / PID</th>
@@ -250,69 +423,61 @@ export function ComponentNodeInspector({
             </tr>
           </thead>
           <tbody className="divide-y divide-border/40">
-            {filteredRows.map((row) => (
+            {filteredRows.map((r) => (
               <tr
-                key={row.channelId}
-                className={cn(
-                  "transition-colors hover:bg-card/90",
-                  activeNode === row.nodeKey && "bg-foreground/[0.04]",
-                )}
+                key={r.channelId}
+                className="hover:bg-foreground/[0.02] transition-colors"
               >
-                <td className="py-2 pr-2 font-mono font-semibold text-foreground/90">
-                  {row.channelId}
+                <td className="py-2 pr-2 font-semibold text-foreground/90 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <Led tone={r.tone} pulse={r.tone === "crimson"} />
+                    <span>{r.channelId}</span>
+                  </div>
                 </td>
-                <td className="py-2 px-2">
-                  <div className="font-medium text-foreground">{row.parameter}</div>
-                  {row.subReadout && (
-                    <div className="text-[9.5px] text-muted-foreground">{row.subReadout}</div>
+                <td className="py-2 px-2 text-foreground/90">
+                  <div className="font-medium">{r.parameter}</div>
+                  {r.subReadout && (
+                    <div className="text-[10px] text-muted-foreground">
+                      {r.subReadout}
+                    </div>
                   )}
                 </td>
-                <td className="py-2 px-2 font-semibold">
-                  <span
-                    className={cn(
-                      row.tone === "crimson"
-                        ? "text-crimson"
-                        : row.tone === "amber"
-                          ? "text-amber"
-                          : row.tone === "emerald"
-                            ? "text-emerald"
-                            : "text-foreground",
-                    )}
-                  >
-                    {row.readout}
-                  </span>
+                <td className="py-2 px-2 font-bold text-foreground whitespace-nowrap">
+                  {r.readout}
                 </td>
-                <td className="py-2 px-2 text-[10.5px] text-muted-foreground">
-                  {row.range}
+                <td className="py-2 px-2 text-muted-foreground whitespace-nowrap text-[10.5px]">
+                  {r.range}
                 </td>
                 <td className="py-2 px-2">
                   <MiniWaveform
-                    type={row.waveformType}
-                    tone={row.tone}
-                    active={
-                      row.waveformType === "alternator"
-                        ? isCharging
-                        : row.waveformType === "rpm"
-                          ? t.engine_on
-                          : true
-                    }
+                    type={r.waveformType}
+                    tone={r.tone}
+                    active={t.engine_on || isCharging}
+                    vBat={t.v_bat}
+                    adcRawMv={t.adc_raw_mv}
+                    engineOn={t.engine_on}
+                    rpm={t.rpm}
+                    tempC={t.temp_c}
+                    canOk={t.can_ok !== false}
+                    dtcCnt={t.dtc_cnt}
+                    seq={t.seq}
+                    shuntUa={t.shunt_sleep_ua}
                   />
                 </td>
-                <td className="py-2 pl-2 text-right">
+                <td className="py-2 pl-2 text-right whitespace-nowrap">
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-[1px] border px-1.5 py-0.5 text-[9.5px] font-semibold tracking-wider uppercase",
-                      row.tone === "crimson"
+                      "inline-flex items-center rounded-[1px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                      r.tone === "crimson"
                         ? "border-crimson/50 bg-crimson/15 text-crimson"
-                        : row.tone === "amber"
+                        : r.tone === "amber"
                           ? "border-amber/50 bg-amber/15 text-amber"
-                          : row.tone === "emerald"
+                          : r.tone === "emerald"
                             ? "border-emerald/50 bg-emerald/15 text-emerald"
-                            : "border-border bg-secondary text-muted-foreground",
+                            : "border-border bg-secondary/70 text-muted-foreground",
                     )}
                   >
-                    <Led tone={row.tone} />
-                    <span>{row.status}</span>
+                    {r.status}
                   </span>
                 </td>
               </tr>

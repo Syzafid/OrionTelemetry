@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { VehicleUnit } from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,8 @@ export function VehicleTopologyMap({
   onSelectNode,
   className,
 }: VehicleTopologyMapProps) {
+  const [focusedNode, setFocusedNode] = useState<TopologyNodeId | null>(null);
+
   const t = unit.telemetry;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
   const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
@@ -37,17 +40,25 @@ export function VehicleTopologyMap({
   const canTone: Tone = isCanFault ? "crimson" : "emerald";
   const rfTone: Tone = isOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald";
 
+  // Helper to determine node opacity based on active selection (C-1 Visual Hierarchy)
+  const getNodeOpacityClass = (nodeId: TopologyNodeId) => {
+    if (activeNode === "all" || activeNode === nodeId) {
+      return "opacity-100 transition-opacity duration-200";
+    }
+    return "opacity-25 hover:opacity-80 transition-opacity duration-200";
+  };
+
   return (
     <div
       className={cn(
-        "relative flex w-full flex-col overflow-hidden rounded-[2px] border border-border bg-card/40 p-3 sm:p-4",
+        "relative flex w-full flex-col rounded-[2px] border border-border bg-card/60 p-3 sm:p-4",
         className,
       )}
     >
       {/* Workbench Header */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background/80 px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
+          <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
             <span className="h-2 w-2 rounded-full bg-crimson" />
             <span>MITSUBISHI PAJERO SPORT HARNESS TOPOLOGY</span>
           </div>
@@ -75,7 +86,7 @@ export function VehicleTopologyMap({
                 type="button"
                 onClick={() => onSelectNode(item.id as TopologyNodeId)}
                 className={cn(
-                  "flex min-h-[30px] items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
+                  "flex min-h-[32px] items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
                   on
                     ? "border-foreground/80 bg-foreground/15 font-semibold text-foreground"
                     : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
@@ -89,11 +100,11 @@ export function VehicleTopologyMap({
         </div>
       </div>
 
-      {/* Main Orthographic Chassis Blueprint Container */}
-      <div className="relative min-h-[340px] flex-1 overflow-x-auto overflow-y-hidden rounded-[2px] border border-border/80 bg-background/95 p-3">
+      {/* Main Orthographic Chassis Blueprint Container - Fully Responsive (R-03) */}
+      <div className="relative flex-1 rounded-[2px] border border-border/80 bg-background/95 p-2 sm:p-3 flex items-center justify-center">
         <svg
           viewBox="0 0 960 400"
-          className="h-full min-h-[320px] w-full min-w-[820px] select-none"
+          className="w-full h-auto aspect-[2.4/1] max-h-[380px] select-none"
           role="img"
           aria-label="Topologi potongan chassis kendaraan Mitsubishi Pajero Sport dengan letak fisik komponen sensor"
         >
@@ -179,13 +190,9 @@ export function VehicleTopologyMap({
             <line x1="720" y1="85" x2="720" y2="315" stroke="oklch(0.30 0.015 265)" strokeWidth="1.2" />
 
             {/* 4 Wheels (Orthographic Tires & Rims) */}
-            {/* Front Left Wheel */}
             <rect x="200" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            {/* Front Right Wheel */}
             <rect x="200" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            {/* Rear Left Wheel */}
             <rect x="640" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            {/* Rear Right Wheel */}
             <rect x="640" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
 
             {/* Axle Lines */}
@@ -233,15 +240,35 @@ export function VehicleTopologyMap({
 
           {/* PROBE 1: 12V BATTERY & SHUNT SENSOR (Ruang Mesin Kiri) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("battery"))}
             onClick={() => onSelectNode("battery")}
+            onFocus={() => setFocusedNode("battery")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Aki 12V dan Resistor Shunt"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("battery");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("battery");
+              }
             }}
           >
+            {/* Keyboard Focus Ring (R-32 & R-39) */}
+            {focusedNode === "battery" && (
+              <rect
+                x="195"
+                y="110"
+                width="60"
+                height="50"
+                rx="3"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* Physical Battery Box */}
             <rect
               x="200"
@@ -292,15 +319,33 @@ export function VehicleTopologyMap({
 
           {/* PROBE 2: ALTERNATOR & REGULATOR (Ruang Mesin Depan) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("alternator"))}
             onClick={() => onSelectNode("alternator")}
+            onFocus={() => setFocusedNode("alternator")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Alternator dan Regulator"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("alternator");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("alternator");
+              }
             }}
           >
+            {/* Keyboard Focus Ring (R-32 & R-39) */}
+            {focusedNode === "alternator" && (
+              <circle
+                cx="160"
+                cy="200"
+                r="26"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* Alternator Pulley & Body */}
             <circle
               cx="160"
@@ -339,15 +384,35 @@ export function VehicleTopologyMap({
 
           {/* PROBE 3: ENGINE TRANSDUCERS (RPM & COOLANT SENSOR) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("powertrain"))}
             onClick={() => onSelectNode("powertrain")}
+            onFocus={() => setFocusedNode("powertrain")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Sensor Putaran Mesin dan Coolant"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("powertrain");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("powertrain");
+              }
             }}
           >
+            {/* Keyboard Focus Ring */}
+            {focusedNode === "powertrain" && (
+              <rect
+                x="210"
+                y="175"
+                width="55"
+                height="50"
+                rx="3"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* Engine Block Visual */}
             <rect
               x="215"
@@ -387,15 +452,35 @@ export function VehicleTopologyMap({
 
           {/* PROBE 4: OBD-II PORT J1962 & CAN BUS (Bawah Setir Kabin) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("can_obd"))}
             onClick={() => onSelectNode("can_obd")}
+            onFocus={() => setFocusedNode("can_obd")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Port OBD-II dan CAN Bus"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("can_obd");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("can_obd");
+              }
             }}
           >
+            {/* Keyboard Focus Ring */}
+            {focusedNode === "can_obd" && (
+              <rect
+                x="362"
+                y="230"
+                width="42"
+                height="32"
+                rx="3"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* Trapezoidal OBD-II Connector Icon */}
             <path
               d="M 370 235 L 395 235 L 398 255 L 367 255 Z"
@@ -431,15 +516,35 @@ export function VehicleTopologyMap({
 
           {/* PROBE 5: ORION ESP32 GATEWAY (Laci Kabin / Konsol Tengah) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("esp32_core"))}
             onClick={() => onSelectNode("esp32_core")}
+            onFocus={() => setFocusedNode("esp32_core")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Gateway ORION ESP32 dan RTC"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("esp32_core");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("esp32_core");
+              }
             }}
           >
+            {/* Keyboard Focus Ring */}
+            {focusedNode === "esp32_core" && (
+              <rect
+                x="485"
+                y="175"
+                width="70"
+                height="50"
+                rx="3"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* PCB Module Silhouette */}
             <rect
               x="490"
@@ -481,15 +586,33 @@ export function VehicleTopologyMap({
 
           {/* PROBE 6: RF ANTENNA & GEOFENCE (Pilar Atap Kabin) */}
           <g
-            className="cursor-pointer"
+            className={cn("cursor-pointer outline-none", getNodeOpacityClass("rf_network"))}
             onClick={() => onSelectNode("rf_network")}
+            onFocus={() => setFocusedNode("rf_network")}
+            onBlur={() => setFocusedNode(null)}
             tabIndex={0}
             role="button"
             aria-label="Probe Antena RF dan Geofence Gateway"
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("rf_network");
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectNode("rf_network");
+              }
             }}
           >
+            {/* Keyboard Focus Ring */}
+            {focusedNode === "rf_network" && (
+              <circle
+                cx="680"
+                cy="200"
+                r="22"
+                fill="none"
+                stroke="#F2EFE9"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+              />
+            )}
+
             {/* Antenna Symbol */}
             <circle cx="680" cy="200" r="12" fill="oklch(0.18 0.01 265)" stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"} strokeWidth="1" />
             <path d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190" stroke={isOffline ? "oklch(0.50 0.01 260)" : "#10B981"} fill="none" strokeWidth="1.2" />

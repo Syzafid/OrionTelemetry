@@ -37,8 +37,6 @@ export function ShowroomModule({ active }: { active: boolean }) {
     <div className="module-showroom grid h-full min-h-0 gap-4 [&>*]:min-w-0 lg:grid-cols-[290px_1fr]">
       {/* 3D Digital Twin Stage - Order first on mobile so digital twin is visible immediately */}
       <section className="showroom-stage panel relative order-1 flex min-h-[360px] flex-col overflow-hidden sm:min-h-[440px] md:order-2 md:min-h-[520px] lg:min-h-0">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_75%,oklch(0.20_0.01_265/0.8),transparent_70%)]" />
-
         {/* Stage Heading */}
         <div className="stage-heading relative z-10 flex shrink-0 items-start justify-between gap-3 p-3.5 sm:p-4 md:p-5">
           <div className="min-w-0 flex-1">
@@ -125,7 +123,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
               </button>
             </div>
 
-            <div className="glass hidden shrink-0 px-3.5 py-2 text-right md:block">
+            <div className="hidden shrink-0 rounded-[2px] border border-border bg-card/90 px-3.5 py-2 text-right md:block">
               <div className="label-hmi text-[10px]">VIN</div>
               <div className="num text-xs font-medium">{selected.vin}</div>
               <div className="label-hmi mt-0.5 text-[10px]">{selected.color}</div>
@@ -160,7 +158,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
 
             {/* Desktop Top-Right Telemetry HUD */}
             <div className="pointer-events-none absolute right-3 top-3 z-20 hidden w-72 flex-col gap-1 md:flex">
-              <div className="glass rounded-[2px] border border-border p-2.5 shadow-xl backdrop-blur-md">
+              <div className="rounded-[2px] border border-border bg-card/95 p-2.5 shadow-xl">
                 <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border/80 pb-1.5">
                   <span className="label-hmi text-[10px] text-foreground">
                     Saluran Telemetri Node
@@ -221,7 +219,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
 
             {/* Mobile Bottom-Docked Status Strip */}
             <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-20 flex md:hidden">
-              <div className="glass w-full rounded-[2px] border border-border px-3 py-2 shadow-lg backdrop-blur-md">
+              <div className="w-full rounded-[2px] border border-border bg-card/95 px-3 py-2 shadow-lg">
                 <div className="num grid grid-cols-2 gap-x-3 gap-y-1 text-[10.5px]">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -266,7 +264,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
 
             {/* Desktop Camera Orbit/Zoom Instruction Hint */}
             <div className="pointer-events-none absolute bottom-2.5 right-3 z-20 hidden md:block">
-              <div className="glass num rounded-[2px] border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="num rounded-[2px] border border-border/70 bg-card/90 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Drag to orbit / Scroll to zoom
               </div>
             </div>
@@ -436,9 +434,15 @@ export function ShowroomModule({ active }: { active: boolean }) {
               tone={selected.buffer_used > 0 ? "amber" : "emerald"}
             />
             <Stat
-              label={t.seq !== undefined ? "CAN & Seq" : "CAN & Boot"}
-              value={`${t.can_ok === false ? "ERR" : "OK"} / ${t.rssi}dBm (#${t.seq ?? t.boot})`}
-              tone={t.can_ok === false ? "crimson" : t.rssi < -85 ? "amber" : "dim"}
+              label="CAN Bus TWAI"
+              value={t.can_ok === false ? "ERROR" : "OK (500k)"}
+              tone={t.can_ok === false ? "crimson" : "dim"}
+            />
+            <Stat
+              label="Uplink Seq"
+              value={`#${t.seq ?? t.boot}`}
+              unit={`${t.rssi} dBm`}
+              tone={t.rssi < -85 ? "amber" : "dim"}
             />
             <Stat
               label="Speed / Load"
