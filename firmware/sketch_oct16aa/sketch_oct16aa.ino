@@ -791,6 +791,108 @@ static uint8_t  pendingExitLagSteps    = 0;
 static uint32_t lastKnownEpoch         = 0;
 static uint8_t  lastKnownSpeed         = 0;
 
+// C.3: Satukan penetapan rtcCurrentZone di satu fungsi setZone(newZone, reason)
+void setZone(uint8_t newZone, const char* reason = nullptr) {
+  if (rtcCurrentZone == newZone) return;
+
+  uint8_t oldZone = rtcCurrentZone;
+  rtcCurrentZone = newZone;
+
+  const char* oldStr = netZoneToString(oldZone);
+  const char* newStr = netZoneToString(newZone);
+
+  // C.1: Cetak log transisi spesifik untuk semua jalur
+  if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_TECH) {
+    Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us)%s%s\n",
+                  pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U),
+                  reason ? " | " : "", reason ? reason : "");
+  } else if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_OFFLINE) {
+    Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE | exit_lag=%u step (%us)%s%s\n",
+                  pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U),
+                  reason ? " | " : "", reason ? reason : "");
+  } else if ((oldZone == NET_ZONE_TECH || oldZone == NET_ZONE_OFFLINE) && newZone == NET_ZONE_YARD) {
+    Serial.printf("[ZONE TRANSITION] OUTSIDE -> YARD%s%s\n",
+                  reason ? " | " : "", reason ? reason : "");
+  } else if (oldZone == NET_ZONE_TECH && newZone == NET_ZONE_OFFLINE) {
+    Serial.printf("[ZONE TRANSITION] TECH_HOTSPOT -> OFFLINE%s%s\n",
+                  reason ? " | " : "", reason ? reason : "");
+  } else if (oldZone == NET_ZONE_OFFLINE && newZone == NET_ZONE_TECH) {
+    Serial.printf("[ZONE TRANSITION] OFFLINE -> TECH_HOTSPOT%s%s\n",
+                  reason ? " | " : "", reason ? reason : "");
+  } else {
+    Serial.printf("[ZONE TRANSITION] %s -> %s%s%s\n",
+                  oldStr, newStr,
+                  reason ? " | " : "", reason ? reason : "");
+  }
+}
+
+// B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 6s)
+enum WifiConnectTarget {
+  CONN_IDLE = 0,
+  CONN_CONNECTING_TECH,
+  CONN_CONNECTING_YARD
+};
+
+static WifiConnectTarget wifiConnState          = CONN_IDLE;
+static uint32_t          wifiConnStartMs        = 0;
+static const uint32_t    WIFI_CONNECT_TIMEOUT_MS = 6000UL;
+
+void startWifiConnectNonBlocking(WifiConnectTarget target, const char* ssid, const char* pass) {
+  if (wifiConnState != CONN_IDLE && (millis() - wifiConnStartMs < WIFI_CONNECT_TIMEOUT_MS)) {
+    return; // Sedang ada proses penyambungan yang berjalan
+  }
+  WiFi.disconnect(false, true);
+  WiFi.begin(ssid, pass);
+  wifiConnState   = target;
+  wifiConnStartMs = millis();
+  Serial.printf("[WIFI ASYNC CONNECT] Memulai koneksi ke '%s' (non-blocking, timeout 6s)...\n", ssid);
+}
+
+void updateWifiAsyncConnect() {
+  if (wifiConnState == CONN_IDLE) return;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (wifiConnState == CONN_CONNECTING_TECH) {
+      Serial.printf("[WIFI ASYNC CONNECT] Terhubung ke Hotspot Teknisi '%s' (IP: %s) dalam %lums\n",
+                    WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), (unsigned long)(millis() - wifiConnStartMs));
+      setZone(NET_ZONE_TECH, "Async Connect Tech Berhasil");
+    } else if (wifiConnState == CONN_CONNECTING_YARD) {
+      Serial.printf("[WIFI ASYNC CONNECT] Terhubung ke Gudang '%s' (IP: %s) dalam %lums\n",
+                    WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), (unsigned long)(millis() - wifiConnStartMs));
+      setZone(NET_ZONE_YARD, "Async Connect Yard Berhasil");
+    }
+    wifiConnState = CONN_IDLE;
+    return;
+  }
+
+  if (millis() - wifiConnStartMs >= WIFI_CONNECT_TIMEOUT_MS) {
+    Serial.printf("[WIFI ASYNC CONNECT] Timeout (%lums) mencoba terhubung.\n", (unsigned long)WIFI_CONNECT_TIMEOUT_MS);
+    if (wifiConnState == CONN_CONNECTING_TECH) {
+      if (rtcCurrentZone == NET_ZONE_TECH) {
+        setZone(NET_ZONE_OFFLINE, "Tech Connect Timeout");
+      }
+    }
+    wifiConnState = CONN_IDLE;
+  }
+}
+
+// C.2: Rate limiter pesan [INFO TECH] (hanya sekali saat cold boot atau tiap 10 menit)
+static uint32_t lastTechInfoPrintMs     = 0;
+static bool     coldBootTechInfoPrinted = false;
+
+void printTechInfoIfDue() {
+  if (!coldBootTechInfoPrinted) {
+    coldBootTechInfoPrinted = true;
+    lastTechInfoPrintMs     = millis();
+    Serial.printf("  [INFO TECH] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke pita 2.4 GHz di HP!\n", wifiTechSsid.c_str());
+    return;
+  }
+  if (millis() - lastTechInfoPrintMs >= 600000UL) {
+    lastTechInfoPrintMs = millis();
+    Serial.printf("  [INFO TECH] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke pita 2.4 GHz di HP!\n", wifiTechSsid.c_str());
+  }
+}
+
 void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &outLagSteps) {
   outLagSteps = 0;
 
@@ -830,7 +932,7 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
 
   // 2. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
   if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
-    rtcCurrentZone    = NET_ZONE_YARD;
+    setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (Evaluate)");
     rtcYardMissCount  = 0;
     rtcYardHitCount   = 0;
     rtcFirstMissEpoch = 0;
@@ -840,9 +942,10 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
   }
 
   // 3. Kembalikan zona yang telah dievaluasi oleh background scan (0ms latency, bebas blocking)
+  // A.1: Nilai pendingExitLagSteps dilekatkan tepat ke 1 paket pertama saat transisi keluar, lalu di-reset
   outZone     = (rtcCurrentZone != NET_ZONE_UNKNOWN) ? rtcCurrentZone : NET_ZONE_OFFLINE;
   outLagSteps = pendingExitLagSteps;
-  pendingExitLagSteps = 0; // Hanya dilekatkan pada 1 paket pertama saat transisi keluar
+  pendingExitLagSteps = 0;
 }
 
 static uint32_t lastMeasuredScanDurationMs = 1800UL;
@@ -854,7 +957,7 @@ void updateAsyncWifiScan() {
       WiFi.scanDelete();
       asyncScanRunning = false;
     }
-    rtcCurrentZone    = NET_ZONE_YARD;
+    setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (UpdateScan)");
     rtcYardMissCount  = 0;
     rtcYardHitCount   = 0;
     rtcFirstMissEpoch = 0;
@@ -888,10 +991,11 @@ void updateAsyncWifiScan() {
     int nNetworks              = scanRes;
     Serial.printf("[SCAN] durasi=%lums hasil=%d\n", (unsigned long)lastMeasuredScanDurationMs, nNetworks);
 
-    // A.5: Ambil ts_epoch mutakhir tepat saat SCAN SELESAI diproses dari RTC fisik
+    // A.3: Ambil ts_epoch mutakhir tepat saat SCAN SELESAI diproses dari RTC fisik
     uint32_t scanFinishedEpoch = 0;
     float unusedTemp = 0.0f;
     if (!probeAndReadDS3231(scanFinishedEpoch, unusedTemp)) {
+      Serial.println("[RTC ERR] probeAndReadDS3231() gagal saat scan selesai!");
       scanFinishedEpoch = (lastKnownEpoch > 0) ? lastKnownEpoch : 0;
     }
 
@@ -921,7 +1025,7 @@ void updateAsyncWifiScan() {
     Serial.printf("  -> Evaluasi Teknisi ('%s'): %s (%d dBm)\n",
                   wifiTechSsid.c_str(), (techRssi > -90) ? "TERDETEKSI" : "ABSEN/LEMAH", techRssi);
     if (techRssi <= -90) {
-      Serial.printf("  [INFO TECH] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke pita 2.4 GHz di HP!\n", wifiTechSsid.c_str());
+      printTechInfoIfDue();
     }
 
     WiFi.scanDelete();
@@ -933,16 +1037,15 @@ void updateAsyncWifiScan() {
       if (yardRssi >= -85) {
         rtcYardMissCount  = 0;
         rtcFirstMissEpoch = 0;
-        if (WiFi.status() != WL_CONNECTED) {
+        if (WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE) {
           const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
-          WiFi.begin(connectSsid, wifiYardPass.c_str());
+          startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
         }
         return;
       }
 
       // ATURAN 2: Debounce Keluar (SSID Gudang absen / < -85 dBm)
-      // A.5: Counter miss bertambah tepat 1 kali per scan selesai.
-      // rtcFirstMissEpoch memakai ts_epoch tepat saat SCAN SELESAI diproses (scanFinishedEpoch).
+      // Counter miss bertambah tepat 1 kali per scan selesai.
       rtcYardMissCount++;
       if (rtcYardMissCount == 1) {
         rtcFirstMissEpoch = scanFinishedEpoch;
@@ -962,28 +1065,18 @@ void updateAsyncWifiScan() {
           pendingExitLagSteps = 0;
         }
 
+        // A.2: Log pengesahan transisi zona keluar
+        Serial.printf("[ZONE TRANSITION] rawLag=%lus steps=%u firstMiss=%lu nowEpoch=%lu\n",
+                      (unsigned long)rawLag, (unsigned)pendingExitLagSteps,
+                      (unsigned long)rtcFirstMissEpoch, (unsigned long)scanFinishedEpoch);
+
+        // B.1: Mulai rekoneksi non-blocking ke Hotspot Teknisi jika terdeteksi, atau set OFFLINE
         if (techRssi > -90) {
           const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
-          Serial.printf("[HANDOVER] Menghubungkan ke Hotspot Teknisi '%s'...", connectSsid);
-          WiFi.disconnect(false, true);
-          delay(100);
-          WiFi.begin(connectSsid, wifiTechPass.c_str());
-          uint32_t t0 = millis();
-          while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
-            delay(200);
-            Serial.print(".");
-          }
-          Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL/TIMEOUT");
-        }
-
-        if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiTechSsid)) {
-          rtcCurrentZone = NET_ZONE_TECH;
-          Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us) | IP: %s\n",
-                        pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U), WiFi.localIP().toString().c_str());
+          startWifiConnectNonBlocking(CONN_CONNECTING_TECH, connectSsid, wifiTechPass.c_str());
+          setZone(NET_ZONE_TECH, "Handover Exit Yard -> Tech Hotspot");
         } else {
-          rtcCurrentZone = NET_ZONE_OFFLINE;
-          Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE | exit_lag=%u step (%us)\n",
-                        pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U));
+          setZone(NET_ZONE_OFFLINE, "Handover Exit Yard -> Offline");
         }
 
         rtcFirstMissEpoch = 0;
@@ -999,21 +1092,13 @@ void updateAsyncWifiScan() {
       rtcYardHitCount++;
       Serial.printf("[ZONE HYSTERESIS] Yard SSID hit #%u/2 (RSSI: %d dBm >= -75)\n", rtcYardHitCount, yardRssi);
       if (rtcYardHitCount >= 2) {
-        if (WiFi.status() == WL_CONNECTED && !isSsidMatch(WiFi.SSID(), wifiYardSsid)) {
-          WiFi.disconnect(false, true);
-          delay(100);
-        }
         const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
-        WiFi.begin(connectSsid, wifiYardPass.c_str());
-        uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
-
-        rtcCurrentZone      = NET_ZONE_YARD;
+        startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
+        setZone(NET_ZONE_YARD, "Handover Confirmed to Yard (Hit >= 2)");
         rtcYardHitCount     = 0;
         rtcYardMissCount    = 0;
         rtcFirstMissEpoch   = 0;
         pendingExitLagSteps = 0;
-        Serial.println("[ZONE TRANSITION] OUTSIDE -> YARD (Handover Confirmed, lag=0)");
         return;
       }
     } else {
@@ -1021,28 +1106,19 @@ void updateAsyncWifiScan() {
     }
 
     if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiTechSsid)) {
-      rtcCurrentZone = NET_ZONE_TECH;
+      setZone(NET_ZONE_TECH, "WiFi Connected to Tech");
     } else if (techRssi > -90) {
-      if (WiFi.status() != WL_CONNECTED) {
+      if (WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE) {
         const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
-        Serial.printf("[TECH RECONNECT] Menghubungkan ke Hotspot Teknisi '%s'...", connectSsid);
-        WiFi.disconnect(false, true);
-        delay(50);
-        WiFi.begin(connectSsid, wifiTechPass.c_str());
-        uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
-          delay(200);
-          Serial.print(".");
-        }
-        Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL");
+        startWifiConnectNonBlocking(CONN_CONNECTING_TECH, connectSsid, wifiTechPass.c_str());
       }
       if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiTechSsid)) {
-        rtcCurrentZone = NET_ZONE_TECH;
+        setZone(NET_ZONE_TECH, "Tech Hotspot Active");
       } else {
-        rtcCurrentZone = NET_ZONE_OFFLINE;
+        setZone(NET_ZONE_OFFLINE, "Connecting to Tech Hotspot");
       }
     } else {
-      rtcCurrentZone = NET_ZONE_OFFLINE;
+      setZone(NET_ZONE_OFFLINE, "Tech Signal Absent");
     }
   }
 }
@@ -1053,7 +1129,7 @@ void triggerWifiScanIfDue() {
 
   // 1. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
   if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
-    rtcCurrentZone    = NET_ZONE_YARD;
+    setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (TriggerScan)");
     rtcYardMissCount  = 0;
     rtcYardHitCount   = 0;
     rtcFirstMissEpoch = 0;
@@ -1452,7 +1528,7 @@ void setup() {
     WiFi.scanDelete();
 
     if (yardRssi >= -85) {
-      rtcCurrentZone    = NET_ZONE_YARD;
+      setZone(NET_ZONE_YARD, "Cold Boot Yard Detected");
       rtcYardMissCount  = 0;
       rtcYardHitCount   = 0;
       rtcFirstMissEpoch = 0;
@@ -1477,10 +1553,10 @@ void setup() {
         Serial.println("");
       }
       if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiTechSsid)) {
-        rtcCurrentZone = NET_ZONE_TECH;
+        setZone(NET_ZONE_TECH, "Cold Boot Tech Connected");
         Serial.printf("[WIFI COLD BOOT] Terhubung ke Hotspot Teknisi '%s' -> NET_ZONE_TECH\n", WiFi.SSID().c_str());
       } else {
-        rtcCurrentZone = NET_ZONE_OFFLINE;
+        setZone(NET_ZONE_OFFLINE, "Cold Boot Offline");
         Serial.println("[WIFI COLD BOOT] Hotspot Teknisi tidak tersedia -> NET_ZONE_OFFLINE");
       }
     }
@@ -1571,14 +1647,14 @@ void handleSerialCommands() {
       }
       Serial.println("");
       if (WiFi.status() == WL_CONNECTED) {
-        rtcCurrentZone = NET_ZONE_TECH;
+        setZone(NET_ZONE_TECH, "Direct Tech Test Connected");
         Serial.printf("[TEST DIRECT] BERHASIL TERHUBUNG! IP: %s (Zone diset ke NET_ZONE_TECH)\n\n", WiFi.localIP().toString().c_str());
       } else {
         Serial.println("[TEST DIRECT] GAGAL terhubung ke Hotspot Teknisi! Amati alasan [WIFI EVENT] di atas.\n");
       }
     }
     else if (c == 'z') {
-      rtcCurrentZone    = NET_ZONE_UNKNOWN;
+      setZone(NET_ZONE_UNKNOWN, "Manual Reset via Serial Command");
       rtcYardMissCount  = 0;
       rtcYardHitCount   = 0;
       rtcFirstMissEpoch = 0;
@@ -1618,24 +1694,23 @@ void loop() {
   // B.2: Sinkronisasi waktu RTC DS3231 dengan NTP jika terhubung WiFi & ada selisih > 5 detik
   checkNtpRtcSync();
 
+  // B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 6s)
+  updateWifiAsyncConnect();
+
   // A.1: Pemeriksaan & pengelolaan pemindaian Wi-Fi background asinkron (non-blocking)
   updateAsyncWifiScan();
 
   // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung
-  if (!simOfflineMode && WiFi.status() != WL_CONNECTED && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
+  if (!simOfflineMode && WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
     lastWifiRetryMs = millis();
     if (rtcCurrentZone == NET_ZONE_TECH) {
       Serial.println("[WIFI] Mencoba menyambung ulang ke Hotspot Teknisi...");
       const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
-      WiFi.disconnect(false, true);
-      delay(50);
-      WiFi.begin(connectSsid, wifiTechPass.c_str());
+      startWifiConnectNonBlocking(CONN_CONNECTING_TECH, connectSsid, wifiTechPass.c_str());
     } else if (rtcCurrentZone == NET_ZONE_YARD && rtcYardMissCount == 0) {
       Serial.println("[WIFI] Mencoba menyambung ulang ke SSID Gudang...");
       const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
-      WiFi.disconnect(false, true);
-      delay(50);
-      WiFi.begin(connectSsid, wifiYardPass.c_str());
+      startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
     } else {
       // NET_ZONE_OFFLINE atau UNKNOWN: Paksa scan jaringan alami pada live poll berikutnya
       lastZoneEvalMs = 0;
