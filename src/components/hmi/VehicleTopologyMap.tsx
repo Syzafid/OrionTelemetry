@@ -1,26 +1,14 @@
-import { useId, useState } from "react";
 import type { VehicleUnit } from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
-import {
-  Activity,
-  AlertTriangle,
-  BatteryCharging,
-  Cpu,
-  Gauge,
-  Radio,
-  Sliders,
-  Thermometer,
-  Wifi,
-  Zap,
-} from "lucide-react";
 
 export type TopologyNodeId =
+  | "all"
   | "battery"
   | "alternator"
-  | "esp32_core"
-  | "can_obd"
   | "powertrain"
+  | "can_obd"
+  | "esp32_core"
   | "rf_network";
 
 interface VehicleTopologyMapProps {
@@ -41,7 +29,8 @@ export function VehicleTopologyMap({
   const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
   const isCanFault = t.can_ok === false || t.dtc_cnt > 0;
-  const isOffline = unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
+  const isOffline =
+    unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
 
   const batteryTone: Tone = isBatteryCrit ? "crimson" : isBatteryLow ? "amber" : "emerald";
   const alternatorTone: Tone = isCharging ? "emerald" : t.engine_on ? "amber" : "dim";
@@ -51,296 +40,216 @@ export function VehicleTopologyMap({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-card/60 p-3 sm:p-4",
+        "relative flex w-full flex-col overflow-hidden rounded-[2px] border border-border bg-card/40 p-3 sm:p-4",
         className,
       )}
     >
-      {/* Blueprint Header Status Bar */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2.5">
+      {/* Workbench Header */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-[2px] border border-border bg-background px-2 py-1 num text-[10px] uppercase font-semibold text-foreground">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald" />
-            TOPOLOGI KELISTRIKAN & SENSOR ORION
+          <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background/80 px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
+            <span className="h-2 w-2 rounded-full bg-crimson" />
+            <span>MITSUBISHI PAJERO SPORT HARNESS TOPOLOGY</span>
           </div>
-          <span className="num hidden text-[11px] text-muted-foreground sm:inline">
-            PCB v1.0 | Mitsubishi Harness Blueprint v3.3
+          <span className="num hidden text-[11px] text-muted-foreground md:inline">
+            Orthographic Chassis Cutaway (Skala Rasio 1:1 OEM)
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10.5px] num">
-          <span className="text-muted-foreground">SIMPUL AKTIF:</span>
-          <span className="font-semibold uppercase text-foreground">
-            {activeNode.replace("_", " ")}
-          </span>
+
+        {/* Quick Filter Pill Controls */}
+        <div className="flex flex-wrap items-center gap-1 num text-[10.5px]">
+          <span className="mr-1 text-muted-foreground text-[10px]">FILTER PROBE:</span>
+          {[
+            { id: "all", label: "SEMUA PROBE" },
+            { id: "battery", label: "AKI 12V", tone: batteryTone },
+            { id: "alternator", label: "ALTERNATOR", tone: alternatorTone },
+            { id: "powertrain", label: "MESIN / RPM", tone: "dim" as Tone },
+            { id: "can_obd", label: "CAN BUS", tone: canTone },
+            { id: "esp32_core", label: "ESP32", tone: "emerald" as Tone },
+            { id: "rf_network", label: "GATEWAY RF", tone: rfTone },
+          ].map((item) => {
+            const on = activeNode === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectNode(item.id as TopologyNodeId)}
+                className={cn(
+                  "flex min-h-[30px] items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
+                  on
+                    ? "border-foreground/80 bg-foreground/15 font-semibold text-foreground"
+                    : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
+                )}
+              >
+                {item.tone && <Led tone={item.tone} />}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Main Interactive Vector Blueprint Canvas */}
-      <div className="relative min-h-0 flex-1 overflow-x-auto overflow-y-hidden rounded-[2px] border border-border bg-background/90 p-2">
+      {/* Main Orthographic Chassis Blueprint Container */}
+      <div className="relative min-h-[340px] flex-1 overflow-x-auto overflow-y-hidden rounded-[2px] border border-border/80 bg-background/95 p-3">
         <svg
-          viewBox="0 0 920 440"
-          className="h-full min-h-[340px] w-full min-w-[760px] select-none"
+          viewBox="0 0 960 400"
+          className="h-full min-h-[320px] w-full min-w-[820px] select-none"
           role="img"
-          aria-label="Diagram skematik topologi kelistrikan dan telemetri kendaraan"
+          aria-label="Topologi potongan chassis kendaraan Mitsubishi Pajero Sport dengan letak fisik komponen sensor"
         >
-          <defs>
-            {/* Subtle engineering grid pattern */}
-            <pattern
-              id="cad-grid"
-              width="24"
-              height="24"
-              patternUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 24 0 L 0 0 0 24"
-                fill="none"
-                stroke="oklch(0.28 0.015 265 / 0.35)"
-                strokeWidth="0.5"
-              />
-            </pattern>
+          {/* Subtle Technical Dimension Axis / Centerline */}
+          <line
+            x1="40"
+            y1="200"
+            x2="920"
+            y2="200"
+            stroke="oklch(0.30 0.015 265 / 0.4)"
+            strokeDasharray="8 4 2 4"
+            strokeWidth="0.75"
+          />
+          <text
+            x="50"
+            y="204"
+            fill="oklch(0.50 0.01 260)"
+            fontSize="8"
+            fontFamily="monospace"
+          >
+            CL VEHICLE CENTERLINE
+          </text>
 
-            {/* Marker Arrows */}
-            <marker
-              id="arrow-power"
-              viewBox="0 0 10 10"
-              refX="6"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1 L 8 5 L 0 9 z" fill="#F45B60" />
-            </marker>
-            <marker
-              id="arrow-can"
-              viewBox="0 0 10 10"
-              refX="6"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1 L 8 5 L 0 9 z" fill="#10B981" />
-            </marker>
-          </defs>
-
-          {/* Grid background */}
-          <rect width="920" height="440" fill="url(#cad-grid)" />
-
-          {/* Boundaries: Engine Bay / Cockpit Cabin / IoT Node Enclosure */}
-          <g className="subsystem-zones opacity-70">
-            {/* Engine Bay Zone */}
-            <rect
-              x="20"
-              y="20"
-              width="270"
-              height="400"
-              rx="2"
-              fill="none"
-              stroke="oklch(0.35 0.01 265)"
-              strokeDasharray="4 4"
-              strokeWidth="1"
+          {/* ================= CHASSIS SILHOUETTE (PAJERO SPORT TOP-DOWN) ================= */}
+          <g className="chassis-geometry" stroke="oklch(0.38 0.015 265)" fill="none" strokeWidth="1.5">
+            {/* Outer Vehicle Body Shell */}
+            <path
+              d="
+                M 120 130
+                C 140 100, 180 80, 240 80
+                L 700 80
+                C 760 80, 800 100, 830 130
+                C 850 150, 855 180, 855 200
+                C 855 220, 850 250, 830 270
+                C 800 300, 760 320, 700 320
+                L 240 320
+                C 180 320, 140 300, 120 270
+                C 105 250, 100 220, 100 200
+                C 100 180, 105 150, 120 130
+                Z
+              "
+              fill="oklch(0.14 0.008 265 / 0.85)"
+              stroke="oklch(0.42 0.015 265)"
+              strokeWidth="2"
             />
-            <text
-              x="30"
-              y="38"
-              fill="oklch(0.65 0.01 260)"
-              fontSize="10"
-              fontFamily="monospace"
-              fontWeight="bold"
-            >
-              [KOMPARTEMEN MESIN / POWERTRAIN]
+
+            {/* Front Bumper / Skid Plate Contour */}
+            <path
+              d="M 98 175 C 95 185, 95 215, 98 225 L 115 235 L 115 165 Z"
+              fill="oklch(0.18 0.01 265)"
+              stroke="oklch(0.35 0.015 265)"
+            />
+
+            {/* Hood / Engine Bay Divider (Bulkhead Firewall) */}
+            <line x1="280" y1="82" x2="280" y2="318" stroke="oklch(0.32 0.015 265)" strokeWidth="1.5" />
+            <text x="200" y="98" fill="oklch(0.55 0.01 260)" fontSize="9" fontFamily="monospace">
+              FRONT ENGINE BAY (RUANG MESIN)
             </text>
 
-            {/* Cabin / OBD Zone */}
+            {/* Windshield Contour & A-Pillars */}
+            <path
+              d="M 285 105 L 340 115 L 340 285 L 285 295 Z"
+              fill="oklch(0.16 0.01 265)"
+              stroke="oklch(0.30 0.015 265)"
+            />
+
+            {/* Cabin Green-House / Roof Rails */}
             <rect
-              x="310"
-              y="20"
-              width="270"
-              height="400"
-              rx="2"
-              fill="none"
-              stroke="oklch(0.35 0.01 265)"
-              strokeDasharray="4 4"
+              x="350"
+              y="110"
+              width="340"
+              height="180"
+              rx="4"
+              fill="oklch(0.13 0.008 265)"
+              stroke="oklch(0.28 0.015 265)"
               strokeWidth="1"
             />
-            <text
-              x="320"
-              y="38"
-              fill="oklch(0.65 0.01 260)"
-              fontSize="10"
-              fontFamily="monospace"
-              fontWeight="bold"
-            >
-              [KABIN / KONEKTOR OBD-II J1962]
+            <text x="440" y="125" fill="oklch(0.50 0.01 260)" fontSize="9" fontFamily="monospace">
+              PASSENGER CABIN & CARGO (KABIN)
             </text>
 
-            {/* ORION Hardware Enclosure */}
-            <rect
-              x="600"
-              y="20"
-              width="300"
-              height="400"
-              rx="2"
-              fill="none"
-              stroke="oklch(0.40 0.02 265)"
-              strokeDasharray="4 4"
-              strokeWidth="1"
-            />
-            <text
-              x="610"
-              y="38"
-              fill="oklch(0.75 0.02 260)"
-              fontSize="10"
-              fontFamily="monospace"
-              fontWeight="bold"
-            >
-              [MODUL GATEWAY ORION ESP32 v1.0]
-            </text>
+            {/* Tailgate / Rear Bumper Contour */}
+            <line x1="720" y1="85" x2="720" y2="315" stroke="oklch(0.30 0.015 265)" strokeWidth="1.2" />
+
+            {/* 4 Wheels (Orthographic Tires & Rims) */}
+            {/* Front Left Wheel */}
+            <rect x="200" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
+            {/* Front Right Wheel */}
+            <rect x="200" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
+            {/* Rear Left Wheel */}
+            <rect x="640" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
+            {/* Rear Right Wheel */}
+            <rect x="640" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
+
+            {/* Axle Lines */}
+            <line x1="240" y1="76" x2="240" y2="324" stroke="oklch(0.30 0.015 265)" strokeDasharray="3 3" />
+            <line x1="680" y1="76" x2="680" y2="324" stroke="oklch(0.30 0.015 265)" strokeDasharray="3 3" />
           </g>
 
-          {/* ================= ELECTRICAL BUS LINES ================= */}
-          <g className="bus-lines">
-            {/* Alternator to Battery Charge Line */}
+          {/* ================= ELECTRICAL HARNESS WIRING ================= */}
+          <g className="wiring-harness">
+            {/* Alternator to Battery B+ Wire */}
             <path
-              d="M 155 125 L 155 185"
+              d="M 160 185 L 160 140 L 210 140"
               fill="none"
-              stroke={isCharging ? "#10B981" : "oklch(0.35 0.01 265)"}
-              strokeWidth={isCharging ? "3" : "1.5"}
-              strokeDasharray={isCharging ? "none" : "3 3"}
+              stroke={isCharging ? "#10B981" : "oklch(0.35 0.015 265)"}
+              strokeWidth={isCharging ? "2.5" : "1.5"}
             />
-            <text
-              x="162"
-              y="160"
-              fill={isCharging ? "#10B981" : "oklch(0.60 0.01 260)"}
-              fontSize="8.5"
-              fontFamily="monospace"
-            >
-              {isCharging ? "CHARGING CURRENT" : "STANDBY"}
-            </text>
 
-            {/* Battery 12V Main Feed to ORION ADC Pin 16 Divider */}
+            {/* Battery B+ Wire to Cabin ORION Node (Firewall pass-through) */}
             <path
-              d="M 235 220 L 630 220 L 630 160 L 670 160"
+              d="M 240 140 L 290 140 L 290 180 L 490 180 L 490 190"
               fill="none"
               stroke={isBatteryCrit ? "#F45B60" : "#F59E0B"}
               strokeWidth="2"
             />
-            <text
-              x="330"
-              y="214"
-              fill="#F59E0B"
-              fontSize="9"
-              fontFamily="monospace"
-              fontWeight="600"
-            >
-              PIN 16 SENSE FEED (300k / 68k DIVIDER)
-            </text>
 
-            {/* Engine Sensors to OBD-II Port Line */}
+            {/* Engine Sensors to OBD-II Harness */}
             <path
-              d="M 155 315 L 155 350 L 445 350 L 445 285"
+              d="M 230 230 L 320 230 L 320 250 L 370 250"
               fill="none"
-              stroke={t.engine_on ? "#10B981" : "oklch(0.35 0.01 265)"}
+              stroke={t.engine_on ? "#10B981" : "oklch(0.35 0.015 265)"}
               strokeWidth="1.5"
             />
-            <text
-              x="210"
-              y="344"
-              fill="oklch(0.65 0.01 260)"
-              fontSize="8.5"
-              fontFamily="monospace"
-            >
-              ECU TRANSDUCER (RPM / COOLANT / MAP)
-            </text>
 
-            {/* OBD-II Port to WCMCU-230 CAN Bus Pair */}
+            {/* OBD-II to ORION TWAI CAN Differential Pair */}
             <path
-              d="M 445 200 L 445 130 L 670 130"
+              d="M 390 240 L 450 240 L 450 215 L 490 215"
               fill="none"
               stroke={isCanFault ? "#F45B60" : "#10B981"}
-              strokeWidth={isCanFault ? "2" : "2"}
-              strokeDasharray={isCanFault ? "4 3" : "none"}
-            />
-            <text
-              x="475"
-              y="124"
-              fill={isCanFault ? "#F45B60" : "#10B981"}
-              fontSize="9"
-              fontFamily="monospace"
-              fontWeight="600"
-            >
-              TWAI CAN BUS HIGH/LOW (PIN 6 & 14)
-            </text>
-
-            {/* ESP32 to RF Radio / Antenna Line */}
-            <path
-              d="M 770 200 L 770 280"
-              fill="none"
-              stroke={isOffline ? "oklch(0.40 0.01 260)" : "#10B981"}
               strokeWidth="2"
-              strokeDasharray={isOffline ? "3 3" : "none"}
+              strokeDasharray={isCanFault ? "4 2" : "none"}
             />
-            <text
-              x="778"
-              y="245"
-              fill="oklch(0.65 0.01 260)"
-              fontSize="8.5"
-              fontFamily="monospace"
-            >
-              SPI / 2.4GHz RF
-            </text>
           </g>
 
-          {/* ================= COMPONENT INTERACTIVE NODES ================= */}
+          {/* ================= COMPONENT PROBE HOTSPOTS ================= */}
 
-          {/* 1. ALTERNATOR & REGULATOR */}
+          {/* PROBE 1: 12V BATTERY & SHUNT SENSOR (Ruang Mesin Kiri) */}
           <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
-            onClick={() => onSelectNode("alternator")}
-            tabIndex={0}
-            role="button"
-            aria-label="Simpul Alternator dan Sirkuit Pengisian"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelectNode("alternator");
-            }}
-          >
-            <rect
-              x="80"
-              y="65"
-              width="150"
-              height="60"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
-              stroke={activeNode === "alternator" ? "#F2EFE9" : isCharging ? "#10B981" : "oklch(0.32 0.01 265)"}
-              strokeWidth={activeNode === "alternator" ? "2" : "1"}
-            />
-            <circle cx="98" cy="85" r="4" fill={isCharging ? "#10B981" : "oklch(0.45 0.01 265)"} />
-            <text x="110" y="88" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              ALTERNATOR 130A
-            </text>
-            <text x="95" y="108" fill="oklch(0.70 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              Status: {isCharging ? "CHARGING (RUN)" : t.engine_on ? "LOW REGULATE" : "OFF / STANDBY"}
-            </text>
-          </g>
-
-          {/* 2. 12V MAIN BATTERY & SHUNT */}
-          <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer"
             onClick={() => onSelectNode("battery")}
             tabIndex={0}
             role="button"
-            aria-label="Simpul Baterai Aki 12V dan Resistor Shunt"
+            aria-label="Probe Aki 12V dan Resistor Shunt"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onSelectNode("battery");
             }}
           >
+            {/* Physical Battery Box */}
             <rect
-              x="75"
-              y="185"
-              width="160"
-              height="75"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
+              x="200"
+              y="115"
+              width="50"
+              height="40"
+              rx="1.5"
+              fill={activeNode === "battery" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={
                 activeNode === "battery"
                   ? "#F2EFE9"
@@ -352,198 +261,262 @@ export function VehicleTopologyMap({
               }
               strokeWidth={activeNode === "battery" ? "2" : "1.5"}
             />
-            <circle cx="92" cy="205" r="4" fill={isBatteryCrit ? "#F45B60" : isBatteryLow ? "#F59E0B" : "#10B981"} />
-            <text x="104" y="208" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              AKI 12V (70Ah PB)
+            {/* Battery Terminals */}
+            <rect x="206" y="110" width="8" height="5" fill="#F45B60" />
+            <rect x="236" y="110" width="8" height="5" fill="#64748B" />
+            <text x="210" y="138" fill="#F2EFE9" fontSize="9" fontWeight="bold" fontFamily="monospace">
+              12V
             </text>
-            <text x="92" y="228" fill="#F2EFE9" fontSize="12" fontWeight="600" fontFamily="monospace">
-              {fmtV(t.v_bat)} V <tspan fill="oklch(0.65 0.01 260)" fontSize="10">({t.adc_raw_mv} mV)</tspan>
-            </text>
-            <text x="92" y="246" fill="oklch(0.70 0.01 260)" fontSize="9" fontFamily="monospace">
-              Sleep Shunt: {t.shunt_sleep_ua} µA
-            </text>
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(140, 20)">
+              <rect
+                x="0"
+                y="0"
+                width="160"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "battery" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "battery" ? "1.5" : "1"}
+              />
+              <line x1="85" y1="32" x2="85" y2="92" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 01: AKI 12V 70Ah
+              </text>
+              <text x="8" y="26" fill={isBatteryCrit ? "#F45B60" : isBatteryLow ? "#F59E0B" : "#10B981"} fontSize="11" fontWeight="bold" fontFamily="monospace">
+                {fmtV(t.v_bat)} V <tspan fill="oklch(0.70 0.01 260)" fontSize="9">({t.adc_raw_mv} mV)</tspan>
+              </text>
+            </g>
           </g>
 
-          {/* 3. POWERTRAIN TRANSDUCERS (RPM / COOLANT / MAP) */}
+          {/* PROBE 2: ALTERNATOR & REGULATOR (Ruang Mesin Depan) */}
           <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer"
+            onClick={() => onSelectNode("alternator")}
+            tabIndex={0}
+            role="button"
+            aria-label="Probe Alternator dan Regulator"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onSelectNode("alternator");
+            }}
+          >
+            {/* Alternator Pulley & Body */}
+            <circle
+              cx="160"
+              cy="200"
+              r="22"
+              fill={activeNode === "alternator" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
+              stroke={activeNode === "alternator" ? "#F2EFE9" : isCharging ? "#10B981" : "oklch(0.35 0.015 265)"}
+              strokeWidth={activeNode === "alternator" ? "2" : "1.5"}
+            />
+            <circle cx="160" cy="200" r="10" fill="oklch(0.12 0.01 265)" stroke="oklch(0.40 0.015 265)" />
+            <text x="146" y="203" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+              ALT
+            </text>
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(60, 245)">
+              <rect
+                x="0"
+                y="0"
+                width="165"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "alternator" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "alternator" ? "1.5" : "1"}
+              />
+              <line x1="100" y1="0" x2="145" y2="-25" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 02: ALTERNATOR 130A
+              </text>
+              <text x="8" y="26" fill={isCharging ? "#10B981" : "oklch(0.75 0.01 260)"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+                {isCharging ? "13.80V (PENGISIAN AKTIF)" : "0.0V (STANDBY / OFF)"}
+              </text>
+            </g>
+          </g>
+
+          {/* PROBE 3: ENGINE TRANSDUCERS (RPM & COOLANT SENSOR) */}
+          <g
+            className="cursor-pointer"
             onClick={() => onSelectNode("powertrain")}
             tabIndex={0}
             role="button"
-            aria-label="Simpul Powertrain RPM dan Coolant Temperature"
+            aria-label="Probe Sensor Putaran Mesin dan Coolant"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onSelectNode("powertrain");
             }}
           >
+            {/* Engine Block Visual */}
             <rect
-              x="75"
-              y="285"
-              width="160"
-              height="65"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
-              stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.32 0.01 265)"}
+              x="215"
+              y="180"
+              width="45"
+              height="40"
+              rx="1.5"
+              fill={activeNode === "powertrain" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
+              stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
               strokeWidth={activeNode === "powertrain" ? "2" : "1"}
             />
-            <circle cx="92" cy="305" r="4" fill={t.engine_on ? "#10B981" : "oklch(0.45 0.01 265)"} />
-            <text x="104" y="308" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              SENSOR POWERTRAIN
+            <text x="221" y="204" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+              ENGINE
             </text>
-            <text x="92" y="326" fill="oklch(0.85 0.01 260)" fontSize="10" fontFamily="monospace">
-              RPM: <tspan fill="#F2EFE9" fontWeight="bold">{!t.engine_on || t.rpm <= 0 ? "0" : t.rpm}</tspan> | Coolant: <tspan fill="#F2EFE9" fontWeight="bold">{!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c}°C`}</tspan>
-            </text>
-            <text x="92" y="342" fill="oklch(0.65 0.01 260)" fontSize="8.5" fontFamily="monospace">
-              Engine Load: {t.load_pct ?? 0}% | IAT: {t.iat_c ?? 30}°C
-            </text>
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(180, 290)">
+              <rect
+                x="0"
+                y="0"
+                width="155"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "powertrain" ? "1.5" : "1"}
+              />
+              <line x1="60" y1="0" x2="45" y2="-70" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 03: TRANSDUSER MESIN
+              </text>
+              <text x="8" y="26" fill="#F2EFE9" fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+                {!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`} | {!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c}°C`}
+              </text>
+            </g>
           </g>
 
-          {/* 4. OBD-II DIAGNOSTIC PORT & CAN INTERFACE */}
+          {/* PROBE 4: OBD-II PORT J1962 & CAN BUS (Bawah Setir Kabin) */}
           <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer"
             onClick={() => onSelectNode("can_obd")}
             tabIndex={0}
             role="button"
-            aria-label="Simpul Port OBD-II dan Jalur CAN Bus"
+            aria-label="Probe Port OBD-II dan CAN Bus"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onSelectNode("can_obd");
             }}
           >
-            <rect
-              x="365"
-              y="200"
-              width="160"
-              height="85"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
+            {/* Trapezoidal OBD-II Connector Icon */}
+            <path
+              d="M 370 235 L 395 235 L 398 255 L 367 255 Z"
+              fill={activeNode === "can_obd" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={activeNode === "can_obd" ? "#F2EFE9" : isCanFault ? "#F45B60" : "#10B981"}
               strokeWidth={activeNode === "can_obd" ? "2" : "1.5"}
             />
-            <circle cx="382" cy="220" r="4" fill={isCanFault ? "#F45B60" : "#10B981"} />
-            <text x="394" y="223" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              OBD-II PORT (J1962)
+            <text x="372" y="248" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+              OBD
             </text>
-            <text x="382" y="243" fill={isCanFault ? "#F45B60" : "#10B981"} fontSize="10" fontWeight="bold" fontFamily="monospace">
-              CAN Status: {t.can_ok === false ? "FAULT / DOWN" : "HEALTHY (500 kbps)"}
-            </text>
-            <text x="382" y="261" fill="oklch(0.75 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              DTC Error Code: <tspan fill={t.dtc_cnt > 0 ? "#F45B60" : "#10B981"} fontWeight="bold">{t.dtc}</tspan> ({t.dtc_cnt})
-            </text>
-            <text x="382" y="277" fill="oklch(0.60 0.01 260)" fontSize="8.5" fontFamily="monospace">
-              Pins: 6 (CAN-H), 14 (CAN-L), 4/5 (GND)
-            </text>
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(340, 290)">
+              <rect
+                x="0"
+                y="0"
+                width="165"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "can_obd" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "can_obd" ? "1.5" : "1"}
+              />
+              <line x1="45" y1="0" x2="45" y2="-35" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 04: OBD-II / CAN BUS
+              </text>
+              <text x="8" y="26" fill={isCanFault ? "#F45B60" : "#10B981"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+                {t.can_ok === false ? "CAN FAULT" : "CAN OK"} | DTC: {t.dtc}
+              </text>
+            </g>
           </g>
 
-          {/* 5. ESP32 ORION HARDWARE GATEWAY */}
+          {/* PROBE 5: ORION ESP32 GATEWAY (Laci Kabin / Konsol Tengah) */}
           <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer"
             onClick={() => onSelectNode("esp32_core")}
             tabIndex={0}
             role="button"
-            aria-label="Simpul Mikrokontroler ESP32 Orion Core"
+            aria-label="Probe Gateway ORION ESP32 dan RTC"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onSelectNode("esp32_core");
             }}
           >
+            {/* PCB Module Silhouette */}
             <rect
-              x="670"
-              y="90"
-              width="200"
-              height="110"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
+              x="490"
+              y="180"
+              width="60"
+              height="40"
+              rx="1.5"
+              fill={activeNode === "esp32_core" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={activeNode === "esp32_core" ? "#F2EFE9" : "#10B981"}
               strokeWidth={activeNode === "esp32_core" ? "2" : "1.5"}
             />
-            <circle cx="688" cy="110" r="4" fill="#10B981" />
-            <text x="700" y="113" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              ORION ESP32 (NODE {unit.unit_id})
+            {/* IC Chip on PCB */}
+            <rect x="508" y="190" width="24" height="20" fill="oklch(0.10 0.008 265)" stroke="#10B981" strokeWidth="0.8" />
+            <text x="496" y="202" fill="#F2EFE9" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+              ESP32
             </text>
-            <text x="688" y="133" fill="oklch(0.85 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              DS3231 RTC Temp: <tspan fill="#F2EFE9" fontWeight="bold">{t.rtc_temp_c.toFixed(1)}°C</tspan>
-            </text>
-            <text x="688" y="151" fill="oklch(0.85 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              Kalibrasi OLS: <tspan fill="#10B981">m=0.005412, c=0.069</tspan>
-            </text>
-            <text x="688" y="169" fill="oklch(0.85 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              Uptime Siklus: <tspan fill="#F2EFE9">{t.active_ms} ms</tspan> | Boot #{t.boot}
-            </text>
-            <text x="688" y="187" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace">
-              Konsumsi Harian: {t.daily_mah} mAh | Seq #{t.seq}
-            </text>
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(470, 25)">
+              <rect
+                x="0"
+                y="0"
+                width="175"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "esp32_core" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "esp32_core" ? "1.5" : "1"}
+              />
+              <line x1="50" y1="32" x2="50" y2="155" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 05: ORION GATEWAY v1.0
+              </text>
+              <text x="8" y="26" fill="#10B981" fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+                RTC: {t.rtc_temp_c.toFixed(1)}°C | Day: {t.daily_mah}mAh
+              </text>
+            </g>
           </g>
 
-          {/* 6. RF GATEWAY / NETWORK PRESENCE */}
+          {/* PROBE 6: RF ANTENNA & GEOFENCE (Pilar Atap Kabin) */}
           <g
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer"
             onClick={() => onSelectNode("rf_network")}
             tabIndex={0}
             role="button"
-            aria-label="Simpul Antena RF dan Manajemen Zona Jaringan"
+            aria-label="Probe Antena RF dan Geofence Gateway"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onSelectNode("rf_network");
             }}
           >
-            <rect
-              x="670"
-              y="280"
-              width="200"
-              height="80"
-              rx="2"
-              fill="oklch(0.18 0.01 265)"
-              stroke={
-                activeNode === "rf_network"
-                  ? "#F2EFE9"
-                  : isOffline
-                    ? "oklch(0.35 0.01 265)"
-                    : unit.net_zone === "TECH_HOTSPOT"
-                      ? "#F59E0B"
-                      : "#10B981"
-              }
-              strokeWidth={activeNode === "rf_network" ? "2" : "1.5"}
-            />
-            <circle cx="688" cy="300" r="4" fill={isOffline ? "oklch(0.50 0.01 260)" : unit.net_zone === "TECH_HOTSPOT" ? "#F59E0B" : "#10B981"} />
-            <text x="700" y="303" fill="#F2EFE9" fontSize="11" fontWeight="bold">
-              RF GATEWAY & GEOFENCE
-            </text>
-            <text x="688" y="323" fill="oklch(0.85 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              Zona: <tspan fill={isOffline ? "oklch(0.70 0.01 260)" : "#10B981"} fontWeight="bold">{unit.net_zone ?? "YARD"}</tspan> | {t.rssi} dBm
-            </text>
-            <text x="688" y="341" fill="oklch(0.85 0.01 260)" fontSize="9.5" fontFamily="monospace">
-              Antrean Buffer: <tspan fill={unit.buffer_used > 0 ? "#F59E0B" : "#10B981"} fontWeight="bold">{unit.buffer_used} slot</tspan> (Tier-1 RTC)
-            </text>
+            {/* Antenna Symbol */}
+            <circle cx="680" cy="200" r="12" fill="oklch(0.18 0.01 265)" stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"} strokeWidth="1" />
+            <path d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190" stroke={isOffline ? "oklch(0.50 0.01 260)" : "#10B981"} fill="none" strokeWidth="1.2" />
+            <circle cx="680" cy="200" r="2.5" fill="#10B981" />
+
+            {/* Live Readout Callout Tag */}
+            <g transform="translate(680, 25)">
+              <rect
+                x="0"
+                y="0"
+                width="165"
+                height="32"
+                rx="1"
+                fill="oklch(0.12 0.01 265 / 0.95)"
+                stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                strokeWidth={activeNode === "rf_network" ? "1.5" : "1"}
+              />
+              <line x1="0" y1="20" x2="-20" y2="175" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
+              <text x="8" y="14" fill="oklch(0.70 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+                PROBE 06: RF & GEOFENCE
+              </text>
+              <text x="8" y="26" fill={isOffline ? "oklch(0.70 0.01 260)" : unit.net_zone === "TECH_HOTSPOT" ? "#F59E0B" : "#10B981"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+                {unit.net_zone ?? "YARD"} ({t.rssi} dBm)
+              </text>
+            </g>
           </g>
         </svg>
-      </div>
-
-      {/* Interactive Node Selector Badges / Button Bar */}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-1">
-        <span className="label-hmi mr-1 text-[10px] text-muted-foreground">PILIH SIMPUL:</span>
-        {[
-          { id: "battery", label: "Aki 12V", tone: batteryTone },
-          { id: "alternator", label: "Alternator", tone: alternatorTone },
-          { id: "can_obd", label: "CAN / OBD-II", tone: canTone },
-          { id: "powertrain", label: "Powertrain", tone: "dim" as Tone },
-          { id: "esp32_core", label: "ESP32 Core", tone: "emerald" as Tone },
-          { id: "rf_network", label: "Gateway RF", tone: rfTone },
-        ].map((node) => {
-          const isActive = activeNode === node.id;
-          return (
-            <button
-              key={node.id}
-              type="button"
-              onClick={() => onSelectNode(node.id as TopologyNodeId)}
-              className={cn(
-                "flex min-h-[36px] items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[10.5px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                isActive
-                  ? "border-foreground bg-foreground/10 font-semibold text-foreground shadow-sm"
-                  : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
-              )}
-            >
-              <Led tone={node.tone} />
-              <span>{node.label}</span>
-            </button>
-          );
-        })}
       </div>
     </div>
   );
