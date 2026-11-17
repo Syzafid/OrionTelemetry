@@ -52,12 +52,45 @@ if (!function_exists('orionEnv')) {
 }
 
 // 1. CORS Preflight & Security Headers
-$allowedOrigin = orionEnv('CORS_ALLOWED_ORIGIN', '*') ?: '*';
+$rawOrigin = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
+$configuredOrigin = trim(orionEnv('CORS_ALLOWED_ORIGIN', '*') ?: '*');
+
+// Strip markdown link formatting if present, e.g. [url](url) -> url
+if (preg_match('/\[.*?\]\((.*?)\)/', $configuredOrigin, $matches)) {
+    $configuredOrigin = trim($matches[1]);
+}
+
+$originClean = '';
+if ($rawOrigin !== '') {
+    $parsed = parse_url($rawOrigin);
+    if (!empty($parsed['scheme']) && !empty($parsed['host'])) {
+        $originClean = $parsed['scheme'] . '://' . $parsed['host'] . (!empty($parsed['port']) ? (':' . $parsed['port']) : '');
+    }
+}
+
+$allowedOrigin = '*';
+if ($configuredOrigin === '*' || $configuredOrigin === '') {
+    $allowedOrigin = '*';
+} elseif ($originClean !== '') {
+    $parsedHost = parse_url($originClean, PHP_URL_HOST) ?? '';
+    if ($parsedHost === 'localhost' || $parsedHost === '127.0.0.1' || str_ends_with($parsedHost, 'oriontelemetry.tech')) {
+        $allowedOrigin = $originClean;
+    } else {
+        $allowedOrigin = $configuredOrigin;
+    }
+} else {
+    $allowedOrigin = $configuredOrigin;
+}
+
 header("Access-Control-Allow-Origin: {$allowedOrigin}");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Accept, X-Orion-Node, X-Burst-Sync, X-Node-Token, Authorization, Cache-Control, Pragma, Origin, X-Requested-With");
+header("Access-Control-Allow-Headers: Content-Type, Accept, X-Orion-Node, X-Burst-Sync, X-Node-Token, Authorization, Cache-Control, Pragma, Origin, X-Requested-With, X-Sync-SSID");
 header("Access-Control-Allow-Private-Network: true");
 header("Access-Control-Max-Age: 86400"); // 24 hours cache for preflight
+if ($allowedOrigin !== '*') {
+    header("Access-Control-Allow-Credentials: true");
+    header("Vary: Origin");
+}
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 
