@@ -768,11 +768,19 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
   int16_t techRssi = -127;
 
   int nNetworks = WiFi.scanNetworks(false, false, false, 120);
+  Serial.printf("[WIFI SCAN] Ditemukan %d Access Point di sekitar ESP32:\n", nNetworks);
   for (int i = 0; i < nNetworks; i++) {
     String s = WiFi.SSID(i);
     int32_t r = WiFi.RSSI(i);
     if (s == wifiYardSsid && r > yardRssi) yardRssi = (int16_t)r;
     if (s == wifiTechSsid && r > techRssi) techRssi = (int16_t)r;
+  }
+  Serial.printf("  -> Gudang   ('%s'): %s (%d dBm)\n",
+                wifiYardSsid.c_str(), (yardRssi >= -85) ? "TERDETEKSI" : "ABSEN/LEMAH", yardRssi);
+  Serial.printf("  -> Teknisi  ('%s'): %s (%d dBm)\n",
+                wifiTechSsid.c_str(), (techRssi > -90) ? "TERDETEKSI" : "ABSEN/LEMAH", techRssi);
+  if (techRssi <= -90) {
+    Serial.printf("  [INFO TECH] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke pita 2.4 GHz (Bukan 5 GHz) di HP!\n", wifiTechSsid.c_str());
   }
   WiFi.scanDelete();
   lastZoneEvalMs = millis();
@@ -843,16 +851,21 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
 
       // Coba hubungkan ke Hotspot Teknisi
       if (techRssi > -90) {
+        Serial.printf("[HANDOVER] Menghubungkan ke Hotspot Teknisi '%s'...", wifiTechSsid.c_str());
         WiFi.disconnect();
         WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
         uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
+          delay(200);
+          Serial.print(".");
+        }
+        Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL/TIMEOUT");
       }
 
       if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
         rtcCurrentZone = NET_ZONE_TECH;
-        Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us)\n",
-                      outLagSteps, (unsigned)(outLagSteps * 20U));
+        Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us) | IP: %s\n",
+                      outLagSteps, (unsigned)(outLagSteps * 20U), WiFi.localIP().toString().c_str());
       } else {
         rtcCurrentZone = NET_ZONE_OFFLINE;
         Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE | exit_lag=%u step (%us)\n",
@@ -906,9 +919,14 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
     rtcCurrentZone = NET_ZONE_TECH;
   } else if (techRssi > -90) {
     if (WiFi.status() != WL_CONNECTED) {
+      Serial.printf("[TECH RECONNECT] Menghubungkan ke Hotspot Teknisi '%s'...", wifiTechSsid.c_str());
       WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
       uint32_t t0 = millis();
-      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 3000) delay(100);
+      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
+        delay(200);
+        Serial.print(".");
+      }
+      Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL");
     }
     if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
       rtcCurrentZone = NET_ZONE_TECH;
@@ -1211,11 +1229,19 @@ void setup() {
     int nNetworks = WiFi.scanNetworks(false, false, false, 120);
     int16_t yardRssi = -127;
     int16_t techRssi = -127;
+    Serial.printf("[WIFI COLD BOOT] Ditemukan %d Access Point:\n", nNetworks);
     for (int i = 0; i < nNetworks; i++) {
       String s = WiFi.SSID(i);
       int32_t r = WiFi.RSSI(i);
       if (s == wifiYardSsid && r > yardRssi) yardRssi = (int16_t)r;
       if (s == wifiTechSsid && r > techRssi) techRssi = (int16_t)r;
+    }
+    Serial.printf("  -> Gudang  ('%s'): %s (%d dBm)\n",
+                  wifiYardSsid.c_str(), (yardRssi >= -85) ? "TERDETEKSI" : "ABSEN/LEMAH", yardRssi);
+    Serial.printf("  -> Teknisi ('%s'): %s (%d dBm)\n",
+                  wifiTechSsid.c_str(), (techRssi > -90) ? "TERDETEKSI" : "ABSEN/LEMAH", techRssi);
+    if (techRssi <= -90) {
+      Serial.printf("  [PETUNJUK] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke frekuensi 2.4 GHz di HP!\n", wifiTechSsid.c_str());
     }
     WiFi.scanDelete();
 
@@ -1228,11 +1254,15 @@ void setup() {
                     wifiYardSsid.c_str(), yardRssi);
       WiFi.begin(wifiYardSsid.c_str(), wifiYardPass.c_str());
     } else {
-      Serial.printf("[WIFI COLD BOOT] SSID Gudang absen (%d dBm < -85). Mencoba Hotspot Teknisi...\n", yardRssi);
+      Serial.printf("[WIFI COLD BOOT] SSID Gudang absen (%d dBm < -85). Mencoba Hotspot Teknisi '%s'...\n", yardRssi, wifiTechSsid.c_str());
       if (techRssi > -90) {
         WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
         uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 4000) delay(100);
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
+          delay(200);
+          Serial.print(".");
+        }
+        Serial.println("");
       }
       if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == wifiTechSsid) {
         rtcCurrentZone = NET_ZONE_TECH;
