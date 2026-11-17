@@ -779,7 +779,7 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
 
   uint32_t evalIntervalMs = 180000UL; // Default 180s saat mesin mati dan masih terhubung ke Gudang
   if (WiFi.status() != WL_CONNECTED) {
-    evalIntervalMs = 8000UL; // 8 detik saat koneksi terputus agar deteksi & handover ke Hotspot Teknisi responsif!
+    evalIntervalMs = 0UL; // Evaluasi scan di setiap siklus poll (5s) saat koneksi terputus agar debounce & handover cepat
   } else if (pkt.engine_on == 1) {
     if ((millis() - engineStartTimeMs) <= 120000UL) {
       evalIntervalMs = 15000UL; // 15 detik selama 120 detik pertama setelah mesin menyala
@@ -1539,7 +1539,7 @@ void loop() {
       WiFi.disconnect(false, true);
       delay(50);
       WiFi.begin(connectSsid, wifiTechPass.c_str());
-    } else if (rtcCurrentZone == NET_ZONE_YARD) {
+    } else if (rtcCurrentZone == NET_ZONE_YARD && rtcYardMissCount == 0) {
       Serial.println("[WIFI] Mencoba menyambung ulang ke SSID Gudang...");
       const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
       WiFi.disconnect(false, true);
