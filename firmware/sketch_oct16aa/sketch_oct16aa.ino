@@ -23,6 +23,7 @@
 #include <LittleFS.h>
 #include "driver/twai.h"
 #include "esp_sleep.h"
+#include "esp_wifi.h"
 
 // Forward Declaration untuk Arduino IDE Preprocessor (C++ prototype resolver)
 struct TelemetryItem;
@@ -264,10 +265,15 @@ void initAndLoadNvsState() {
 
   if (!rtcInitialized || esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
     // Cold Boot / Hard Reset: naikkan nomor boot & ambil seq terakhir dari NVS
-    rtcBootCount   = nvsBoot + 1;
-    rtcSeqCounter  = (rtcSeqCounter > nvsSeq) ? rtcSeqCounter : nvsSeq;
-    rtcInitialized = true;
+    rtcBootCount      = nvsBoot + 1;
+    rtcSeqCounter     = (rtcSeqCounter > nvsSeq) ? rtcSeqCounter : nvsSeq;
+    rtcInitialized    = true;
     nvsStore.putULong("boot_cnt", rtcBootCount);
+    // Reset status zona & debounce pada cold boot / upload agar scan jaringan berjalan bersih
+    rtcCurrentZone    = NET_ZONE_UNKNOWN;
+    rtcYardMissCount  = 0;
+    rtcYardHitCount   = 0;
+    rtcFirstMissEpoch = 0;
   } else {
     // Bangun dari Deep Sleep: pastikan tetap sinkron dengan NVS
     if (rtcBootCount < nvsBoot) rtcBootCount = nvsBoot;
@@ -792,10 +798,18 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
   }
 
   // 4. Lakukan Scan Jaringan Aktif Lengkap (Pindai semua AP 2.4 GHz)
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect(false, false);
+    delay(50);
+  }
   int16_t yardRssi = -127;
   int16_t techRssi = -127;
 
   int nNetworks = WiFi.scanNetworks(false, true, false, 250);
+  if (nNetworks < 0) {
+    delay(100);
+    nNetworks = WiFi.scanNetworks(false, true, false, 300);
+  }
   Serial.printf("[WIFI SCAN] Ditemukan %d Access Point di sekitar ESP32:\n", nNetworks);
   for (int i = 0; i < nNetworks; i++) {
     String s = WiFi.SSID(i);
@@ -847,7 +861,11 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
         delay(50);
         WiFi.begin(connectSsid, wifiTechPass.c_str());
         uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) delay(100);
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 10000) {
+          delay(250);
+          Serial.print(".");
+        }
+        Serial.println("");
       }
       if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiTechSsid)) {
         rtcCurrentZone = NET_ZONE_TECH;
@@ -906,8 +924,8 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
         delay(100);
         WiFi.begin(connectSsid, wifiTechPass.c_str());
         uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
-          delay(200);
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 10000) {
+          delay(250);
           Serial.print(".");
         }
         Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL/TIMEOUT");
@@ -978,8 +996,8 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
       delay(50);
       WiFi.begin(connectSsid, wifiTechPass.c_str());
       uint32_t t0 = millis();
-      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
-        delay(200);
+      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 10000) {
+        delay(250);
         Serial.print(".");
       }
       Serial.println(WiFi.status() == WL_CONNECTED ? " BERHASIL!" : " GAGAL");
@@ -1249,6 +1267,8 @@ void printOrionBanner() {
 #if ORION_DEBUG_SERIAL
   Serial.println("  [t] Siklus Uji Simulasi Zona (YARD -> TECH_HOTSPOT -> OFFLINE -> AUTO/BURST)");
   Serial.println("  [m] Paksa Evaluasi Scan Jaringan WiFi Segera (Bypass Timer 15/30/60/180s)");
+  Serial.println("  [p] Uji Koneksi Langsung ke Hotspot Teknisi (10 Detik)");
+  Serial.println("  [z] Reset State Machine Zona Jaringan ke UNKNOWN");
 #endif
   Serial.println("======================================================================\n");
 }
@@ -1276,13 +1296,45 @@ void setup() {
   printOrionBanner();
 
   WiFi.mode(WIFI_STA);
+  wifi_country_t country = { "ID", 1, 14, 20, WIFI_COUNTRY_POLICY_AUTO };
+  esp_wifi_set_country(&country);
   WiFi.setSleep(false); // Nonaktifkan modem sleep agar latensi HTTP POST rendah & stabil
-  WiFi.setAutoReconnect(true);
+  WiFi.setAutoReconnect(false); // Kelola rekoneksi secara terpusat agar tidak mengunci radio scan
+
+  // Daftarkan event handler untuk diagnosa WiFi mendalam
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (event == ARDUINO_EVENT_WIFI_STA_START) {
+      Serial.println("[WIFI EVENT] Radio Station siap");
+    } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+      Serial.printf("[WIFI EVENT] Terhubung fisik ke SSID: '%s' (Channel: %d)\n",
+                    WiFi.SSID().c_str(), (int)WiFi.channel());
+    } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+      Serial.printf("[WIFI EVENT] Mendapatkan IP: %s (Gateway: %s)\n",
+                    WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str());
+    } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+      uint8_t reason = info.wifi_sta_disconnected.reason;
+      Serial.printf("[WIFI EVENT] Terputus / Gagal! Kode: %u (%s)\n",
+                    reason, WiFi.disconnectReasonName((wifi_err_reason_t)reason));
+      if (reason == WIFI_REASON_NO_AP_FOUND) {
+        Serial.println("  -> [SARAN] SSID tidak ditemukan. Pastikan hotspot HP aktif & menggunakan pita 2.4 GHz!");
+      } else if (reason == WIFI_REASON_AUTH_FAIL) {
+        Serial.println("  -> [SARAN] Password hotspot salah!");
+      } else if (reason == WIFI_REASON_HANDSHAKE_TIMEOUT || reason == WIFI_REASON_AUTH_EXPIRE) {
+        Serial.println("  -> [SARAN] Masalah WPA3/PMF! Di HP, ganti Security hotspot ke 'WPA2-Personal' dan matikan 'Wi-Fi 6 hotspot'.");
+      }
+    }
+  });
 
   // Cold Boot Sequence untuk penentuan awal zona jaringan:
   if (rtcCurrentZone == NET_ZONE_UNKNOWN) {
     Serial.println("[WIFI COLD BOOT] Scanning jaringan untuk deteksi kehadiran SSID Gudang...");
+    WiFi.disconnect(false, true);
+    delay(100);
     int nNetworks = WiFi.scanNetworks(false, true, false, 250);
+    if (nNetworks < 0) {
+      delay(100);
+      nNetworks = WiFi.scanNetworks(false, true, false, 300);
+    }
     int16_t yardRssi = -127;
     int16_t techRssi = -127;
     Serial.printf("[WIFI COLD BOOT] Ditemukan %d Access Point:\n", nNetworks);
@@ -1310,7 +1362,7 @@ void setup() {
     Serial.printf("  -> Evaluasi Teknisi ('%s'): %s (%d dBm)\n",
                   wifiTechSsid.c_str(), (techRssi > -90) ? "TERDETEKSI" : "ABSEN/LEMAH", techRssi);
     if (techRssi <= -90) {
-      Serial.printf("  [PETUNJUK] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke frekuensi 2.4 GHz di HP!\n", wifiTechSsid.c_str());
+      Serial.printf("  [PETUNJUK] Hotspot '%s' tidak terlihat. Pastikan Hotspot disetel ke pita 2.4 GHz di HP!\n", wifiTechSsid.c_str());
     }
     WiFi.scanDelete();
 
@@ -1333,8 +1385,8 @@ void setup() {
         delay(50);
         WiFi.begin(connectSsid, wifiTechPass.c_str());
         uint32_t t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 6000) {
-          delay(200);
+        while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 10000) {
+          delay(250);
           Serial.print(".");
         }
         Serial.println("");
@@ -1421,6 +1473,34 @@ void handleSerialCommands() {
       lastPollMs = 0;
       Serial.println("[MANUAL SCAN] Memicu evaluasi scan jaringan alami segera (bypass timer)...");
     }
+    else if (c == 'p') {
+      Serial.println("\n[TEST DIRECT] Menguji koneksi langsung ke Hotspot Teknisi...");
+      Serial.printf("  SSID Target: '%s' | Password: '%s'\n", wifiTechSsid.c_str(), wifiTechPass.c_str());
+      WiFi.disconnect(false, true);
+      delay(200);
+      WiFi.begin(wifiTechSsid.c_str(), wifiTechPass.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && (millis() - t0) < 10000) {
+        delay(250);
+        Serial.print(".");
+      }
+      Serial.println("");
+      if (WiFi.status() == WL_CONNECTED) {
+        rtcCurrentZone = NET_ZONE_TECH;
+        Serial.printf("[TEST DIRECT] BERHASIL TERHUBUNG! IP: %s (Zone diset ke NET_ZONE_TECH)\n\n", WiFi.localIP().toString().c_str());
+      } else {
+        Serial.println("[TEST DIRECT] GAGAL terhubung ke Hotspot Teknisi! Amati alasan [WIFI EVENT] di atas.\n");
+      }
+    }
+    else if (c == 'z') {
+      rtcCurrentZone    = NET_ZONE_UNKNOWN;
+      rtcYardMissCount  = 0;
+      rtcYardHitCount   = 0;
+      rtcFirstMissEpoch = 0;
+      lastZoneEvalMs    = 0;
+      lastPollMs        = 0;
+      Serial.println("[ZONE RESET] State machine zona di-reset ke UNKNOWN. Evaluasi scan segera dipicu!");
+    }
 #endif
     else if (c == 's') {
       Serial.printf("[STATUS] Boot: %lu | Seq: %lu | Zone: %s (RTC=%u, Miss=%u, Hit=%u, 1stMiss=%lu) | Tier-1 RTC: %u/20 | Tier-2 LittleFS: %u/%u | Total Antrean: %u\n",
@@ -1453,15 +1533,21 @@ void loop() {
   // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung
   if (!simOfflineMode && WiFi.status() != WL_CONNECTED && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
     lastWifiRetryMs = millis();
-    Serial.println("[WIFI] Mencoba menyambung ulang ke jaringan WiFi...");
-    WiFi.disconnect(false, true);
-    delay(50);
     if (rtcCurrentZone == NET_ZONE_TECH) {
+      Serial.println("[WIFI] Mencoba menyambung ulang ke Hotspot Teknisi...");
       const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
+      WiFi.disconnect(false, true);
+      delay(50);
       WiFi.begin(connectSsid, wifiTechPass.c_str());
-    } else {
+    } else if (rtcCurrentZone == NET_ZONE_YARD) {
+      Serial.println("[WIFI] Mencoba menyambung ulang ke SSID Gudang...");
       const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
+      WiFi.disconnect(false, true);
+      delay(50);
       WiFi.begin(connectSsid, wifiYardPass.c_str());
+    } else {
+      // NET_ZONE_OFFLINE atau UNKNOWN: Paksa scan jaringan alami pada live poll berikutnya
+      lastZoneEvalMs = 0;
     }
   }
 
