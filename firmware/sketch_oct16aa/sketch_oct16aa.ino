@@ -787,7 +787,8 @@ bool runCanTransceiverLoopbackTest() {
 // ==================== STATE MACHINE ZONA JARINGAN (4-STATE ASINKRON) ==========
 static bool     asyncScanRunning       = false;
 static uint32_t asyncScanStartMs       = 0;
-static uint8_t  pendingExitLagSteps    = 0;
+static uint32_t pendingFirstMissEpoch  = 0;
+static uint8_t  yardRecoveryCount      = 0;
 static uint32_t lastKnownEpoch         = 0;
 static uint8_t  lastKnownSpeed         = 0;
 
@@ -802,13 +803,11 @@ void setZone(uint8_t newZone, const char* reason = nullptr) {
   const char* newStr = netZoneToString(newZone);
 
   // C.1: Cetak log transisi spesifik untuk semua jalur
-  if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_TECH) {
-    Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT | exit_lag=%u step (%us)%s%s\n",
-                  pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U),
+  if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_OFFLINE) {
+    Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE%s%s\n",
                   reason ? " | " : "", reason ? reason : "");
-  } else if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_OFFLINE) {
-    Serial.printf("[ZONE TRANSITION] YARD -> OFFLINE | exit_lag=%u step (%us)%s%s\n",
-                  pendingExitLagSteps, (unsigned)(pendingExitLagSteps * 20U),
+  } else if (oldZone == NET_ZONE_YARD && newZone == NET_ZONE_TECH) {
+    Serial.printf("[ZONE TRANSITION] YARD -> TECH_HOTSPOT%s%s\n",
                   reason ? " | " : "", reason ? reason : "");
   } else if ((oldZone == NET_ZONE_TECH || oldZone == NET_ZONE_OFFLINE) && newZone == NET_ZONE_YARD) {
     Serial.printf("[ZONE TRANSITION] OUTSIDE -> YARD%s%s\n",
@@ -927,41 +926,67 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
   if (rtcFirstMissEpoch > 0 && pkt.ts_epoch > rtcFirstMissEpoch && (pkt.ts_epoch - rtcFirstMissEpoch) > 620UL) {
     rtcYardMissCount  = 0;
     rtcFirstMissEpoch = 0;
+    yardRecoveryCount = 0;
     Serial.println("[ZONE] Stale miss counter reset (>620s expired)");
   }
 
   // 2. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
+  // Anti-Flapping Gerbang (Task 1.4 C.1):
+  // Jika rtcYardMissCount > 0, koneksi baru pulih sesaat atau sedang berada di batas gerbang.
+  // Jangan mereset rtcYardMissCount dan rtcFirstMissEpoch jika belum diverifikasi lewat minimal 2 scan stabil.
   if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
+    if (rtcYardMissCount > 0) {
+      Serial.printf("[ZERO-SCAN HOLD] Anti-flapping aktif (missCount=%u, recoveryScan=%u/2). Debounce miss dipertahankan.\n",
+                    rtcYardMissCount, yardRecoveryCount);
+      setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (Anti-Flap Holding)");
+      outZone     = NET_ZONE_YARD;
+      outLagSteps = 0;
+      return;
+    }
     setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (Evaluate)");
-    rtcYardMissCount  = 0;
     rtcYardHitCount   = 0;
-    rtcFirstMissEpoch = 0;
     outZone           = NET_ZONE_YARD;
     outLagSteps       = 0;
     return;
   }
 
   // 3. Kembalikan zona yang telah dievaluasi oleh background scan (0ms latency, bebas blocking)
-  // A.1: Nilai pendingExitLagSteps dilekatkan tepat ke 1 paket pertama saat transisi keluar, lalu di-reset
-  outZone     = (rtcCurrentZone != NET_ZONE_UNKNOWN) ? rtcCurrentZone : NET_ZONE_OFFLINE;
-  outLagSteps = pendingExitLagSteps;
-  pendingExitLagSteps = 0;
+  // B.1 & B.2: Kalkulasi lag relatif terhadap pendingFirstMissEpoch saat record pertama zona luar dibuat
+  outZone = (rtcCurrentZone != NET_ZONE_UNKNOWN) ? rtcCurrentZone : NET_ZONE_OFFLINE;
+  if (pendingFirstMissEpoch > 0 && (outZone == NET_ZONE_OFFLINE || outZone == NET_ZONE_TECH)) {
+    uint32_t lagSec = (pkt.ts_epoch > pendingFirstMissEpoch) ? (pkt.ts_epoch - pendingFirstMissEpoch) : 0UL;
+    if (lagSec > 620UL) {
+      outLagSteps = 0;
+    } else {
+      uint32_t steps = lagSec / 20UL; // floor division
+      outLagSteps = (uint8_t)(steps > 31UL ? 31UL : steps);
+    }
+    Serial.printf("[ZONE LAG PACK] ts_epoch=%lu pendingFirstMissEpoch=%lu -> lagSec=%lus steps=%u\n",
+                  (unsigned long)pkt.ts_epoch, (unsigned long)pendingFirstMissEpoch,
+                  (unsigned long)lagSec, (unsigned)outLagSteps);
+    pendingFirstMissEpoch = 0; // Reset tepat setelah digunakan sekali
+  } else {
+    outLagSteps = 0;
+  }
 }
 
 static uint32_t lastMeasuredScanDurationMs = 1800UL;
 
 void updateAsyncWifiScan() {
   // 1. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
+  // Anti-Flapping Gerbang (Task 1.4 C.1):
+  // Jangan batalkan scan asinkron jika rtcYardMissCount > 0 agar scan verifikasi tetap berjalan
+  // sampai sinyal gudang terbukti benar-benar stabil minimal 2 scan berturut-turut.
   if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
-    if (asyncScanRunning) {
-      WiFi.scanDelete();
-      asyncScanRunning = false;
+    if (rtcYardMissCount == 0) {
+      if (asyncScanRunning) {
+        WiFi.scanDelete();
+        asyncScanRunning = false;
+      }
+      setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (UpdateScan)");
+      rtcYardHitCount   = 0;
+      return;
     }
-    setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (UpdateScan)");
-    rtcYardMissCount  = 0;
-    rtcYardHitCount   = 0;
-    rtcFirstMissEpoch = 0;
-    return;
   }
 
   // 2. Jika Scan Asinkron Sedang Berjalan, Periksa Apakah Sudah Selesai (Non-Blocking)
@@ -1035,8 +1060,23 @@ void updateAsyncWifiScan() {
     // Jalankan Logika Debounce & Hysteresis State Machine (Aturan 1, 2, 3)
     if (rtcCurrentZone == NET_ZONE_YARD) {
       if (yardRssi >= -85) {
+        // C.1 Anti-Flapping Gerbang:
+        // Jika sebelumnya ada miss (rtcYardMissCount > 0), butuh minimal 2 kali scan berturut-turut
+        // dengan sinyal gudang kuat (>= -85 dBm) sebelum rtcYardMissCount di-reset ke 0.
+        if (rtcYardMissCount > 0) {
+          yardRecoveryCount++;
+          if (yardRecoveryCount < 2) {
+            Serial.printf("[GATE ANTI-FLAP] Yard sinyal terdeteksi lagi (#%u/2). Debounce miss count (%u) dipertahankan.\n",
+                          yardRecoveryCount, rtcYardMissCount);
+            return;
+          }
+          Serial.println("[GATE ANTI-FLAP] Pemulihan sinyal gudang stabil (>=2 scan). Reset miss counter.");
+        }
         rtcYardMissCount  = 0;
-        rtcFirstMissEpoch = 0;
+        rtcFirstMissEpoch     = 0;
+      pendingFirstMissEpoch = 0;
+      yardRecoveryCount     = 0;
+        yardRecoveryCount = 0;
         if (WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE) {
           const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
           startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
@@ -1045,7 +1085,7 @@ void updateAsyncWifiScan() {
       }
 
       // ATURAN 2: Debounce Keluar (SSID Gudang absen / < -85 dBm)
-      // Counter miss bertambah tepat 1 kali per scan selesai.
+      yardRecoveryCount = 0; // Reset recovery count jika terdeteksi miss lagi
       rtcYardMissCount++;
       if (rtcYardMissCount == 1) {
         rtcFirstMissEpoch = scanFinishedEpoch;
@@ -1058,30 +1098,33 @@ void updateAsyncWifiScan() {
 
       if (exitConfirmed) {
         uint32_t rawLag = (rtcFirstMissEpoch > 0 && scanFinishedEpoch > rtcFirstMissEpoch) ? (scanFinishedEpoch - rtcFirstMissEpoch) : 0;
-        if (rawLag <= 620UL) {
-          pendingExitLagSteps = (uint8_t)(rawLag / 20U);
-          if (pendingExitLagSteps > 31) pendingExitLagSteps = 31;
-        } else {
-          pendingExitLagSteps = 0;
-        }
+        uint8_t estSteps = (rawLag <= 620UL) ? (uint8_t)(rawLag / 20U) : 0;
+        if (estSteps > 31) estSteps = 31;
 
-        // A.2: Log pengesahan transisi zona keluar
+        // B.2: Log pengesahan transisi zona keluar
         Serial.printf("[ZONE TRANSITION] rawLag=%lus steps=%u firstMiss=%lu nowEpoch=%lu\n",
-                      (unsigned long)rawLag, (unsigned)pendingExitLagSteps,
+                      (unsigned long)rawLag, (unsigned)estSteps,
                       (unsigned long)rtcFirstMissEpoch, (unsigned long)scanFinishedEpoch);
 
-        // B.1: Mulai rekoneksi non-blocking ke Hotspot Teknisi jika terdeteksi, atau set OFFLINE
+        // B.1 & B.2: Simpan pendingFirstMissEpoch untuk dihitung tepat saat record pertama zona luar dibuat
+        if (pendingFirstMissEpoch > 0) {
+          Serial.printf("[ZONE WARN] pendingFirstMissEpoch tertimpa sebelum dipakai! Lama: %lu, Baru: %lu\n",
+                        (unsigned long)pendingFirstMissEpoch, (unsigned long)rtcFirstMissEpoch);
+        }
+        pendingFirstMissEpoch = rtcFirstMissEpoch;
+
+        // A.1: Zona TECH hanya disetel setelah koneksi benar-benar sukses (WL_CONNECTED).
+        // Selama proses connect (CONN_CONNECTING_TECH), zona sementara NET_ZONE_OFFLINE.
+        setZone(NET_ZONE_OFFLINE, "Handover Exit Yard Disahkan");
         if (techRssi > -90) {
           const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
           startWifiConnectNonBlocking(CONN_CONNECTING_TECH, connectSsid, wifiTechPass.c_str());
-          setZone(NET_ZONE_TECH, "Handover Exit Yard -> Tech Hotspot");
-        } else {
-          setZone(NET_ZONE_OFFLINE, "Handover Exit Yard -> Offline");
         }
 
         rtcFirstMissEpoch = 0;
         rtcYardMissCount  = 0;
         rtcYardHitCount   = 0;
+        yardRecoveryCount = 0;
       }
       return;
     }
@@ -1095,10 +1138,11 @@ void updateAsyncWifiScan() {
         const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
         startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
         setZone(NET_ZONE_YARD, "Handover Confirmed to Yard (Hit >= 2)");
-        rtcYardHitCount     = 0;
-        rtcYardMissCount    = 0;
-        rtcFirstMissEpoch   = 0;
-        pendingExitLagSteps = 0;
+        rtcYardHitCount       = 0;
+        rtcYardMissCount      = 0;
+        rtcFirstMissEpoch     = 0;
+        pendingFirstMissEpoch = 0;
+        yardRecoveryCount     = 0;
         return;
       }
     } else {
@@ -1128,12 +1172,16 @@ void triggerWifiScanIfDue() {
   if (asyncScanRunning) return;
 
   // 1. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
+  // Anti-Flapping Gerbang (Task 1.4 C.1):
+  // Jika rtcYardMissCount > 0, jangan lewati pemindaian. Pemindaian harus tetap berjalan
+  // untuk memverifikasi apakah sinyal gudang pulih stabil (>=2 scan berturut-turut)
+  // atau kendaraan memang sedang bergerak keluar melewati gerbang.
   if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
-    setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (TriggerScan)");
-    rtcYardMissCount  = 0;
-    rtcYardHitCount   = 0;
-    rtcFirstMissEpoch = 0;
-    return;
+    if (rtcYardMissCount == 0) {
+      setZone(NET_ZONE_YARD, "Zero-Scan Yard Hold (TriggerScan)");
+      rtcYardHitCount   = 0;
+      return;
+    }
   }
 
   // 2. Evaluasi interval scan berdasarkan status koneksi & mesin
@@ -1531,7 +1579,9 @@ void setup() {
       setZone(NET_ZONE_YARD, "Cold Boot Yard Detected");
       rtcYardMissCount  = 0;
       rtcYardHitCount   = 0;
-      rtcFirstMissEpoch = 0;
+      rtcFirstMissEpoch     = 0;
+      pendingFirstMissEpoch = 0;
+      yardRecoveryCount     = 0;
       const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
       Serial.printf("[WIFI COLD BOOT] SSID Gudang '%s' terdeteksi (%d dBm >= -85) -> NET_ZONE_YARD\n",
                     connectSsid, yardRssi);
@@ -1657,7 +1707,9 @@ void handleSerialCommands() {
       setZone(NET_ZONE_UNKNOWN, "Manual Reset via Serial Command");
       rtcYardMissCount  = 0;
       rtcYardHitCount   = 0;
-      rtcFirstMissEpoch = 0;
+      rtcFirstMissEpoch     = 0;
+      pendingFirstMissEpoch = 0;
+      yardRecoveryCount     = 0;
       lastZoneEvalMs    = 0;
       lastPollMs        = 0;
       Serial.println("[ZONE RESET] State machine zona di-reset ke UNKNOWN. Evaluasi scan segera dipicu!");
