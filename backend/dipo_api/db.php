@@ -101,13 +101,15 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
 }
 
 // 2. Helper to output JSON cleanly
-function sendJson($data, int $statusCode = 200): void {
-    http_response_code($statusCode);
-    header("Content-Type: application/json; charset=utf-8");
-    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-    header("Pragma: no-cache");
-    echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    exit(0);
+if (!function_exists('sendJson')) {
+    function sendJson($data, int $statusCode = 200): void {
+        http_response_code($statusCode);
+        header("Content-Type: application/json; charset=utf-8");
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
 }
 
 if (!function_exists('orionSchemaLockFile')) {
