@@ -326,6 +326,104 @@ try {
     }
 
     // 6. Query movement_events untuk sinkronisasi dua arah Modul 04 (termasuk transisi 4-zona)
+    // Task 1.2: Hitung durasi di luar (durasi_di_luar_sec) dan status "masih di luar" saat dibaca di get_data.php
+    $pairedMoves = [];
+    $movementPairs = [];
+    try {
+        $stmtAllMoves = $pdo->query("
+            SELECT * FROM `movement_events`
+            ORDER BY `unit_id` ASC, `boot_id` ASC, `seq_no` ASC, `event_epoch` ASC, `id` ASC
+        ");
+        $allMoves = $stmtAllMoves->fetchAll();
+        $pendingExitByUnit = [];
+
+        foreach ($allMoves as $m) {
+            $uid   = (string)$m['unit_id'];
+            $type  = (string)($m['event_type'] ?? 'EXIT_YARD');
+            $epoch = isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0;
+            $id    = (string)$m['id'];
+
+            if ($type === 'EXIT_YARD') {
+                if (isset($pendingExitByUnit[$uid])) {
+                    $prevExit = $pendingExitByUnit[$uid];
+                    $durasiSec = max(0, $now - $prevExit['epoch']);
+                    $movementPairs[] = [
+                        'unit_id'            => $uid,
+                        'exit_id'            => $prevExit['id'],
+                        'exit_epoch'         => $prevExit['epoch'],
+                        'exit_time'          => $prevExit['departed'],
+                        'enter_id'           => null,
+                        'enter_epoch'        => null,
+                        'enter_time'         => null,
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => true,
+                    ];
+                    $pairedMoves[$prevExit['id']] = [
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => true,
+                    ];
+                }
+                $pendingExitByUnit[$uid] = [
+                    'id'       => $id,
+                    'epoch'    => $epoch,
+                    'departed' => (string)$m['departed'],
+                ];
+            } elseif ($type === 'ENTER_YARD') {
+                if (isset($pendingExitByUnit[$uid])) {
+                    $prevExit = $pendingExitByUnit[$uid];
+                    $durasiSec = max(0, $epoch - $prevExit['epoch']);
+                    $movementPairs[] = [
+                        'unit_id'            => $uid,
+                        'exit_id'            => $prevExit['id'],
+                        'exit_epoch'         => $prevExit['epoch'],
+                        'exit_time'          => $prevExit['departed'],
+                        'enter_id'           => $id,
+                        'enter_epoch'        => $epoch,
+                        'enter_time'         => (string)$m['departed'],
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => false,
+                    ];
+                    $pairedMoves[$prevExit['id']] = [
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => false,
+                    ];
+                    $pairedMoves[$id] = [
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => false,
+                    ];
+                    unset($pendingExitByUnit[$uid]);
+                } else {
+                    $pairedMoves[$id] = [
+                        'durasi_di_luar_sec' => 0,
+                        'masih_di_luar'      => false,
+                    ];
+                }
+            }
+        }
+
+        foreach ($pendingExitByUnit as $uid => $prevExit) {
+            $durasiSec = max(0, $now - $prevExit['epoch']);
+            $movementPairs[] = [
+                'unit_id'            => $uid,
+                'exit_id'            => $prevExit['id'],
+                'exit_epoch'         => $prevExit['epoch'],
+                'exit_time'          => $prevExit['departed'],
+                'enter_id'           => null,
+                'enter_epoch'        => null,
+                'enter_time'         => null,
+                'durasi_di_luar_sec' => $durasiSec,
+                'masih_di_luar'      => true,
+            ];
+            $pairedMoves[$prevExit['id']] = [
+                'durasi_di_luar_sec' => $durasiSec,
+                'masih_di_luar'      => true,
+            ];
+        }
+    } catch (Exception $e) {
+        $movementPairs = [];
+        $pairedMoves = [];
+    }
+
     try {
         $stmtMovements = $pdo->query("SELECT * FROM `movement_events` ORDER BY `event_epoch` DESC, `departed` DESC, `id` DESC LIMIT 50");
     } catch (Exception $e) {
@@ -333,24 +431,30 @@ try {
     }
     $movementsList = [];
     foreach ($stmtMovements->fetchAll() as $m) {
+        $id = (string)$m['id'];
+        $durSec = isset($pairedMoves[$id]['durasi_di_luar_sec']) ? $pairedMoves[$id]['durasi_di_luar_sec'] : null;
+        $masihDiLuar = isset($pairedMoves[$id]['masih_di_luar']) ? $pairedMoves[$id]['masih_di_luar'] : false;
+
         $movementsList[] = [
-            'id'            => (string)$m['id'],
-            'unit_id'       => (string)$m['unit_id'],
-            'event_type'    => (string)($m['event_type'] ?? 'EXIT_YARD'),
-            'from_zone'     => (string)($m['from_zone'] ?? 'YARD'),
-            'to_zone'       => (string)($m['to_zone'] ?? 'OFFLINE'),
-            'event_epoch'   => isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0,
-            'boot_id'       => isset($m['boot_id']) ? (int)$m['boot_id'] : 1,
-            'seq_no'        => isset($m['seq_no']) ? (int)$m['seq_no'] : 0,
-            'v_bat'         => isset($m['v_bat']) ? (float)$m['v_bat'] : 12.60,
-            'rpm'           => isset($m['rpm']) ? (int)$m['rpm'] : 0,
-            'speed_kmh'     => isset($m['speed_kmh']) ? (int)$m['speed_kmh'] : 0,
-            'departed'      => (string)$m['departed'],
-            'returned'      => $m['returned'] ? (string)$m['returned'] : null,
-            'away_min'      => $m['away_min'] !== null ? (int)$m['away_min'] : null,
-            'debounce_hits' => (int)$m['debounce_hits'],
-            'tag'           => $m['tag'] ? (string)$m['tag'] : null,
-            'created_at'    => isset($m['created_at']) ? (string)$m['created_at'] : null,
+            'id'                 => $id,
+            'unit_id'            => (string)$m['unit_id'],
+            'event_type'         => (string)($m['event_type'] ?? 'EXIT_YARD'),
+            'from_zone'          => (string)($m['from_zone'] ?? 'YARD'),
+            'to_zone'            => (string)($m['to_zone'] ?? 'OFFLINE'),
+            'event_epoch'        => isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0,
+            'boot_id'            => isset($m['boot_id']) ? (int)$m['boot_id'] : 1,
+            'seq_no'             => isset($m['seq_no']) ? (int)$m['seq_no'] : 0,
+            'v_bat'              => isset($m['v_bat']) ? (float)$m['v_bat'] : 12.60,
+            'rpm'                => isset($m['rpm']) ? (int)$m['rpm'] : 0,
+            'speed_kmh'          => isset($m['speed_kmh']) ? (int)$m['speed_kmh'] : 0,
+            'departed'           => (string)$m['departed'],
+            'returned'           => $m['returned'] ? (string)$m['returned'] : null,
+            'away_min'           => $durSec !== null ? (int)round($durSec / 60) : ($m['away_min'] !== null ? (int)$m['away_min'] : null),
+            'durasi_di_luar_sec' => $durSec,
+            'masih_di_luar'      => $masihDiLuar,
+            'debounce_hits'      => (int)$m['debounce_hits'],
+            'tag'                => $m['tag'] ? (string)$m['tag'] : null,
+            'created_at'         => isset($m['created_at']) ? (string)$m['created_at'] : null,
         ];
     }
 
@@ -402,6 +506,7 @@ try {
         'configs'               => $configsMap,
         'movement'              => $movementsList,
         'movement_events'       => $movementsList,
+        'movement_pairs'        => $movementPairs,
         'history'               => $historyMap,
         'audit_logs'            => $auditLogsList,
         'tickets'               => $ticketsList,

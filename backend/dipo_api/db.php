@@ -137,6 +137,9 @@ if (!function_exists('readJsonBody')) {
             return $TEST_JSON_BODY;
         }
         $rawInput = file_get_contents('php://input');
+        if (empty($rawInput) && (PHP_SAPI === 'cli' || empty($_SERVER['REMOTE_ADDR']))) {
+            $rawInput = file_get_contents('php://stdin');
+        }
         if (empty($rawInput)) {
             sendJson(['error' => 'EMPTY_BODY', 'message' => 'No JSON payload received.'], 400);
         }

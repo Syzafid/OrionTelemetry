@@ -372,6 +372,55 @@ void applyPiggybackAck(const String &resp) {
 
 // ========================== UTILITAS I2C DS3231SN ============================
 static uint8_t bcd2dec(uint8_t val) { return ((val / 16 * 10) + (val % 16)); }
+static uint8_t dec2bcd(uint8_t val) { return ((val / 10 * 16) + (val % 10)); }
+
+bool setDS3231Time(uint32_t epoch) {
+  time_t rawtime = (time_t)epoch;
+  struct tm t;
+  gmtime_r(&rawtime, &t);
+
+  Wire.beginTransmission(DS3231_I2C_ADDR);
+  Wire.write(0x00);
+  Wire.write(dec2bcd(t.tm_sec));
+  Wire.write(dec2bcd(t.tm_min));
+  Wire.write(dec2bcd(t.tm_hour));
+  Wire.write(dec2bcd((uint8_t)(t.tm_wday == 0 ? 7 : t.tm_wday)));
+  Wire.write(dec2bcd(t.tm_mday));
+  Wire.write(dec2bcd(t.tm_mon + 1));
+  uint8_t yearOffset = (t.tm_year >= 100) ? (uint8_t)(t.tm_year - 100) : (uint8_t)t.tm_year;
+  Wire.write(dec2bcd(yearOffset));
+  return (Wire.endTransmission() == 0);
+}
+
+bool probeAndReadDS3231(uint32_t &outEpoch, float &outTempC);
+
+static uint32_t lastNtpCheckMs = 0;
+void checkNtpRtcSync() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (lastNtpCheckMs > 0 && (millis() - lastNtpCheckMs < 30000UL)) return;
+  lastNtpCheckMs = millis();
+
+  time_t nowNtp = 0;
+  time(&nowNtp);
+  if (nowNtp < 1700000000L) {
+    return; // NTP belum tersinkron atau belum valid
+  }
+
+  uint32_t rtcEpoch = 0;
+  float rtcTemp = 0.0f;
+  if (!probeAndReadDS3231(rtcEpoch, rtcTemp)) {
+    return;
+  }
+
+  int32_t diff = (int32_t)nowNtp - (int32_t)rtcEpoch;
+  if (diff > 5 || diff < -5) {
+    uint32_t oldEpoch = rtcEpoch;
+    if (setDS3231Time((uint32_t)nowNtp)) {
+      Serial.printf("[RTC] sync dari NTP: sebelum=%lu sesudah=%lu\n",
+                    (unsigned long)oldEpoch, (unsigned long)nowNtp);
+    }
+  }
+}
 
 bool probeAndReadDS3231(uint32_t &outEpoch, float &outTempC) {
   uint32_t fallbackEpoch = 1778000000UL + (rtcSeqCounter * 5UL);
@@ -766,6 +815,13 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
 #endif
 
   // 1. Pembersihan Counter Basi Saat Bangun Tidur / Evaluasi (>620 Detik)
+  // DOKUMENTASI KETERBATASAN ARSITEKTUR (TASK 1.2 D.2):
+  // Guard counter basi 620 detik (~10.3 menit) membersihkan akumulasi hit/miss counter
+  // agar kondisi keluar palsu dari siklus operasi sebelumnya tidak menggantung.
+  // KONSEKUENSI: Jika unit tertidur (deep sleep) > ~5 menit, siklus debounce keluar (membutuhkan
+  // 3x miss scan atau 2x miss + pergerakan speed) tidak dapat selesai pada siklus bangun pertama
+  // karena counter basi di-reset ke 0. Ini adalah trade-off yang diterima secara sengaja untuk
+  // memastikan integritas data terhadap kendaraan yang ditarik (towing) saat mesin mati.
   if (rtcFirstMissEpoch > 0 && pkt.ts_epoch > rtcFirstMissEpoch && (pkt.ts_epoch - rtcFirstMissEpoch) > 620UL) {
     rtcYardMissCount  = 0;
     rtcFirstMissEpoch = 0;
@@ -788,6 +844,8 @@ void evaluateNetworkZone(const TelemetryItem &pkt, uint8_t &outZone, uint8_t &ou
   outLagSteps = pendingExitLagSteps;
   pendingExitLagSteps = 0; // Hanya dilekatkan pada 1 paket pertama saat transisi keluar
 }
+
+static uint32_t lastMeasuredScanDurationMs = 1800UL;
 
 void updateAsyncWifiScan() {
   // 1. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
@@ -825,9 +883,17 @@ void updateAsyncWifiScan() {
     }
 
     // scanRes >= 0: Scan Selesai!
-    uint32_t scanDur = millis() - asyncScanStartMs;
-    int nNetworks    = scanRes;
-    Serial.printf("[WIFI SCAN ASYNC] Selesai dalam %lu ms (Terdeteksi %d AP):\n", (unsigned long)scanDur, nNetworks);
+    // A.3: Ukur durasi scan sebenarnya dengan millis() dan cetak format tepat:
+    lastMeasuredScanDurationMs = millis() - asyncScanStartMs;
+    int nNetworks              = scanRes;
+    Serial.printf("[SCAN] durasi=%lums hasil=%d\n", (unsigned long)lastMeasuredScanDurationMs, nNetworks);
+
+    // A.5: Ambil ts_epoch mutakhir tepat saat SCAN SELESAI diproses dari RTC fisik
+    uint32_t scanFinishedEpoch = 0;
+    float unusedTemp = 0.0f;
+    if (!probeAndReadDS3231(scanFinishedEpoch, unusedTemp)) {
+      scanFinishedEpoch = (lastKnownEpoch > 0) ? lastKnownEpoch : 0;
+    }
 
     int16_t yardRssi = -127;
     int16_t techRssi = -127;
@@ -875,17 +941,20 @@ void updateAsyncWifiScan() {
       }
 
       // ATURAN 2: Debounce Keluar (SSID Gudang absen / < -85 dBm)
+      // A.5: Counter miss bertambah tepat 1 kali per scan selesai.
+      // rtcFirstMissEpoch memakai ts_epoch tepat saat SCAN SELESAI diproses (scanFinishedEpoch).
       rtcYardMissCount++;
       if (rtcYardMissCount == 1) {
-        rtcFirstMissEpoch = (lastKnownEpoch > 0) ? lastKnownEpoch : 0;
+        rtcFirstMissEpoch = scanFinishedEpoch;
       }
+      // speed_kmh diambil dari sampel telemetri terbaru (lastKnownSpeed)
       bool exitConfirmed = (rtcYardMissCount >= 3) || (rtcYardMissCount >= 2 && lastKnownSpeed > 0);
-      Serial.printf("[ZONE DEBOUNCE] Yard SSID miss #%u/3 (firstMissEpoch=%lu, RSSI=%d dBm) -> %s\n",
-                    rtcYardMissCount, (unsigned long)rtcFirstMissEpoch, yardRssi,
+      Serial.printf("[ZONE DEBOUNCE] Yard SSID miss #%u/3 (firstMissEpoch=%lu, RSSI=%d dBm, speed=%u km/h) -> %s\n",
+                    rtcYardMissCount, (unsigned long)rtcFirstMissEpoch, yardRssi, (unsigned)lastKnownSpeed,
                     exitConfirmed ? "EXIT DISAHKAN (HANDOVER)" : "MENUNGGU DEBOUNCE (TETAP YARD)");
 
       if (exitConfirmed) {
-        uint32_t rawLag = (rtcFirstMissEpoch > 0 && lastKnownEpoch > rtcFirstMissEpoch) ? (lastKnownEpoch - rtcFirstMissEpoch) : 0;
+        uint32_t rawLag = (rtcFirstMissEpoch > 0 && scanFinishedEpoch > rtcFirstMissEpoch) ? (scanFinishedEpoch - rtcFirstMissEpoch) : 0;
         if (rawLag <= 620UL) {
           pendingExitLagSteps = (uint8_t)(rawLag / 20U);
           if (pendingExitLagSteps > 31) pendingExitLagSteps = 31;
@@ -975,10 +1044,23 @@ void updateAsyncWifiScan() {
     } else {
       rtcCurrentZone = NET_ZONE_OFFLINE;
     }
+  }
+}
+
+// A.2: Pemicu Scan HANYA dijalankan segera setelah POST selesai (window terpanjang sebelum POST berikutnya)
+void triggerWifiScanIfDue() {
+  if (asyncScanRunning) return;
+
+  // 1. Optimasi Tanpa Scan Saat Terhubung ke Gudang (Zero-Scan Yard Hold)
+  if (WiFi.status() == WL_CONNECTED && isSsidMatch(WiFi.SSID(), wifiYardSsid) && WiFi.RSSI() >= -85) {
+    rtcCurrentZone    = NET_ZONE_YARD;
+    rtcYardMissCount  = 0;
+    rtcYardHitCount   = 0;
+    rtcFirstMissEpoch = 0;
     return;
   }
 
-  // 3. Jika Belum Berjalan, Periksa Apakah Sudah Waktunya Memulai Scan Latar Belakang
+  // 2. Evaluasi interval scan berdasarkan status koneksi & mesin
   uint32_t evalIntervalMs = 180000UL;
   if (WiFi.status() != WL_CONNECTED) {
     evalIntervalMs = 0UL;
@@ -996,10 +1078,12 @@ void updateAsyncWifiScan() {
     return; // Belum waktunya scan
   }
 
-  // ATURAN: Jangan memulai scan jika transaksi HTTP 5 detik segera berlangsung (< 1800 ms)
-  // Hal ini menjamin channel hopping scan tidak pernah mengganggu pengiriman data live.
-  if ((millis() - lastPollMs) >= (pollIntervalMs - 1800UL)) {
-    return; // Tunda scan sampai loop poll transmisi berikutnya selesai
+  // A.2: Jangan memulai scan jika sisa waktu menuju POST berikutnya < durasi scan terukur + 500 ms
+  uint32_t elapsed = millis() - lastPollMs;
+  uint32_t remainingMs = (elapsed < pollIntervalMs) ? (pollIntervalMs - elapsed) : 0;
+  uint32_t safeThresholdMs = lastMeasuredScanDurationMs + 500UL;
+  if (remainingMs < safeThresholdMs) {
+    return; // Tunda ke siklus berikutnya karena sisa waktu tidak cukup aman
   }
 
   // Mulai Pemindaian Latar Belakang Asinkron (120ms per channel, non-blocking)
@@ -1008,7 +1092,8 @@ void updateAsyncWifiScan() {
   if (startStatus == WIFI_SCAN_RUNNING || startStatus == 0) {
     asyncScanRunning = true;
     asyncScanStartMs = millis();
-    Serial.println("[WIFI SCAN ASYNC] Memulai scan background asinkron (120ms/ch)...");
+    Serial.printf("[WIFI SCAN ASYNC] Memulai scan background asinkron (120ms/ch, sisa window=%lums, batas aman=%lums)...\n",
+                  (unsigned long)remainingMs, (unsigned long)safeThresholdMs);
   }
 }
 
@@ -1298,6 +1383,9 @@ void setup() {
   WiFi.setSleep(false); // Nonaktifkan modem sleep agar latensi HTTP POST rendah & stabil
   WiFi.setAutoReconnect(false); // Kelola rekoneksi secara terpusat agar tidak mengunci radio scan
 
+  // Inisialisasi NTP SNTP client untuk sinkronisasi waktu epoch akurat saat terhubung internet
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+
   // Daftarkan event handler untuk diagnosa WiFi mendalam
   WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
     if (event == ARDUINO_EVENT_WIFI_STA_START) {
@@ -1467,7 +1555,7 @@ void handleSerialCommands() {
     }
     else if (c == 'm') {
       lastZoneEvalMs = 0; // Paksa scan jaringan alami segera
-      lastPollMs = 0;
+      triggerWifiScanIfDue();
       Serial.println("[MANUAL SCAN] Memicu evaluasi scan jaringan alami segera (bypass timer)...");
     }
     else if (c == 'p') {
@@ -1527,7 +1615,10 @@ void handleSerialCommands() {
 void loop() {
   handleSerialCommands();
 
-  // Pemeriksaan & pengelolaan pemindaian Wi-Fi background asinkron (non-blocking)
+  // B.2: Sinkronisasi waktu RTC DS3231 dengan NTP jika terhubung WiFi & ada selisih > 5 detik
+  checkNtpRtcSync();
+
+  // A.1: Pemeriksaan & pengelolaan pemindaian Wi-Fi background asinkron (non-blocking)
   updateAsyncWifiScan();
 
   // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung
@@ -1595,5 +1686,9 @@ void loop() {
                     pkt.rtc_temp_c,
                     getRecordCanOk(pkt) ? "OK" : "ERR", (uint16_t)(tier1Count + tier2Count));
     }
+
+    // A.2: Scan Wi-Fi latar belakang HANYA dipicu segera setelah POST/Enqueue selesai
+    // Ini menjamin window waktu terpanjang (~4.5s) sebelum jadwal transmisi berikutnya
+    triggerWifiScanIfDue();
   }
 }

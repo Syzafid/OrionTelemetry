@@ -356,11 +356,12 @@ try {
     ");
 
     // 2. Query successor terdekat di telemetry_logs dengan urutan lebih besar.
-    // KETERBATASAN EKSPLISIT (Single-Successor Evaluation Limitation):
-    // Implementasi ini hanya mengevaluasi 1 penerus langsung (LIMIT 1) dengan urutan kronologis terkecil setelah record yang disisipkan.
-    // Hal ini optimal untuk aliran telemetri otomotif (burst sinkronisasi kontigu) tanpa membebani server dengan full table scan O(N).
-    // Jika batch terlambat yang tiba memiliki diskontinuitas multi-gap internal yang melintasi lebih dari 1 horizon transisi,
-    // record di luar cakupan LIMIT 1 tidak dire-evaluasi secara retrospektif.
+    // Desain State Machine Transisi Lintas-Batch:
+    // Event pergerakan pada suatu record hanya bergantung secara deterministik pada transisi zona
+    // dari pendahulu langsungnya ($sFrom) ke zona record itu sendiri ($sTo).
+    // Ketika record baru disisipkan, satu-satunya record lain yang relasi pendahulunya berubah adalah
+    // penerus langsung terdekatnya (immediate successor). Record setelah penerus tersebut tetap memiliki
+    // pendahulu yang sama dan tidak terpengaruh, sehingga re-evaluasi pada LIMIT 1 penerus adalah cukup dan lengkap.
     $stmtSucc = $pdo->prepare("
         SELECT `id`, `unit_id`, `net_zone`, `boot`, `seq`, `ts_epoch`, `zone_exit_epoch`, `v_bat`, `rpm`, `speed_kmh`
         FROM `telemetry_logs`
