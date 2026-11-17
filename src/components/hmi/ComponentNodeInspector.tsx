@@ -7,6 +7,7 @@ import type { TopologyNodeId } from "./VehicleTopologyMap";
 interface ComponentNodeInspectorProps {
   unit: VehicleUnit;
   activeNode: TopologyNodeId;
+  onSelectNode?: (node: TopologyNodeId) => void;
   className?: string;
 }
 
@@ -58,13 +59,11 @@ function MiniWaveform({
   const points = useMemo(() => {
     switch (type) {
       case "battery": {
-        // Voltage level mapped to vertical axis (11.0V -> Y=21, 14.8V -> Y=4)
         const clampedV = Math.max(11.0, Math.min(14.8, vBat));
         const baseY = 21 - ((clampedV - 11.0) / 3.8) * 17;
         const pts: string[] = [];
         for (let i = 0; i <= 10; i++) {
           const x = i * 15;
-          // Analog noise variation derived from raw ADC micro-jitter and packet sequence
           const noise = Math.sin((i * 1.7) + (seq % 10) + (adcRawMv % 5)) * 1.4;
           const y = Math.max(3, Math.min(22, baseY + noise));
           pts.push(`${x},${y.toFixed(1)}`);
@@ -73,7 +72,6 @@ function MiniWaveform({
       }
 
       case "shunt": {
-        // Flatline sleep baseline with pulse spikes if leakage > 50 uA
         if (engineOn) {
           return "0,12 30,12 60,11 90,12 120,11 150,12";
         }
@@ -81,7 +79,6 @@ function MiniWaveform({
         const isExcess = shuntUa > 50;
         for (let i = 0; i <= 10; i++) {
           const x = i * 15;
-          // Pulse at specific step when excess drain occurs
           const y = isExcess && (i === 4 || i === 8) ? 10 : 18;
           pts.push(`${x},${y}`);
         }
@@ -89,7 +86,6 @@ function MiniWaveform({
       }
 
       case "alternator": {
-        // 3-phase rectified diode ripple scrolling with seq when active; flatline when off
         if (!active || !engineOn) {
           return "0,21 150,21";
         }
@@ -105,7 +101,6 @@ function MiniWaveform({
       }
 
       case "rpm": {
-        // Crankshaft variable reluctance pulse train: frequency scales with RPM
         if (!engineOn || rpm <= 0) {
           return "0,18 150,18";
         }
@@ -114,15 +109,14 @@ function MiniWaveform({
         for (let x = 0; x <= 150; x += 5) {
           const mod = (x + (seq * 4)) % period;
           let y = 18;
-          if (mod === 0) y = 4; // Positive reluctance spike
-          else if (mod === 5) y = 22; // Negative zero-crossing undershoot
+          if (mod === 0) y = 4;
+          else if (mod === 5) y = 22;
           pts.push(`${x},${y}`);
         }
         return pts.join(" ");
       }
 
       case "coolant": {
-        // NTC thermistor thermal curve height proportional to engine temperature
         const clampedT = Math.max(30, Math.min(115, tempC > 0 ? tempC : 40));
         const endY = 21 - ((clampedT - 30) / 85) * 16;
         const pts: string[] = [];
@@ -135,7 +129,6 @@ function MiniWaveform({
       }
 
       case "can": {
-        // High-Speed CAN differential bitstream. Clean square packets if OK, glitch if fault
         if (!canOk || dtcCnt > 0) {
           return "0,16 15,16 15,6 20,6 25,22 35,16 60,16 65,4 70,22 90,16 120,16 150,16";
         }
@@ -155,13 +148,11 @@ function MiniWaveform({
       }
 
       case "rtc": {
-        // Ultra-stable TCXO reference baseline with micro temp flutter
         const yBase = 12 + ((tempC > 0 ? tempC : 28) - 25) * 0.1;
         return `0,${yBase.toFixed(1)} 150,${yBase.toFixed(1)}`;
       }
 
       case "rf": {
-        // Periodic telemetry beacon pulses
         const pts: string[] = [];
         for (let i = 0; i <= 10; i++) {
           const x = i * 15;
@@ -199,6 +190,67 @@ function MiniWaveform({
   );
 }
 
+// Authentic OEM Mitsubishi Pajero Sport Pinout & Harness Diagnostic Knowledge Base (C-2 & C-5)
+interface HarnessSpec {
+  nodeName: string;
+  wireColor: string;
+  pinout: string;
+  spec: string;
+  diagProcedure: string;
+}
+
+const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
+  all: {
+    nodeName: "SISTEM TOPOLOGI KELISTRIKAN LENGKAP",
+    wireColor: "Kombinasi Standar OEM Mitsubishi Harness",
+    pinout: "6 Titik Sadap Transduser (Engine Bay + Cabin + DLC)",
+    spec: "Arsitektur 12V DC Negatif Ground, J1962 High-Speed CAN 500 kbps",
+    diagProcedure: "Pilih salah satu probe di atas untuk menampilkan detail pinout & prosedur uji.",
+  },
+  battery: {
+    nodeName: "PROBE 01: AKI 12V 70Ah & RESISTOR SHUNT",
+    wireColor: "Merah 16mm² (Terminal B+), Hitam 16mm² (Ground Shunt Return)",
+    pinout: "Terminal M8 B+ -> Pembagi Tegangan 10k/1k -> GPIO34 ADC ESP32",
+    spec: "Aki 12V 70Ah Calcium-Silver. Shunt 10Ω R-Sense arus parasitik.",
+    diagProcedure: "Periksa tegangan terminal (>12.4V nominal) dan arus sleep deep-sleep (<50 µA).",
+  },
+  alternator: {
+    nodeName: "PROBE 02: ALTERNATOR 130A & REGULATOR",
+    wireColor: "Merah Tebal (Terminal B+ Output), Putih/Biru (Terminal L Lampu)",
+    pinout: "Terminal B+ (Output Cas), Terminal L (Indikator Speedometer), Terminal S (Sense)",
+    spec: "Denso 12V 130A Internal IC Regulator, Cut-in Speed 650 RPM",
+    diagProcedure: "Ukur tegangan saat mesin menyala (13.8V s/d 14.4V). Ripple AC maksimal < 250 mV RMS.",
+  },
+  powertrain: {
+    nodeName: "PROBE 03: TRANSDUSER MESIN (CKP RELUCTANCE & ECT)",
+    wireColor: "Shielded Twisted Pair Kuning/Hitam (CKP), Hijau/Putih (Suhu NTC)",
+    pinout: "Sensor CKP 2-pin ke ECU Mesin Pin 12/24; ECT Sensor 2-pin ke ECU Pin 42",
+    spec: "Crankshaft Reluctance Wheel 60-2 gigi. Thermistor NTC 82°C-95°C operasional.",
+    diagProcedure: "Verifikasi kestabilan RPM idle (750 ± 50 RPM). Cek sinyal analog ECT saat suhu naik.",
+  },
+  can_obd: {
+    nodeName: "PROBE 04: PORT OBD-II J1962 & CAN BUS TWAI",
+    wireColor: "Kuning (CAN-H), Hijau (CAN-L), Merah (Pin 16 +12V Fused 7.5A)",
+    pinout: "Pin 16 = B+, Pin 4 = Chassis GND, Pin 5 = Signal GND, Pin 6 = CAN-H, Pin 14 = CAN-L",
+    spec: "ISO 11898-2 High-Speed 500 kbps, Resistansi Terminasi 120Ω antar CAN-H/L",
+    diagProcedure: "Ukur resistansi bus saat kontak OFF (harus 60Ω). Verifikasi 0 DTC pada sistem TWAI.",
+  },
+  esp32_core: {
+    nodeName: "PROBE 05: ORION IOT GATEWAY v1.0 & RTC DS3231",
+    wireColor: "Kabel Pita Internal PCB v1.0 (Regulasi DC-DC TPS54302 3.3V)",
+    pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
+    spec: "ESP32 Dual-Core 240MHz, Flash LittleFS 1.5MB (Tier-2 Buffer 20 record)",
+    diagProcedure: "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi aktif 80mA.",
+  },
+  rf_network: {
+    nodeName: "PROBE 06: ANTENA RF DUAL-BAND & GEOFENCE",
+    wireColor: "Koaksial Mikro U.FL 50Ω ke Antena PCB 2.4 GHz",
+    pinout: "Transceiver RF 2.4 GHz 802.11 b/g/n, Tx Power +19.5 dBm",
+    spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Teknisi Fallback, Offline Buffer",
+    diagProcedure: "Ambang batas koneksi real-time: RSSI >= -85 dBm. Buffer ke LittleFS jika di luar jangkauan.",
+  },
+};
+
 export function ComponentNodeInspector({
   unit,
   activeNode,
@@ -211,6 +263,8 @@ export function ComponentNodeInspector({
   const isCanFault = t.can_ok === false || t.dtc_cnt > 0;
   const isOffline =
     unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
+
+  const activeSpec = HARNESS_SPECS[activeNode] ?? HARNESS_SPECS.all;
 
   const rows: ChannelRow[] = useMemo(() => {
     return [
@@ -331,6 +385,42 @@ export function ComponentNodeInspector({
         className,
       )}
     >
+      {/* Interactive Harness Wiring & Pinout Specification Card (C-2 & C-5) */}
+      <div className="mb-3 rounded-[2px] border border-border/80 bg-background/80 p-3 num text-[11px]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-foreground text-[11px] tracking-wide uppercase">
+              {activeSpec.nodeName}
+            </span>
+            <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground uppercase">
+              OEM SPESIFIKASI PAJERO SPORT
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">
+            Standar Uji: Mitsubishi MUT-III / SAE J1979
+          </span>
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-[10.5px]">
+          <div>
+            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">KODE WARNA HARNESS</div>
+            <div className="mt-0.5 font-medium text-foreground">{activeSpec.wireColor}</div>
+          </div>
+          <div>
+            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">PINOUT TERMINAL</div>
+            <div className="mt-0.5 font-medium text-foreground">{activeSpec.pinout}</div>
+          </div>
+          <div>
+            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">SPESIFIKASI KOMPONEN</div>
+            <div className="mt-0.5 font-medium text-foreground">{activeSpec.spec}</div>
+          </div>
+          <div>
+            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">PROSEDUR DIAGNOSTIK</div>
+            <div className="mt-0.5 text-muted-foreground">{activeSpec.diagProcedure}</div>
+          </div>
+        </div>
+      </div>
+
       {/* Table Header Controls */}
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2">
         <div className="flex items-center gap-2">
