@@ -1,17 +1,21 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
-import { Search, X } from "lucide-react";
+import { Box, Cpu, Search, X } from "lucide-react";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
 import { Led, Panel, Stat, unitTone, fmtV } from "./primitives";
 import { cn } from "@/lib/utils";
+import { VehicleTopologyMap, type TopologyNodeId } from "./VehicleTopologyMap";
+import { ComponentNodeInspector } from "./ComponentNodeInspector";
 
 const Stage3D = lazy(() => import("./Stage3D"));
 
 export function ShowroomModule({ active }: { active: boolean }) {
   const { units, selected, selectUnit, configs, dataSource } = useTelemetry();
   const [sidebarQuery, setSidebarQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"topology" | "3d">("topology");
+  const [activeTopologyNode, setActiveTopologyNode] = useState<TopologyNodeId>("battery");
   const activeUnitRef = useRef<HTMLButtonElement>(null);
   const t = selected.telemetry;
   const tone = unitTone(selected, configs[selected.unit_id]?.crit_v ?? 11.80);
@@ -88,136 +92,186 @@ export function ShowroomModule({ active }: { active: boolean }) {
               </span>
             </div>
           </div>
-          <div className="glass hidden shrink-0 px-3.5 py-2.5 text-right md:block">
-            <div className="label-hmi text-[10px]">VIN</div>
-            <div className="num text-xs font-medium">{selected.vin}</div>
-            <div className="label-hmi mt-1 text-[10px]">{selected.color}</div>
-          </div>
-        </div>
-
-        {/* 3D Canvas Viewport */}
-        <div className="relative min-h-0 flex-1">
-          <ClientOnly fallback={<div className="label-hmi absolute inset-0 grid place-items-center">Initialising stage</div>}>
-            <Suspense fallback={<div className="label-hmi absolute inset-0 grid place-items-center">Loading digital twin</div>}>
-              <div className="absolute inset-0">
-                <Stage3D unit={selected} active={active} />
-              </div>
-            </Suspense>
-          </ClientOnly>
-
-          {/* Desktop Top-Right Telemetry HUD */}
-          <div className="pointer-events-none absolute right-3 top-3 z-20 hidden w-72 flex-col gap-1 md:flex">
-            <div className="glass rounded-[2px] border border-border p-2.5 shadow-xl backdrop-blur-md">
-              <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border/80 pb-1.5">
-                <span className="label-hmi text-[10px] text-foreground">
-                  Saluran Telemetri Node
-                </span>
-                <span
-                  className={cn(
-                    "num text-[9.5px] font-semibold uppercase",
-                    conn.isOnline ? "text-emerald" : "text-muted-foreground",
-                  )}
-                >
-                  {conn.isOnline
-                    ? conn.lastSeenSec !== null
-                      ? `LIVE (${conn.lastSeenSec}s)`
-                      : "LIVE"
-                    : "SLEEP"}
-                </span>
-              </div>
-              <div className="num space-y-1 text-[11px]">
-                <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
-                  <div className="flex items-center gap-1.5">
-                    <Led tone={tone} pulse={t.crit_alert} />
-                    <span className="label-hmi text-[10px]">PIN 16 BAT</span>
-                  </div>
-                  <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : tone === "amber" ? "text-amber" : "text-foreground")}>
-                    {fmtV(t.v_bat)} V <span className="text-[10px] text-muted-foreground">({t.adc_raw_mv} mV)</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
-                  <span className="label-hmi text-[10px]">RTC DS3231</span>
-                  <span className="font-semibold text-foreground">{t.rtc_temp_c.toFixed(1)} °C</span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
-                  <div className="flex items-center gap-1.5">
-                    <Led tone={t.can_ok === false ? "crimson" : "emerald"} pulse={t.can_ok === false} />
-                    <span className="label-hmi text-[10px]">WCMCU-230 CAN</span>
-                  </div>
-                  <span
-                    className={cn(
-                      "text-[10.5px] font-semibold",
-                      t.can_ok === false ? "text-crimson" : "text-emerald",
-                    )}
-                  >
-                    {t.can_ok === false ? "ERROR" : "OK"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
-                  <div className="flex items-center gap-1.5">
-                    {selected.buffer_used > 0 && <Led tone="amber" />}
-                    <span className="label-hmi text-[10px]">QUEUE / WIFI</span>
-                  </div>
-                  <span className={cn("text-[10.5px] font-semibold", selected.buffer_used > 0 ? "text-amber" : "text-foreground")}>
-                    {selected.buffer_used} slot, {t.rssi} dBm
-                  </span>
-                </div>
-              </div>
+          <div className="flex items-center gap-2.5">
+            {/* View Mode Switcher: Topology Blueprint vs 3D Twin */}
+            <div className="flex items-center gap-1 rounded-[2px] border border-border bg-background/80 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("topology")}
+                className={cn(
+                  "flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-[1px] px-2.5 py-1 num text-[10.5px] uppercase font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  viewMode === "topology"
+                    ? "border border-foreground/30 bg-foreground/15 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-label="Tampilkan diagram topologi kelistrikan skematik"
+              >
+                <Cpu size={12} className={viewMode === "topology" ? "text-emerald" : "text-muted-foreground"} />
+                <span>Topologi Skematik</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("3d")}
+                className={cn(
+                  "flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-[1px] px-2.5 py-1 num text-[10.5px] uppercase font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  viewMode === "3d"
+                    ? "border border-foreground/30 bg-foreground/15 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-label="Tampilkan digital twin 3D"
+              >
+                <Box size={12} className={viewMode === "3d" ? "text-amber" : "text-muted-foreground"} />
+                <span>3D Twin</span>
+              </button>
             </div>
-          </div>
 
-          {/* Mobile Bottom-Docked Status Strip */}
-          <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-20 flex md:hidden">
-            <div className="glass w-full rounded-[2px] border border-border px-3 py-2 shadow-lg backdrop-blur-md">
-              <div className="num grid grid-cols-2 gap-x-3 gap-y-1 text-[10.5px]">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Led tone={t.crit_alert ? "crimson" : "emerald"} />
-                    BATTERY
-                  </span>
-                  <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : "text-foreground")}>
-                    {fmtV(t.v_bat)} V
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Led tone={t.engine_on ? "emerald" : "dim"} />
-                    RPM
-                  </span>
-                  <span className="font-semibold text-foreground">{!t.engine_on || t.rpm <= 0 ? "----" : t.rpm}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Led tone={!t.engine_on || t.temp_c <= 0 ? "dim" : t.temp_c > 105 ? "crimson" : "amber"} />
-                    COOLANT
-                  </span>
-                  <span className="font-semibold text-foreground">{!t.engine_on || t.temp_c <= 0 ? "----" : `${t.temp_c}°C`}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Led tone={t.can_ok === false ? "crimson" : "emerald"} />
-                    CAN BUS
-                  </span>
-                  <span
-                    className={cn(
-                      "text-[10px] font-semibold",
-                      t.can_ok === false ? "text-crimson" : "text-emerald",
-                    )}
-                  >
-                    {t.can_ok === false ? "FAULT" : t.engine_on ? "ACTIVE" : "OK"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop Camera Orbit/Zoom Instruction Hint */}
-          <div className="pointer-events-none absolute bottom-2.5 right-3 z-20 hidden md:block">
-            <div className="glass num rounded-[2px] border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Drag to orbit / Scroll to zoom
+            <div className="glass hidden shrink-0 px-3.5 py-2 text-right md:block">
+              <div className="label-hmi text-[10px]">VIN</div>
+              <div className="num text-xs font-medium">{selected.vin}</div>
+              <div className="label-hmi mt-0.5 text-[10px]">{selected.color}</div>
             </div>
           </div>
         </div>
+
+        {/* Viewport: Topology Blueprint or 3D Canvas */}
+        {viewMode === "topology" ? (
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-2 sm:p-3">
+            <VehicleTopologyMap
+              unit={selected}
+              activeNode={activeTopologyNode}
+              onSelectNode={setActiveTopologyNode}
+              className="flex-1 min-h-[380px]"
+            />
+            <ComponentNodeInspector
+              unit={selected}
+              activeNode={activeTopologyNode}
+              className="mt-2.5"
+            />
+          </div>
+        ) : (
+          <div className="relative min-h-0 flex-1">
+            <ClientOnly fallback={<div className="label-hmi absolute inset-0 grid place-items-center">Initialising stage</div>}>
+              <Suspense fallback={<div className="label-hmi absolute inset-0 grid place-items-center">Loading digital twin</div>}>
+                <div className="absolute inset-0">
+                  <Stage3D unit={selected} active={active} />
+                </div>
+              </Suspense>
+            </ClientOnly>
+
+            {/* Desktop Top-Right Telemetry HUD */}
+            <div className="pointer-events-none absolute right-3 top-3 z-20 hidden w-72 flex-col gap-1 md:flex">
+              <div className="glass rounded-[2px] border border-border p-2.5 shadow-xl backdrop-blur-md">
+                <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border/80 pb-1.5">
+                  <span className="label-hmi text-[10px] text-foreground">
+                    Saluran Telemetri Node
+                  </span>
+                  <span
+                    className={cn(
+                      "num text-[9.5px] font-semibold uppercase",
+                      conn.isOnline ? "text-emerald" : "text-muted-foreground",
+                    )}
+                  >
+                    {conn.isOnline
+                      ? conn.lastSeenSec !== null
+                        ? `LIVE (${conn.lastSeenSec}s)`
+                        : "LIVE"
+                      : "SLEEP"}
+                  </span>
+                </div>
+                <div className="num space-y-1 text-[11px]">
+                  <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
+                    <div className="flex items-center gap-1.5">
+                      <Led tone={tone} pulse={t.crit_alert} />
+                      <span className="label-hmi text-[10px]">PIN 16 BAT</span>
+                    </div>
+                    <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : tone === "amber" ? "text-amber" : "text-foreground")}>
+                      {fmtV(t.v_bat)} V <span className="text-[10px] text-muted-foreground">({t.adc_raw_mv} mV)</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
+                    <span className="label-hmi text-[10px]">RTC DS3231</span>
+                    <span className="font-semibold text-foreground">{t.rtc_temp_c.toFixed(1)} °C</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
+                    <div className="flex items-center gap-1.5">
+                      <Led tone={t.can_ok === false ? "crimson" : "emerald"} pulse={t.can_ok === false} />
+                      <span className="label-hmi text-[10px]">WCMCU-230 CAN</span>
+                    </div>
+                    <span
+                      className={cn(
+                        "text-[10.5px] font-semibold",
+                        t.can_ok === false ? "text-crimson" : "text-emerald",
+                      )}
+                    >
+                      {t.can_ok === false ? "ERROR" : "OK"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded border border-border/60 bg-background/80 px-2 py-1">
+                    <div className="flex items-center gap-1.5">
+                      {selected.buffer_used > 0 && <Led tone="amber" />}
+                      <span className="label-hmi text-[10px]">QUEUE / WIFI</span>
+                    </div>
+                    <span className={cn("text-[10.5px] font-semibold", selected.buffer_used > 0 ? "text-amber" : "text-foreground")}>
+                      {selected.buffer_used} slot, {t.rssi} dBm
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Bottom-Docked Status Strip */}
+            <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-20 flex md:hidden">
+              <div className="glass w-full rounded-[2px] border border-border px-3 py-2 shadow-lg backdrop-blur-md">
+                <div className="num grid grid-cols-2 gap-x-3 gap-y-1 text-[10.5px]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Led tone={t.crit_alert ? "crimson" : "emerald"} />
+                      BATTERY
+                    </span>
+                    <span className={cn("font-semibold", t.crit_alert ? "text-crimson" : "text-foreground")}>
+                      {fmtV(t.v_bat)} V
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Led tone={t.engine_on ? "emerald" : "dim"} />
+                      RPM
+                    </span>
+                    <span className="font-semibold text-foreground">{!t.engine_on || t.rpm <= 0 ? "----" : t.rpm}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Led tone={!t.engine_on || t.temp_c <= 0 ? "dim" : t.temp_c > 105 ? "crimson" : "amber"} />
+                      COOLANT
+                    </span>
+                    <span className="font-semibold text-foreground">{!t.engine_on || t.temp_c <= 0 ? "----" : `${t.temp_c}°C`}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Led tone={t.can_ok === false ? "crimson" : "emerald"} />
+                      CAN BUS
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold",
+                        t.can_ok === false ? "text-crimson" : "text-emerald",
+                      )}
+                    >
+                      {t.can_ok === false ? "FAULT" : t.engine_on ? "ACTIVE" : "OK"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop Camera Orbit/Zoom Instruction Hint */}
+            <div className="pointer-events-none absolute bottom-2.5 right-3 z-20 hidden md:block">
+              <div className="glass num rounded-[2px] border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Drag to orbit / Scroll to zoom
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Live Telemetry State Bar (Physical Observability) */}
         <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/95 px-4 py-3 num text-[11px]">
