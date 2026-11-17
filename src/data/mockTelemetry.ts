@@ -31,6 +31,12 @@ export interface TelemetryPayload {
   shunt_sleep_ua: number;
   /** TWAI CAN transceiver status (Mode 01/03 Read-Only or loopback self-test) */
   can_ok?: boolean;
+  /** Network Zone: YARD | TECH_HOTSPOT | OFFLINE | UNKNOWN */
+  net_zone?: string;
+  /** Epoch timestamp when unit exited yard boundary */
+  zone_exit_epoch?: number;
+  /** Diagnostic Wi-Fi SSID used for active sync */
+  sync_ssid?: string;
 
   // --- 15 Parameter OBD-II Read-Only (Mode 0x01 / Mode 0x03 / 0x07) ---
   /** Mode 01 PID 0x0D: Vehicle Speed (km/h) */
@@ -77,6 +83,8 @@ export interface VehicleUnit {
   status_label: string;
   state: SimState;
   in_yard: boolean;
+  net_zone?: string;
+  sync_ssid?: string;
   online_status?: "ONLINE" | "OFFLINE";
   last_seen_sec?: number;
   last_seen?: string | null;
@@ -87,7 +95,7 @@ export interface VehicleUnit {
 
 export interface UnitConnectionState {
   isOnline: boolean;
-  badgeText: "LIVE / ONLINE" | "OFFLINE / DEEP SLEEP";
+  badgeText: "LIVE / ONLINE" | "LIVE / TECH HOTSPOT" | "OFFLINE / DEEP SLEEP" | "OFFLINE / OUT OF YARD" | string;
   lastSeenSec: number | null;
 }
 
@@ -96,20 +104,34 @@ export const LIVE_ONLINE_THRESHOLD_SEC = 6;
 /**
  * Evaluates whether a telemetry unit is LIVE / ONLINE (last_seen <= 6s)
  * or OFFLINE / DEEP SLEEP (> 6s), keeping compatibility with local simulator mode.
+ * When connected via technician hotspot outside yard (net_zone == 'TECH_HOTSPOT'),
+ * the unit is reported as ONLINE with badge 'LIVE / TECH HOTSPOT'.
  */
 export function getUnitConnectionState(u: VehicleUnit): UnitConnectionState {
+  const isTechHotspot =
+    u.net_zone === "TECH_HOTSPOT" ||
+    u.telemetry?.net_zone === "TECH_HOTSPOT";
+  const canBeOnline = u.in_yard || isTechHotspot;
+
   let isOnline: boolean;
   if (typeof u.last_seen_sec === "number" && Number.isFinite(u.last_seen_sec)) {
-    isOnline = u.last_seen_sec <= LIVE_ONLINE_THRESHOLD_SEC && u.in_yard;
+    isOnline = u.last_seen_sec <= LIVE_ONLINE_THRESHOLD_SEC && canBeOnline;
   } else if (u.online_status === "ONLINE" || u.online_status === "OFFLINE") {
-    isOnline = u.online_status === "ONLINE" && u.in_yard;
+    isOnline = u.online_status === "ONLINE" && canBeOnline;
   } else {
-    isOnline = u.in_yard && u.telemetry.engine_on;
+    isOnline = canBeOnline && u.telemetry.engine_on;
+  }
+
+  let badgeText: string;
+  if (isOnline) {
+    badgeText = isTechHotspot ? "LIVE / TECH HOTSPOT" : "LIVE / ONLINE";
+  } else {
+    badgeText = u.in_yard ? "OFFLINE / DEEP SLEEP" : "OFFLINE / OUT OF YARD";
   }
 
   return {
     isOnline,
-    badgeText: isOnline ? "LIVE / ONLINE" : "OFFLINE / DEEP SLEEP",
+    badgeText,
     lastSeenSec: typeof u.last_seen_sec === "number" ? u.last_seen_sec : null,
   };
 }

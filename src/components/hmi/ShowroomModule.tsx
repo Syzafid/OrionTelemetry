@@ -236,8 +236,21 @@ export function ShowroomModule({ active }: { active: boolean }) {
             </div>
             <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
               <span>Keberadaan:</span>
-              <span className={cn("font-medium", selected.in_yard ? "text-emerald" : "text-amber")}>
-                {selected.in_yard ? `In Yard (Bay ${selected.bay})` : "Departed (Luar Geofence)"}
+              <span
+                className={cn(
+                  "font-medium",
+                  selected.in_yard
+                    ? "text-emerald"
+                    : (selected.telemetry?.net_zone === "TECH_HOTSPOT" || selected.net_zone === "TECH_HOTSPOT")
+                      ? "text-emerald"
+                      : "text-amber",
+                )}
+              >
+                {selected.in_yard
+                  ? `In Yard (Bay ${selected.bay})`
+                  : (selected.telemetry?.net_zone === "TECH_HOTSPOT" || selected.net_zone === "TECH_HOTSPOT")
+                    ? `Luar Gudang (Hotspot: ${selected.telemetry?.sync_ssid || selected.sync_ssid || "Teknisi"})`
+                    : "Departed (Luar Geofence)"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">

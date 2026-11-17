@@ -297,10 +297,18 @@ export function PresenceModule() {
                     <span
                       className={cn(
                         "rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold uppercase",
-                        u.in_yard ? "bg-emerald/15 text-emerald" : "bg-amber/15 text-amber",
+                        u.in_yard
+                          ? "bg-emerald/15 text-emerald"
+                          : (u.telemetry?.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT")
+                            ? "bg-emerald/15 text-emerald"
+                            : "bg-amber/15 text-amber",
                       )}
                     >
-                      {u.in_yard ? "IN YARD" : "AWAY"}
+                      {u.in_yard
+                        ? "IN YARD"
+                        : (u.telemetry?.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT")
+                          ? "TECH HOTSPOT"
+                          : "AWAY"}
                     </span>
                   </div>
                 </button>

@@ -939,7 +939,7 @@ export function FleetModule() {
                     <div className="flex justify-between text-muted-foreground">
                       <span>Buffer Antrean &amp; WiFi:</span>
                       <span className="font-medium text-foreground">
-                        {u.buffer_used} slot, {u.in_yard ? `${t.rssi} dBm` : "OUT OF YARD"}
+                        {u.buffer_used} slot, {u.in_yard ? `${t.rssi} dBm` : (t.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT" ? `${t.rssi} dBm (HOTSPOT)` : "OUT OF YARD")}
                       </span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
@@ -956,7 +956,7 @@ export function FleetModule() {
                       <Pill>SLEEP {t.sleep_cfg}s</Pill>
                     </div>
                     <span className="num text-[10px] text-muted-foreground">
-                      {u.in_yard ? `${t.rssi} dBm` : "OUT OF YARD"}
+                      {u.in_yard ? `${t.rssi} dBm` : (t.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT" ? `${t.rssi} dBm (HOTSPOT)` : "OUT OF YARD")}
                     </span>
                   </div>
                 </div>

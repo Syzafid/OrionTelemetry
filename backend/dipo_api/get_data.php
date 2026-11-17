@@ -206,7 +206,7 @@ try {
                 'temp_c'          => (int)$log['temp_c'],
                 'dtc_cnt'         => (int)$log['dtc_cnt'],
                 'dtc'             => (string)$log['dtc'],
-                'rssi'            => $inYard ? ($hasVehLiveSeq && isset($v['rssi']) ? (int)$v['rssi'] : (int)$log['rssi']) : -127,
+                'rssi'            => ($inYard || $resolvedNetZone === 'TECH_HOTSPOT') ? ($hasVehLiveSeq && isset($v['rssi']) ? (int)$v['rssi'] : (int)$log['rssi']) : -127,
                 'sleep_cfg'       => (int)$log['sleep_cfg'],
                 'active_ms'       => (int)$log['active_ms'],
                 'daily_mah'       => (float)$log['daily_mah'],
@@ -274,9 +274,13 @@ try {
             ];
         }
 
-        $isLiveOnline = ($item['lastSeenSec'] <= 6) && $inYard;
+        $isLiveOnline = ($item['lastSeenSec'] <= 6) && ($inYard || $resolvedNetZone === 'TECH_HOTSPOT');
         $onlineStatus = $isLiveOnline ? 'ONLINE' : 'OFFLINE';
-        $connectionBadge = $isLiveOnline ? 'LIVE / ONLINE' : 'OFFLINE / DEEP SLEEP';
+        if ($isLiveOnline) {
+            $connectionBadge = ($resolvedNetZone === 'TECH_HOTSPOT') ? 'LIVE / TECH HOTSPOT' : 'LIVE / ONLINE';
+        } else {
+            $connectionBadge = $inYard ? 'OFFLINE / DEEP SLEEP' : 'OFFLINE / OUT OF YARD';
+        }
 
         $formattedUnits[] = [
             'unit_id'          => (string)$v['unit_id'],

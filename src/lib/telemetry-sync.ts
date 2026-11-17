@@ -4,10 +4,10 @@ const NUM_KEYS = [
   "seq", "boot", "ts_epoch", "v_bat", "rpm", "temp_c", "dtc_cnt", "rssi",
   "sleep_cfg", "active_ms", "daily_mah", "rtc_temp_c", "adc_raw_mv", "shunt_sleep_ua",
   "speed_kmh", "iat_c", "map_kpa", "load_pct", "tps_pct", "ign_deg", "maf_gs", "run_time_s",
-  "fuel_pct", "fuel_rate_lh", "o2_v", "stft_pct", "ecu_v", "dist_clr_km",
+  "fuel_pct", "fuel_rate_lh", "o2_v", "stft_pct", "ecu_v", "dist_clr_km", "zone_exit_epoch",
 ] as const;
 const BOOL_KEYS = ["engine_on", "crit_alert", "can_ok", "mil_on"] as const;
-const STR_KEYS = ["dtc"] as const;
+const STR_KEYS = ["dtc", "net_zone", "sync_ssid"] as const;
 
 type PayloadPatch = Partial<TelemetryPayload>;
 
@@ -176,6 +176,12 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
   }
   if (typeof patchSrc["connection_badge"] === "string") {
     setMetaIfChanged("connection_badge", patchSrc["connection_badge"]);
+  }
+  if (typeof patchSrc["net_zone"] === "string") {
+    setMetaIfChanged("net_zone", patchSrc["net_zone"]);
+  }
+  if (typeof patchSrc["sync_ssid"] === "string") {
+    setMetaIfChanged("sync_ssid", patchSrc["sync_ssid"]);
   }
   if (hasUnitPatch) {
     unitToMerge = { ...baseUnit, ...unitPatch };

@@ -130,6 +130,32 @@ describe("applyRemoteUpdate (live API merge)", () => {
       badgeText: "OFFLINE / DEEP SLEEP",
       lastSeenSec: 18,
     });
+
+    // TECH_HOTSPOT outside yard: should be ONLINE if recently seen, and OFFLINE / OUT OF YARD when stale
+    const techLiveUnit = {
+      ...base,
+      in_yard: false,
+      net_zone: "TECH_HOTSPOT",
+      last_seen_sec: 4,
+      online_status: "ONLINE" as const,
+    };
+    const techStaleUnit = {
+      ...base,
+      in_yard: false,
+      net_zone: "TECH_HOTSPOT",
+      last_seen_sec: 12,
+      online_status: "OFFLINE" as const,
+    };
+    expect(getUnitConnectionState(techLiveUnit)).toEqual({
+      isOnline: true,
+      badgeText: "LIVE / TECH HOTSPOT",
+      lastSeenSec: 4,
+    });
+    expect(getUnitConnectionState(techStaleUnit)).toEqual({
+      isOnline: false,
+      badgeText: "OFFLINE / OUT OF YARD",
+      lastSeenSec: 12,
+    });
   });
 
   it("preserves structural sharing and exact array/unit references when remote payloads contain identical values", () => {
@@ -215,5 +241,32 @@ describe("applyRemoteUpdate (live API merge)", () => {
 
     // Repeating identical OBD-II values keeps exact references
     expect(applyRemoteUpdate(next, obdPayload, UNITS[0]!.unit_id)).toBe(next);
+  });
+
+  it("merges net_zone, sync_ssid, and zone_exit_epoch with strict typing and structural sharing", () => {
+    const before = clone();
+    const zonePayload = {
+      unit_id: TARGET,
+      net_zone: "TECH_HOTSPOT",
+      sync_ssid: "POCOF5",
+      zone_exit_epoch: 1731828000,
+      in_yard: false,
+      online_status: "ONLINE" as const,
+      last_seen_sec: 2,
+    };
+
+    const next = applyRemoteUpdate(before, zonePayload, UNITS[0]!.unit_id);
+    expect(next).not.toBe(before);
+    const u = next.find((x) => x.unit_id === TARGET)!;
+    expect(u.in_yard).toBe(false);
+    expect(u.net_zone).toBe("TECH_HOTSPOT");
+    expect(u.sync_ssid).toBe("POCOF5");
+    expect(u.telemetry.net_zone).toBe("TECH_HOTSPOT");
+    expect(u.telemetry.sync_ssid).toBe("POCOF5");
+    expect(u.telemetry.zone_exit_epoch).toBe(1731828000);
+    expect(u.online_status).toBe("ONLINE");
+
+    // Re-applying identical zone payload keeps exact reference
+    expect(applyRemoteUpdate(next, zonePayload, UNITS[0]!.unit_id)).toBe(next);
   });
 });
