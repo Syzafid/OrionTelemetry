@@ -130,6 +130,10 @@ if (!function_exists('markOrionSchemaReady')) {
 
 if (!function_exists('readJsonBody')) {
     function readJsonBody(): array {
+        global $TEST_JSON_BODY;
+        if (isset($TEST_JSON_BODY) && is_array($TEST_JSON_BODY)) {
+            return $TEST_JSON_BODY;
+        }
         $rawInput = file_get_contents('php://input');
         if (empty($rawInput)) {
             sendJson(['error' => 'EMPTY_BODY', 'message' => 'No JSON payload received.'], 400);
@@ -570,7 +574,7 @@ if (!function_exists('ensureNetZoneAndMovementSchema')) {
         } catch (Exception $ignored) {
             $activeDb = 'default';
         }
-        $lockFile = sys_get_temp_dir() . '/orion_netzone_v160_' . substr(md5($activeDb), 0, 8) . '.ok';
+        $lockFile = sys_get_temp_dir() . '/orion_netzone_v161_' . substr(md5($activeDb), 0, 8) . '.ok';
 
         $tableColumnDefs = [
             'telemetry_logs' => [
@@ -579,8 +583,11 @@ if (!function_exists('ensureNetZoneAndMovementSchema')) {
                 'sync_ssid'       => "VARCHAR(32) NOT NULL DEFAULT ''",
             ],
             'vehicles' => [
-                'net_zone'  => "VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN'",
-                'sync_ssid' => "VARCHAR(32) NOT NULL DEFAULT ''",
+                'net_zone'      => "VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN'",
+                'sync_ssid'     => "VARCHAR(32) NOT NULL DEFAULT ''",
+                'net_zone_boot' => "INT UNSIGNED NOT NULL DEFAULT 0",
+                'net_zone_seq'  => "INT UNSIGNED NOT NULL DEFAULT 0",
+                'net_zone_ts'   => "INT UNSIGNED NOT NULL DEFAULT 0",
             ],
             'movement_events' => [
                 'unit_id'    => "VARCHAR(64) NOT NULL DEFAULT 'MITSUBISHI-STOCK-01'",

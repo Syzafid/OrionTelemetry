@@ -158,6 +158,45 @@ describe("applyRemoteUpdate (live API merge)", () => {
     });
   });
 
+  it("strictly follows backend online_status and connection_badge in LIVE mode (Task 2.1 C)", () => {
+    const base = clone()[0]!;
+    // Kasus 1: Backend menetapkan OFFLINE saat last_seen_sec lokal kecil (misal 2 detik)
+    const backendOfflineUnit = {
+      ...base,
+      in_yard: true,
+      last_seen_sec: 2,
+      online_status: "OFFLINE" as const,
+      connection_badge: "OFFLINE / DEEP SLEEP",
+    };
+    // Pada mode live (isLiveApi = true), status dan badge WAJIB mengikuti backend
+    expect(getUnitConnectionState(backendOfflineUnit, true)).toEqual({
+      isOnline: false,
+      badgeText: "OFFLINE / DEEP SLEEP",
+      lastSeenSec: 2,
+    });
+    // Pada mode simulator (isLiveApi = false), logika lokal tetap bekerja
+    expect(getUnitConnectionState(backendOfflineUnit, false)).toEqual({
+      isOnline: true,
+      badgeText: "LIVE / ONLINE",
+      lastSeenSec: 2,
+    });
+
+    // Kasus 2: Backend mengirim LIVE / TECH HOTSPOT untuk unit di luar gudang
+    const backendHotspotUnit = {
+      ...base,
+      in_yard: false,
+      net_zone: "TECH_HOTSPOT",
+      last_seen_sec: 5,
+      online_status: "ONLINE" as const,
+      connection_badge: "LIVE / TECH HOTSPOT",
+    };
+    expect(getUnitConnectionState(backendHotspotUnit, true)).toEqual({
+      isOnline: true,
+      badgeText: "LIVE / TECH HOTSPOT",
+      lastSeenSec: 5,
+    });
+  });
+
   it("preserves structural sharing and exact array/unit references when remote payloads contain identical values", () => {
     const before = clone();
     const unchangedListPayload = {

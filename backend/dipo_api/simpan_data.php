@@ -284,6 +284,12 @@ $sqlInsertLog = "
         `created_at`      = NOW()
 ";
 
+// CATATAN ARSITEKTUR IDEMPOTENSI (TASK 2.1):
+// Kunci idempotensi (boot_id, seq_no, event_type) pada tabel movement_events
+// mengasumsikan nomor seq selalu monoton naik pada boot_id yang sama.
+// Jika perangkat di-flash ulang / NVS di-reset sehingga seq kembali ke 0 pada boot_id yang sama,
+// potensi tabrakan kunci adalah batasan desain yang diterima sesuai spesifikasi ORION v1.6.
+
 $sqlUpsertMovement = "
     INSERT INTO `movement_events` (
         `id`, `unit_id`, `event_type`, `from_zone`, `to_zone`, `event_epoch`,
@@ -317,7 +323,8 @@ $pdo->beginTransaction();
 try {
     // Kunci baris kendaraan sebelum evaluasi state machine agar transisi atomik & bebas race-condition
     $stmtVeh = $pdo->prepare("
-        SELECT `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`, `net_zone`, `sync_ssid`
+        SELECT `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`, `net_zone`, `sync_ssid`,
+               `net_zone_boot`, `net_zone_seq`, `net_zone_ts`
         FROM `vehicles`
         WHERE `unit_id` = :uid
         FOR UPDATE
@@ -325,49 +332,67 @@ try {
     $stmtVeh->execute([':uid' => $primaryUnitId]);
     $vehRow = $stmtVeh->fetch();
 
-    $curBoot = $vehRow ? (int)$vehRow['last_boot'] : 0;
-    $curSeq  = $vehRow ? (int)$vehRow['last_seq'] : 0;
-    $curTs   = $vehRow ? (int)$vehRow['last_ts_epoch'] : 0;
+    $curBoot     = $vehRow ? (int)$vehRow['last_boot'] : 0;
+    $curSeq      = $vehRow ? (int)$vehRow['last_seq'] : 0;
+    $curTs       = $vehRow ? (int)$vehRow['last_ts_epoch'] : 0;
+    $curZoneBoot = $vehRow ? (int)($vehRow['net_zone_boot'] ?? 0) : 0;
+    $curZoneSeq  = $vehRow ? (int)($vehRow['net_zone_seq'] ?? 0) : 0;
+    $curZoneTs   = $vehRow ? (int)($vehRow['net_zone_ts'] ?? 0) : 0;
 
-    // Tentukan $lastKnownZone awal sebelum iterasi rekaman kronologis
-    $firstRec = $normalized[0];
-    $stmtPriorZone = $pdo->prepare("
-        SELECT `net_zone`
+    // Prepared statements untuk State Machine Transisi Lintas-Batch & Batch Terlambat (Task 2.1)
+    // 1. Query predecessor terdekat di telemetry_logs dengan urutan (boot, seq, ts_epoch) lebih kecil dan net_zone valid
+    $stmtPred = $pdo->prepare("
+        SELECT `net_zone`, `boot`, `seq`, `ts_epoch`
         FROM `telemetry_logs`
         WHERE `unit_id` = :uid
           AND `net_zone` IN ('YARD', 'TECH_HOTSPOT', 'OFFLINE')
-          AND (`boot` < :b1 OR (`boot` = :b2 AND `seq` < :s1))
-        ORDER BY `boot` DESC, `seq` DESC, `id` DESC
+          AND (
+            `boot` < :b1
+            OR (`boot` = :b2 AND `seq` < :s1)
+            OR (`boot` = :b3 AND `seq` = :s2 AND `ts_epoch` < :ts1)
+          )
+        ORDER BY `boot` DESC, `seq` DESC, `ts_epoch` DESC, `id` DESC
         LIMIT 1
     ");
-    $stmtPriorZone->execute([
-        ':uid' => $primaryUnitId,
-        ':b1'  => (int)$firstRec['boot'],
-        ':b2'  => (int)$firstRec['boot'],
-        ':s1'  => (int)$firstRec['seq'],
-    ]);
-    $priorZoneRow = $stmtPriorZone->fetch();
 
-    $vehStoredZone = ($vehRow && isset($vehRow['net_zone'])) ? (string)$vehRow['net_zone'] : 'UNKNOWN';
-    $firstIsNewerThanVeh = ((int)$firstRec['boot'] > $curBoot)
-        || ((int)$firstRec['boot'] === $curBoot && (int)$firstRec['seq'] > $curSeq);
+    // 2. Query successor terdekat di telemetry_logs dengan urutan lebih besar
+    $stmtSucc = $pdo->prepare("
+        SELECT `id`, `unit_id`, `net_zone`, `boot`, `seq`, `ts_epoch`, `zone_exit_epoch`, `v_bat`, `rpm`, `speed_kmh`
+        FROM `telemetry_logs`
+        WHERE `unit_id` = :uid
+          AND `net_zone` IN ('YARD', 'TECH_HOTSPOT', 'OFFLINE')
+          AND (
+            `boot` > :b1
+            OR (`boot` = :b2 AND `seq` > :s1)
+            OR (`boot` = :b3 AND `seq` = :s2 AND `ts_epoch` > :ts1)
+          )
+        ORDER BY `boot` ASC, `seq` ASC, `ts_epoch` ASC, `id` ASC
+        LIMIT 1
+    ");
 
-    if ($priorZoneRow && in_array((string)$priorZoneRow['net_zone'], $validZones, true)) {
-        $lastKnownZone = (string)$priorZoneRow['net_zone'];
-    } elseif ($firstIsNewerThanVeh && in_array($vehStoredZone, $validZones, true)) {
-        $lastKnownZone = $vehStoredZone;
-    } else {
-        $lastKnownZone = 'YARD';
-    }
+    // 3. Cleanup statement untuk menghapus event yang usang akibat disisipkannya batch terlambat
+    $stmtDelMove = $pdo->prepare("
+        DELETE FROM `movement_events`
+        WHERE `unit_id` = :uid
+          AND `boot_id` = :b
+          AND `seq_no` = :s
+    ");
 
-    $hasValidZoneInBatch = false;
+    $stmtDelMoveType = $pdo->prepare("
+        DELETE FROM `movement_events`
+        WHERE `unit_id` = :uid
+          AND `boot_id` = :b
+          AND `seq_no` = :s
+          AND `event_type` = :etype
+    ");
+
+    $newestValidZoneRec = null;
 
     foreach ($normalized as $rec) {
         $primaryUnitId = $rec['unit_id'];
-        // Array $normalized sudah diurutkan kronologis (boot ASC, seq ASC, ts_epoch ASC)
         $latestRecord = $rec;
 
-        // Simpan ke telemetry_logs tanpa pernah menghapus/mengubah rekaman YARD sebelumnya
+        // Simpan ke telemetry_logs tanpa pernah menghapus/mengubah rekaman sebelumnya
         $stmtInsert->execute([
             ':unit_id'         => $rec['unit_id'],
             ':seq'             => $rec['seq'],
@@ -409,99 +434,228 @@ try {
             ':dist_clr_km'     => $rec['dist_clr_km'],
         ]);
 
-        // Evaluasi State Machine Transisi Lokasi 4-Zona
         $z = $rec['net_zone'];
-        if ($z !== 'UNKNOWN') {
-            $hasValidZoneInBatch = true;
+        if (in_array($z, $validZones, true)) {
+            $newestValidZoneRec = $rec;
 
-            if ($lastKnownZone === 'YARD' && ($z === 'TECH_HOTSPOT' || $z === 'OFFLINE')) {
-                // EXIT_YARD: gunakan zone_exit_epoch jika valid & dalam jendela <= 620 detik
-                $exitEpoch = ($rec['zone_exit_epoch'] > 0
-                    && $rec['zone_exit_epoch'] <= $rec['ts_epoch']
-                    && ($rec['ts_epoch'] - $rec['zone_exit_epoch']) <= 620)
-                    ? (int)$rec['zone_exit_epoch']
-                    : (int)$rec['ts_epoch'];
+            // 1. Evaluasi transisi $rec terhadap PREDECESSOR di telemetry_logs
+            $stmtPred->execute([
+                ':uid' => $rec['unit_id'],
+                ':b1'  => (int)$rec['boot'],
+                ':b2'  => (int)$rec['boot'],
+                ':s1'  => (int)$rec['seq'],
+                ':b3'  => (int)$rec['boot'],
+                ':s2'  => (int)$rec['seq'],
+                ':ts1' => (int)$rec['ts_epoch'],
+            ]);
+            $predRow = $stmtPred->fetch();
 
-                $evId = sprintf('MV-%s-%d-%d-OUT', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
-                $stmtMove->execute([
-                    ':id'            => $evId,
-                    ':unit_id'       => $rec['unit_id'],
-                    ':event_type'    => 'EXIT_YARD',
-                    ':from_zone'     => 'YARD',
-                    ':to_zone'       => $z,
-                    ':event_epoch'   => $exitEpoch,
-                    ':boot_id'       => $rec['boot'],
-                    ':seq_no'        => $rec['seq'],
-                    ':v_bat'         => $rec['v_bat'],
-                    ':rpm'           => max(0, $rec['rpm']),
-                    ':speed_kmh'     => $rec['speed_kmh'],
-                    ':departed'      => date('Y-m-d H:i:s', max(1, $exitEpoch)),
-                    ':returned'      => null,
-                    ':away_min'      => null,
-                    ':debounce_hits' => 3,
-                    ':tag'           => 'Test Drive',
+            if ($predRow && in_array((string)$predRow['net_zone'], $validZones, true)) {
+                $fromZone = (string)$predRow['net_zone'];
+                $toZone   = $z;
+
+                if ($fromZone === 'YARD' && ($toZone === 'TECH_HOTSPOT' || $toZone === 'OFFLINE')) {
+                    $exitEpoch = ($rec['zone_exit_epoch'] > 0
+                        && $rec['zone_exit_epoch'] <= $rec['ts_epoch']
+                        && ($rec['ts_epoch'] - $rec['zone_exit_epoch']) <= 620)
+                        ? (int)$rec['zone_exit_epoch']
+                        : (int)$rec['ts_epoch'];
+
+                    $evId = sprintf('MV-%s-%d-%d-OUT', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
+                    $stmtMove->execute([
+                        ':id'            => $evId,
+                        ':unit_id'       => $rec['unit_id'],
+                        ':event_type'    => 'EXIT_YARD',
+                        ':from_zone'     => 'YARD',
+                        ':to_zone'       => $toZone,
+                        ':event_epoch'   => $exitEpoch,
+                        ':boot_id'       => $rec['boot'],
+                        ':seq_no'        => $rec['seq'],
+                        ':v_bat'         => $rec['v_bat'],
+                        ':rpm'           => max(0, $rec['rpm']),
+                        ':speed_kmh'     => $rec['speed_kmh'],
+                        ':departed'      => date('Y-m-d H:i:s', max(1, $exitEpoch)),
+                        ':returned'      => null,
+                        ':away_min'      => null,
+                        ':debounce_hits' => 3,
+                        ':tag'           => 'Test Drive',
+                    ]);
+                } elseif (($fromZone === 'TECH_HOTSPOT' || $fromZone === 'OFFLINE') && $toZone === 'YARD') {
+                    $enterEpoch = (int)$rec['ts_epoch'];
+                    $evId = sprintf('MV-%s-%d-%d-IN', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
+                    $stmtMove->execute([
+                        ':id'            => $evId,
+                        ':unit_id'       => $rec['unit_id'],
+                        ':event_type'    => 'ENTER_YARD',
+                        ':from_zone'     => $fromZone,
+                        ':to_zone'       => 'YARD',
+                        ':event_epoch'   => $enterEpoch,
+                        ':boot_id'       => $rec['boot'],
+                        ':seq_no'        => $rec['seq'],
+                        ':v_bat'         => $rec['v_bat'],
+                        ':rpm'           => max(0, $rec['rpm']),
+                        ':speed_kmh'     => $rec['speed_kmh'],
+                        ':departed'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
+                        ':returned'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
+                        ':away_min'      => null,
+                        ':debounce_hits' => 2,
+                        ':tag'           => 'Test Drive',
+                    ]);
+                }
+            }
+
+            // 2. Re-evaluasi SUCCESSOR di database jika record ini disisipkan sebelum record yang sudah ada
+            $stmtSucc->execute([
+                ':uid' => $rec['unit_id'],
+                ':b1'  => (int)$rec['boot'],
+                ':b2'  => (int)$rec['boot'],
+                ':s1'  => (int)$rec['seq'],
+                ':b3'  => (int)$rec['boot'],
+                ':s2'  => (int)$rec['seq'],
+                ':ts1' => (int)$rec['ts_epoch'],
+            ]);
+            $succRow = $stmtSucc->fetch();
+
+            if ($succRow && in_array((string)$succRow['net_zone'], $validZones, true)) {
+                $stmtPred->execute([
+                    ':uid' => $succRow['unit_id'],
+                    ':b1'  => (int)$succRow['boot'],
+                    ':b2'  => (int)$succRow['boot'],
+                    ':s1'  => (int)$succRow['seq'],
+                    ':b3'  => (int)$succRow['boot'],
+                    ':s2'  => (int)$succRow['seq'],
+                    ':ts1' => (int)$succRow['ts_epoch'],
                 ]);
-                $lastKnownZone = $z;
-            } elseif (($lastKnownZone === 'TECH_HOTSPOT' || $lastKnownZone === 'OFFLINE') && ($z === 'TECH_HOTSPOT' || $z === 'OFFLINE')) {
-                // Transisi antar-luar (TECH_HOTSPOT <-> OFFLINE): update zona tanpa membuat EXIT_YARD baru
-                $lastKnownZone = $z;
-            } elseif (($lastKnownZone === 'TECH_HOTSPOT' || $lastKnownZone === 'OFFLINE') && $z === 'YARD') {
-                // ENTER_YARD: kembali masuk ke area gudang
-                $enterEpoch = (int)$rec['ts_epoch'];
-                $evId = sprintf('MV-%s-%d-%d-IN', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
-                $stmtMove->execute([
-                    ':id'            => $evId,
-                    ':unit_id'       => $rec['unit_id'],
-                    ':event_type'    => 'ENTER_YARD',
-                    ':from_zone'     => $lastKnownZone,
-                    ':to_zone'       => 'YARD',
-                    ':event_epoch'   => $enterEpoch,
-                    ':boot_id'       => $rec['boot'],
-                    ':seq_no'        => $rec['seq'],
-                    ':v_bat'         => $rec['v_bat'],
-                    ':rpm'           => max(0, $rec['rpm']),
-                    ':speed_kmh'     => $rec['speed_kmh'],
-                    ':departed'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
-                    ':returned'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
-                    ':away_min'      => null,
-                    ':debounce_hits' => 2,
-                    ':tag'           => 'Test Drive',
-                ]);
-                $lastKnownZone = 'YARD';
+                $succPredRow = $stmtPred->fetch();
+
+                if ($succPredRow && in_array((string)$succPredRow['net_zone'], $validZones, true)) {
+                    $sFrom = (string)$succPredRow['net_zone'];
+                    $sTo   = (string)$succRow['net_zone'];
+
+                    if ($sFrom === 'YARD' && ($sTo === 'TECH_HOTSPOT' || $sTo === 'OFFLINE')) {
+                        $sExitEpoch = ($succRow['zone_exit_epoch'] > 0
+                            && $succRow['zone_exit_epoch'] <= $succRow['ts_epoch']
+                            && ($succRow['ts_epoch'] - $succRow['zone_exit_epoch']) <= 620)
+                            ? (int)$succRow['zone_exit_epoch']
+                            : (int)$succRow['ts_epoch'];
+
+                        $sEvId = sprintf('MV-%s-%d-%d-OUT', substr(md5($succRow['unit_id']), 0, 6), $succRow['boot'], $succRow['seq']);
+                        $stmtMove->execute([
+                            ':id'            => $sEvId,
+                            ':unit_id'       => $succRow['unit_id'],
+                            ':event_type'    => 'EXIT_YARD',
+                            ':from_zone'     => 'YARD',
+                            ':to_zone'       => $sTo,
+                            ':event_epoch'   => $sExitEpoch,
+                            ':boot_id'       => $succRow['boot'],
+                            ':seq_no'        => $succRow['seq'],
+                            ':v_bat'         => $succRow['v_bat'],
+                            ':rpm'           => max(0, (int)$succRow['rpm']),
+                            ':speed_kmh'     => (int)$succRow['speed_kmh'],
+                            ':departed'      => date('Y-m-d H:i:s', max(1, $sExitEpoch)),
+                            ':returned'      => null,
+                            ':away_min'      => null,
+                            ':debounce_hits' => 3,
+                            ':tag'           => 'Test Drive',
+                        ]);
+                        $stmtDelMoveType->execute([
+                            ':uid'   => $succRow['unit_id'],
+                            ':b'     => $succRow['boot'],
+                            ':s'     => $succRow['seq'],
+                            ':etype' => 'ENTER_YARD',
+                        ]);
+                    } elseif (($sFrom === 'TECH_HOTSPOT' || $sFrom === 'OFFLINE') && $sTo === 'YARD') {
+                        $sEnterEpoch = (int)$succRow['ts_epoch'];
+                        $sEvId = sprintf('MV-%s-%d-%d-IN', substr(md5($succRow['unit_id']), 0, 6), $succRow['boot'], $succRow['seq']);
+                        $stmtMove->execute([
+                            ':id'            => $sEvId,
+                            ':unit_id'       => $succRow['unit_id'],
+                            ':event_type'    => 'ENTER_YARD',
+                            ':from_zone'     => $sFrom,
+                            ':to_zone'       => 'YARD',
+                            ':event_epoch'   => $sEnterEpoch,
+                            ':boot_id'       => $succRow['boot'],
+                            ':seq_no'        => $succRow['seq'],
+                            ':v_bat'         => $succRow['v_bat'],
+                            ':rpm'           => max(0, (int)$succRow['rpm']),
+                            ':speed_kmh'     => (int)$succRow['speed_kmh'],
+                            ':departed'      => date('Y-m-d H:i:s', max(1, $sEnterEpoch)),
+                            ':returned'      => date('Y-m-d H:i:s', max(1, $sEnterEpoch)),
+                            ':away_min'      => null,
+                            ':debounce_hits' => 2,
+                            ':tag'           => 'Test Drive',
+                        ]);
+                        $stmtDelMoveType->execute([
+                            ':uid'   => $succRow['unit_id'],
+                            ':b'     => $succRow['boot'],
+                            ':s'     => $succRow['seq'],
+                            ':etype' => 'EXIT_YARD',
+                        ]);
+                    } else {
+                        // Tidak ada transisi antara sFrom dan sTo -> hapus event yang sebelumnya mungkin tercatat
+                        $stmtDelMove->execute([
+                            ':uid' => $succRow['unit_id'],
+                            ':b'   => $succRow['boot'],
+                            ':s'   => $succRow['seq'],
+                        ]);
+                    }
+                }
             }
         }
 
         $insertedCount++;
     }
 
-    // 4. Perbarui tabel status live `vehicles` HANYA jika seq atau ts_epoch lebih baru
+    // 4. Perbarui tabel status live `vehicles` dengan proteksi urutan monoton
     if ($primaryUnitId && $latestRecord) {
-        $incomingSeq  = (int)$latestRecord['seq'];
-        $incomingTs   = (int)$latestRecord['ts_epoch'];
-        $incomingBoot = (int)$latestRecord['boot'];
+        $newestBatchRec = end($normalized);
+        $incBoot = (int)$newestBatchRec['boot'];
+        $incSeq  = (int)$newestBatchRec['seq'];
+        $incTs   = (int)$newestBatchRec['ts_epoch'];
 
-        $finalVehNetZone = $hasValidZoneInBatch ? $lastKnownZone : $vehStoredZone;
-        $finalVehSyncSsid = ($latestRecord['sync_ssid'] !== '')
-            ? $latestRecord['sync_ssid']
-            : (string)($vehRow['sync_ssid'] ?? '');
-        $inYardVal = ($finalVehNetZone === 'TECH_HOTSPOT' || $finalVehNetZone === 'OFFLINE') ? 0 : 1;
-
-        // Paket live tunggal selalu dianggap pembaruan real-time terbaru (meski ESP32 habis reset/cold boot
-        // atau RTC lokal lebih kecil dari epoch seed). Paket burst hanya memperbarui jika lebih baru / boot berbeda.
+        // Cek pembaruan metrik telemetri (hanya jika lebih baru atau paket live non-burst)
         if (!$isBurstSync) {
-            $isNewerPacket = true;
+            $isNewerTelemetry = true;
         } else {
-            $isNewerPacket = ($incomingBoot !== $curBoot)
-                || ($incomingSeq >= $curSeq)
-                || ($incomingTs >= $curTs)
-                || ($curSeq === 0 && $curTs === 0);
+            $isNewerTelemetry = ($incBoot > $curBoot)
+                || ($incBoot === $curBoot && $incSeq > $curSeq)
+                || ($incBoot === $curBoot && $incSeq === $curSeq && $incTs > $curTs)
+                || ($curBoot === 0 && $curSeq === 0 && $curTs === 0);
         }
 
-        if ($isNewerPacket) {
-            $vBat = (float)$latestRecord['v_bat'];
-            $engineOn = $latestRecord['engine_on'] === 1;
-            $critAlert = $latestRecord['crit_alert'] === 1;
-            $canOk = $latestRecord['can_ok'] === 1;
+        // Cek pembaruan zona jaringan (hanya jika record net_zone lebih baru dari net_zone_boot/seq/ts)
+        $shouldUpdateZone = false;
+        if ($newestValidZoneRec) {
+            $nzBoot = (int)$newestValidZoneRec['boot'];
+            $nzSeq  = (int)$newestValidZoneRec['seq'];
+            $nzTs   = (int)$newestValidZoneRec['ts_epoch'];
+            $shouldUpdateZone = ($nzBoot > $curZoneBoot)
+                || ($nzBoot === $curZoneBoot && $nzSeq > $curZoneSeq)
+                || ($nzBoot === $curZoneBoot && $nzSeq === $curZoneSeq && $nzTs > $curZoneTs)
+                || ($curZoneBoot === 0 && $curZoneSeq === 0 && $curZoneTs === 0);
+        }
+
+        if ($shouldUpdateZone) {
+            $targetZone      = (string)$newestValidZoneRec['net_zone'];
+            $targetSyncSsid  = ($newestValidZoneRec['sync_ssid'] !== '') ? (string)$newestValidZoneRec['sync_ssid'] : (string)($vehRow['sync_ssid'] ?? '');
+            $targetInYard    = ($targetZone === 'TECH_HOTSPOT' || $targetZone === 'OFFLINE') ? 0 : 1;
+            $targetZoneBoot  = (int)$newestValidZoneRec['boot'];
+            $targetZoneSeq   = (int)$newestValidZoneRec['seq'];
+            $targetZoneTs    = (int)$newestValidZoneRec['ts_epoch'];
+        } else {
+            $targetZone      = $vehRow ? (string)($vehRow['net_zone'] ?? 'UNKNOWN') : 'UNKNOWN';
+            $targetSyncSsid  = $vehRow ? (string)($vehRow['sync_ssid'] ?? '') : '';
+            $targetInYard    = $vehRow ? (int)($vehRow['in_yard'] ?? 1) : 1;
+            $targetZoneBoot  = $curZoneBoot;
+            $targetZoneSeq   = $curZoneSeq;
+            $targetZoneTs    = $curZoneTs;
+        }
+
+        if ($isNewerTelemetry) {
+            $vBat = (float)$newestBatchRec['v_bat'];
+            $engineOn = $newestBatchRec['engine_on'] === 1;
+            $critAlert = $newestBatchRec['crit_alert'] === 1;
+            $canOk = $newestBatchRec['can_ok'] === 1;
 
             // Ambil threshold batas kritis dari node_configs
             $stmtCfg = $pdo->prepare("SELECT `crit_v` FROM `node_configs` WHERE `unit_id` = :uid");
@@ -528,94 +682,107 @@ try {
             }
 
             // Kelola Burst Sync Badge (`buffer_used`) langsung dari nilai aktual firmware
-            $rawBuf = (int)$latestRecord['buffer_used'];
+            $rawBuf = (int)$newestBatchRec['buffer_used'];
             $bufferUsed = max(0, min(5000, $rawBuf));
 
             $sqlUpdateVehicle = "
                 UPDATE `vehicles`
                 SET
-                    `state`         = :state,
-                    `status_label`  = :status_label,
-                    `in_yard`       = :in_yard,
-                    `online_status` = 'ONLINE',
-                    `v_bat`         = :v_bat,
-                    `adc_raw_mv`    = :adc_raw_mv,
-                    `rtc_temp_c`    = :rtc_temp_c,
-                    `can_ok`        = :can_ok,
-                    `rssi`          = :rssi,
-                    `net_zone`      = :net_zone,
-                    `sync_ssid`     = :sync_ssid,
-                    `buffer_used`   = :buffer_used,
-                    `last_boot`     = :last_boot,
-                    `last_seq`      = :last_seq,
-                    `last_ts_epoch` = :last_ts_epoch,
-                    `speed_kmh`     = :speed_kmh,
-                    `iat_c`         = :iat_c,
-                    `map_kpa`       = :map_kpa,
-                    `load_pct`      = :load_pct,
-                    `tps_pct`       = :tps_pct,
-                    `ign_deg`       = :ign_deg,
-                    `maf_gs`        = :maf_gs,
-                    `run_time_s`    = :run_time_s,
-                    `fuel_pct`      = :fuel_pct,
-                    `fuel_rate_lh`  = :fuel_rate_lh,
-                    `o2_v`          = :o2_v,
-                    `stft_pct`      = :stft_pct,
-                    `mil_on`        = :mil_on,
-                    `ecu_v`         = :ecu_v,
-                    `dist_clr_km`   = :dist_clr_km,
-                    `last_seen`     = NOW()
+                    `state`          = :state,
+                    `status_label`   = :status_label,
+                    `in_yard`        = :in_yard,
+                    `online_status`  = 'ONLINE',
+                    `v_bat`          = :v_bat,
+                    `adc_raw_mv`     = :adc_raw_mv,
+                    `rtc_temp_c`     = :rtc_temp_c,
+                    `can_ok`         = :can_ok,
+                    `rssi`           = :rssi,
+                    `net_zone`       = :net_zone,
+                    `sync_ssid`      = :sync_ssid,
+                    `net_zone_boot`  = :net_zone_boot,
+                    `net_zone_seq`   = :net_zone_seq,
+                    `net_zone_ts`    = :net_zone_ts,
+                    `buffer_used`    = :buffer_used,
+                    `last_boot`      = :last_boot,
+                    `last_seq`       = :last_seq,
+                    `last_ts_epoch`  = :last_ts_epoch,
+                    `speed_kmh`      = :speed_kmh,
+                    `iat_c`          = :iat_c,
+                    `map_kpa`        = :map_kpa,
+                    `load_pct`       = :load_pct,
+                    `tps_pct`        = :tps_pct,
+                    `ign_deg`        = :ign_deg,
+                    `maf_gs`         = :maf_gs,
+                    `run_time_s`     = :run_time_s,
+                    `fuel_pct`       = :fuel_pct,
+                    `fuel_rate_lh`   = :fuel_rate_lh,
+                    `o2_v`           = :o2_v,
+                    `stft_pct`       = :stft_pct,
+                    `mil_on`         = :mil_on,
+                    `ecu_v`          = :ecu_v,
+                    `dist_clr_km`    = :dist_clr_km,
+                    `last_seen`      = NOW()
                 WHERE `unit_id` = :uid
             ";
             $stmtUpdateVeh = $pdo->prepare($sqlUpdateVehicle);
             $stmtUpdateVeh->execute([
-                ':state'         => $newState,
-                ':status_label'  => $newStatusLabel,
-                ':in_yard'       => $inYardVal,
-                ':v_bat'         => $latestRecord['v_bat'],
-                ':adc_raw_mv'    => $latestRecord['adc_raw_mv'],
-                ':rtc_temp_c'    => $latestRecord['rtc_temp_c'],
-                ':can_ok'        => $latestRecord['can_ok'],
-                ':rssi'          => $latestRecord['rssi'],
-                ':net_zone'      => $finalVehNetZone,
-                ':sync_ssid'     => $finalVehSyncSsid,
-                ':buffer_used'   => $bufferUsed,
-                ':last_boot'     => $incomingBoot,
-                ':last_seq'      => $incomingSeq,
-                ':last_ts_epoch' => $incomingTs,
-                ':speed_kmh'     => $latestRecord['speed_kmh'],
-                ':iat_c'         => $latestRecord['iat_c'],
-                ':map_kpa'       => $latestRecord['map_kpa'],
-                ':load_pct'      => $latestRecord['load_pct'],
-                ':tps_pct'       => $latestRecord['tps_pct'],
-                ':ign_deg'       => $latestRecord['ign_deg'],
-                ':maf_gs'        => $latestRecord['maf_gs'],
-                ':run_time_s'    => $latestRecord['run_time_s'],
-                ':fuel_pct'      => $latestRecord['fuel_pct'],
-                ':fuel_rate_lh'  => $latestRecord['fuel_rate_lh'],
-                ':o2_v'          => $latestRecord['o2_v'],
-                ':stft_pct'      => $latestRecord['stft_pct'],
-                ':mil_on'        => $latestRecord['mil_on'],
-                ':ecu_v'         => $latestRecord['ecu_v'],
-                ':dist_clr_km'   => $latestRecord['dist_clr_km'],
-                ':uid'           => $primaryUnitId,
+                ':state'          => $newState,
+                ':status_label'   => $newStatusLabel,
+                ':in_yard'        => $targetInYard,
+                ':v_bat'          => $newestBatchRec['v_bat'],
+                ':adc_raw_mv'     => $newestBatchRec['adc_raw_mv'],
+                ':rtc_temp_c'     => $newestBatchRec['rtc_temp_c'],
+                ':can_ok'         => $newestBatchRec['can_ok'],
+                ':rssi'           => $newestBatchRec['rssi'],
+                ':net_zone'       => $targetZone,
+                ':sync_ssid'      => $targetSyncSsid,
+                ':net_zone_boot'  => $targetZoneBoot,
+                ':net_zone_seq'   => $targetZoneSeq,
+                ':net_zone_ts'    => $targetZoneTs,
+                ':buffer_used'    => $bufferUsed,
+                ':last_boot'      => $newestBatchRec['boot'],
+                ':last_seq'       => $newestBatchRec['seq'],
+                ':last_ts_epoch'  => $newestBatchRec['ts_epoch'],
+                ':speed_kmh'      => $newestBatchRec['speed_kmh'],
+                ':iat_c'          => $newestBatchRec['iat_c'],
+                ':map_kpa'        => $newestBatchRec['map_kpa'],
+                ':load_pct'       => $newestBatchRec['load_pct'],
+                ':tps_pct'        => $newestBatchRec['tps_pct'],
+                ':ign_deg'        => $newestBatchRec['ign_deg'],
+                ':maf_gs'         => $newestBatchRec['maf_gs'],
+                ':run_time_s'     => $newestBatchRec['run_time_s'],
+                ':fuel_pct'       => $newestBatchRec['fuel_pct'],
+                ':fuel_rate_lh'   => $newestBatchRec['fuel_rate_lh'],
+                ':o2_v'           => $newestBatchRec['o2_v'],
+                ':stft_pct'       => $newestBatchRec['stft_pct'],
+                ':mil_on'         => $newestBatchRec['mil_on'],
+                ':ecu_v'          => $newestBatchRec['ecu_v'],
+                ':dist_clr_km'    => $newestBatchRec['dist_clr_km'],
+                ':uid'            => $primaryUnitId,
             ]);
 
             $statusUpdated = true;
-        } elseif ($hasValidZoneInBatch) {
+        } elseif ($shouldUpdateZone) {
             $stmtUpdateZoneOnly = $pdo->prepare("
                 UPDATE `vehicles`
-                SET `net_zone` = :net_zone,
-                    `sync_ssid` = :sync_ssid,
-                    `in_yard`   = :in_yard
+                SET `net_zone`      = :net_zone,
+                    `sync_ssid`     = :sync_ssid,
+                    `in_yard`       = :in_yard,
+                    `net_zone_boot` = :net_zone_boot,
+                    `net_zone_seq`  = :net_zone_seq,
+                    `net_zone_ts`   = :net_zone_ts
                 WHERE `unit_id` = :uid
             ");
             $stmtUpdateZoneOnly->execute([
-                ':net_zone'  => $finalVehNetZone,
-                ':sync_ssid' => $finalVehSyncSsid,
-                ':in_yard'   => $inYardVal,
-                ':uid'       => $primaryUnitId,
+                ':net_zone'      => $targetZone,
+                ':sync_ssid'     => $targetSyncSsid,
+                ':in_yard'       => $targetInYard,
+                ':net_zone_boot' => $targetZoneBoot,
+                ':net_zone_seq'  => $targetZoneSeq,
+                ':net_zone_ts'   => $targetZoneTs,
+                ':uid'           => $primaryUnitId,
             ]);
+            $statusUpdated = true;
         }
 
         // Catat audit trail saat terjadi Burst Sync offline
@@ -626,7 +793,7 @@ try {
             ");
             $stmtAudit->execute([
                 ':uid' => $primaryUnitId,
-                ':msg' => "Burst sync ingested {$insertedCount} offline record(s) from Two-Tier RTC/Flash buffer (seq up to #{$incomingSeq}).",
+                ':msg' => "Burst sync ingested {$insertedCount} offline record(s) from Two-Tier RTC/Flash buffer (seq up to #{$incSeq}).",
             ]);
         }
     }

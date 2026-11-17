@@ -14,6 +14,11 @@
 /** @var PDO $pdo */
 $pdo = require __DIR__ . '/db.php';
 
+// Single Named Constant ambang batas status online live (Task 2.1)
+// Disetel 10 detik untuk mengakomodasi 5 detik siklus kirim nominal ESP32
+// ditambah jitter scan WiFi background blocking (14 channel x 250ms = ~3.5 detik).
+const ONLINE_THRESHOLD_SEC = 10;
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendJson(['error' => 'METHOD_NOT_ALLOWED', 'message' => 'Use GET method.'], 405);
 }
@@ -274,7 +279,7 @@ try {
             ];
         }
 
-        $isLiveOnline = ($item['lastSeenSec'] <= 6) && ($inYard || $resolvedNetZone === 'TECH_HOTSPOT');
+        $isLiveOnline = ($item['lastSeenSec'] <= ONLINE_THRESHOLD_SEC) && ($inYard || $resolvedNetZone === 'TECH_HOTSPOT');
         $onlineStatus = $isLiveOnline ? 'ONLINE' : 'OFFLINE';
         if ($isLiveOnline) {
             $connectionBadge = ($resolvedNetZone === 'TECH_HOTSPOT') ? 'LIVE / TECH HOTSPOT' : 'LIVE / ONLINE';
@@ -283,23 +288,24 @@ try {
         }
 
         $formattedUnits[] = [
-            'unit_id'          => (string)$v['unit_id'],
-            'bay'              => (string)$v['bay'],
-            'model'            => (string)$v['model'],
-            'trim'             => (string)$v['trim'],
-            'vin'              => (string)$v['vin'],
-            'color'            => (string)$v['color'],
-            'status_label'     => (string)$statusLabel,
-            'state'            => (string)$state,
-            'in_yard'          => (bool)$inYard,
-            'net_zone'         => $resolvedNetZone,
-            'sync_ssid'        => $resolvedSyncSsid,
-            'online_status'    => $onlineStatus,
-            'last_seen_sec'    => (int)$item['lastSeenSec'],
-            'last_seen'        => $v['last_seen'] ? (string)$v['last_seen'] : null,
-            'connection_badge' => $connectionBadge,
-            'buffer_used'      => (int)$v['buffer_used'],
-            'telemetry'        => $telemetry,
+            'unit_id'              => (string)$v['unit_id'],
+            'bay'                  => (string)$v['bay'],
+            'model'                => (string)$v['model'],
+            'trim'                 => (string)$v['trim'],
+            'vin'                  => (string)$v['vin'],
+            'color'                => (string)$v['color'],
+            'status_label'         => (string)$statusLabel,
+            'state'                => (string)$state,
+            'in_yard'              => (bool)$inYard,
+            'net_zone'             => $resolvedNetZone,
+            'sync_ssid'            => $resolvedSyncSsid,
+            'online_status'        => $onlineStatus,
+            'last_seen_sec'        => (int)$item['lastSeenSec'],
+            'last_seen'            => $v['last_seen'] ? (string)$v['last_seen'] : null,
+            'connection_badge'     => $connectionBadge,
+            'online_threshold_sec' => ONLINE_THRESHOLD_SEC,
+            'buffer_used'          => (int)$v['buffer_used'],
+            'telemetry'            => $telemetry,
         ];
     }
 
@@ -390,6 +396,7 @@ try {
     $finalPayload = [
         'status'                => 'OK',
         'timestamp'             => date('c'),
+        'online_threshold_sec'  => ONLINE_THRESHOLD_SEC,
         'mass_disconnect_guard' => $isMassDisconnect,
         'units'                 => $formattedUnits,
         'configs'               => $configsMap,

@@ -89,6 +89,7 @@ export interface VehicleUnit {
   last_seen_sec?: number;
   last_seen?: string | null;
   connection_badge?: string;
+  online_threshold_sec?: number;
   buffer_used: number; // rtcRingBuffer occupied slots
   telemetry: TelemetryPayload;
 }
@@ -102,12 +103,22 @@ export interface UnitConnectionState {
 export const LIVE_ONLINE_THRESHOLD_SEC = 6;
 
 /**
- * Evaluates whether a telemetry unit is LIVE / ONLINE (last_seen <= 6s)
- * or OFFLINE / DEEP SLEEP (> 6s), keeping compatibility with local simulator mode.
- * When connected via technician hotspot outside yard (net_zone == 'TECH_HOTSPOT'),
- * the unit is reported as ONLINE with badge 'LIVE / TECH HOTSPOT'.
+ * Evaluates whether a telemetry unit is LIVE / ONLINE or OFFLINE.
+ * In LIVE_API mode (isLiveApi === true), status and badge strictly follow
+ * the backend get_data.php response as the authoritative source of truth.
+ * In SIMULATOR mode, local time-based evaluation is retained.
  */
-export function getUnitConnectionState(u: VehicleUnit): UnitConnectionState {
+export function getUnitConnectionState(u: VehicleUnit, isLiveApi: boolean = false): UnitConnectionState {
+  // Sesuai Spesifikasi Task 2.1 Bagian C: Pada mode live, backend adalah sumber kebenaran tunggal
+  if (isLiveApi && (u.online_status === "ONLINE" || u.online_status === "OFFLINE") && u.connection_badge) {
+    return {
+      isOnline: u.online_status === "ONLINE",
+      badgeText: u.connection_badge,
+      lastSeenSec: typeof u.last_seen_sec === "number" ? u.last_seen_sec : null,
+    };
+  }
+
+  // Mode SIMULATOR (logika evaluasi lokal):
   const isTechHotspot =
     u.net_zone === "TECH_HOTSPOT" ||
     u.telemetry?.net_zone === "TECH_HOTSPOT";

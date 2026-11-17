@@ -750,19 +750,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
             continue;
           }
           const nextSec = u.last_seen_sec + 1;
-          const isTechHotspot =
-            u.net_zone === "TECH_HOTSPOT" ||
-            u.telemetry?.net_zone === "TECH_HOTSPOT";
-          const isOnline = nextSec <= LIVE_ONLINE_THRESHOLD_SEC && (u.in_yard || isTechHotspot);
-          const badgeText = isOnline
-            ? (isTechHotspot ? "LIVE / TECH HOTSPOT" : "LIVE / ONLINE")
-            : (u.in_yard ? "OFFLINE / DEEP SLEEP" : "OFFLINE / OUT OF YARD");
           if (!next) next = us.slice();
           next[i] = {
             ...u,
             last_seen_sec: nextSec,
-            online_status: isOnline ? "ONLINE" : "OFFLINE",
-            connection_badge: badgeText,
+            // Sesuai Task 2.1 Bagian C: Pada mode live, backend adalah sumber kebenaran status online.
+            // Ticker hanya meng-inkremen detik visual tanpa menimpa online_status / connection_badge.
           };
         }
         return next ?? us;

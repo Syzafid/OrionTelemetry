@@ -177,6 +177,9 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
   if (typeof patchSrc["connection_badge"] === "string") {
     setMetaIfChanged("connection_badge", patchSrc["connection_badge"]);
   }
+  if (typeof patchSrc["online_threshold_sec"] === "number" && Number.isFinite(patchSrc["online_threshold_sec"])) {
+    setMetaIfChanged("online_threshold_sec", patchSrc["online_threshold_sec"]);
+  }
   if (typeof patchSrc["net_zone"] === "string") {
     setMetaIfChanged("net_zone", patchSrc["net_zone"]);
   }

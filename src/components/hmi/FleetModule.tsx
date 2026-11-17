@@ -630,7 +630,7 @@ export function FleetModule() {
             const isSelected = u.unit_id === selectedId;
             const verified = t.v_bat >= ALT_VERIFY_V;
             const unitTicket = tickets.find((tk) => tk.unit_id === u.unit_id) ?? null;
-            const conn = getUnitConnectionState(u);
+            const conn = getUnitConnectionState(u, dataSource === "LIVE_API");
 
             const startTime = warmupStartTimes[u.unit_id] ?? Date.now();
             const elapsedSec = Math.min(WARMUP_TARGET_SEC, Math.max(0, Math.floor((Date.now() - startTime) / 1000)));

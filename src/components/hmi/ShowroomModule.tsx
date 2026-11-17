@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils";
 const Stage3D = lazy(() => import("./Stage3D"));
 
 export function ShowroomModule({ active }: { active: boolean }) {
-  const { units, selected, selectUnit, configs } = useTelemetry();
+  const { units, selected, selectUnit, configs, dataSource } = useTelemetry();
   const [sidebarQuery, setSidebarQuery] = useState("");
   const activeUnitRef = useRef<HTMLButtonElement>(null);
   const t = selected.telemetry;
   const tone = unitTone(selected, configs[selected.unit_id]?.crit_v ?? 11.80);
-  const conn = getUnitConnectionState(selected);
+  const conn = getUnitConnectionState(selected, dataSource === "LIVE_API");
 
   const filteredSidebarUnits = useMemo(
     () => units.filter((u) => matchesFleetSearch(u, sidebarQuery)),
@@ -316,7 +316,7 @@ export function ShowroomModule({ active }: { active: boolean }) {
             {filteredSidebarUnits.map((u) => {
               const on = u.unit_id === selected.unit_id;
               const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.80);
-              const uConn = getUnitConnectionState(u);
+              const uConn = getUnitConnectionState(u, dataSource === "LIVE_API");
               return (
                 <button
                   key={u.unit_id}
