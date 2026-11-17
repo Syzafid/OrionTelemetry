@@ -353,6 +353,7 @@ if (!function_exists('ensureOrionDatabaseInitialized')) {
         @file_put_contents($initLock, (string)time());
         markOrionSchemaReady();
         ensureObd2ReadOnlyColumns($pdo, $force);
+        ensureNetZoneAndMovementSchema($pdo, $force);
         return ['migrated' => true, 'reason' => 'executed_schema_production'];
     }
 }
@@ -524,6 +525,142 @@ if (!function_exists('ensureObd2ReadOnlyColumns')) {
 
         @file_put_contents($lockFile, (string)time());
         return ['added' => $added, 'verified' => $verified, 'view_ready' => $viewReady];
+    }
+}
+
+if (!function_exists('sanitizeSyncSsid')) {
+    /**
+     * Strips non-printable ASCII characters and caps X-Sync-SSID at 32 characters.
+     */
+    function sanitizeSyncSsid(string $raw): string {
+        $clean = preg_replace('/[^\x20-\x7E]/', '', $raw);
+        $clean = trim($clean ?? '');
+        return substr($clean, 0, 32);
+    }
+}
+
+if (!function_exists('normalizeOrionNetZone')) {
+    /**
+     * Validates and normalizes incoming net_zone values to the 4-state contract.
+     */
+    function normalizeOrionNetZone($raw): string {
+        if (!is_string($raw) && !is_numeric($raw)) {
+            return 'UNKNOWN';
+        }
+        $z = strtoupper(trim((string)$raw));
+        if (in_array($z, ['YARD', 'TECH_HOTSPOT', 'OFFLINE', 'UNKNOWN'], true)) {
+            return $z;
+        }
+        return 'UNKNOWN';
+    }
+}
+
+if (!function_exists('ensureNetZoneAndMovementSchema')) {
+    /**
+     * Idempotently ensures ORION v1.6.0 net_zone / sync_ssid / zone_exit_epoch columns
+     * on `telemetry_logs` and `vehicles`, extended transition columns + idempotency unique key
+     * on `movement_events`, and refreshes the `vehicle_units` compatibility view.
+     *
+     * @return array{added: string[], verified: string[], unique_index: string, view_ready: bool}
+     */
+    function ensureNetZoneAndMovementSchema(PDO $pdo, bool $force = false): array {
+        $activeDb = '';
+        try {
+            $activeDb = (string)($pdo->query("SELECT DATABASE()")->fetchColumn() ?: 'default');
+        } catch (Exception $ignored) {
+            $activeDb = 'default';
+        }
+        $lockFile = sys_get_temp_dir() . '/orion_netzone_v160_' . substr(md5($activeDb), 0, 8) . '.ok';
+
+        $tableColumnDefs = [
+            'telemetry_logs' => [
+                'net_zone'        => "VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN'",
+                'zone_exit_epoch' => "INT UNSIGNED NOT NULL DEFAULT 0",
+                'sync_ssid'       => "VARCHAR(32) NOT NULL DEFAULT ''",
+            ],
+            'vehicles' => [
+                'net_zone'  => "VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN'",
+                'sync_ssid' => "VARCHAR(32) NOT NULL DEFAULT ''",
+            ],
+            'movement_events' => [
+                'unit_id'    => "VARCHAR(64) NOT NULL DEFAULT 'MITSUBISHI-STOCK-01'",
+                'event_type' => "VARCHAR(24) NOT NULL DEFAULT 'EXIT_YARD'",
+                'from_zone'  => "VARCHAR(24) NOT NULL DEFAULT 'YARD'",
+                'to_zone'    => "VARCHAR(24) NOT NULL DEFAULT 'OFFLINE'",
+                'event_epoch'=> "INT UNSIGNED NOT NULL DEFAULT 0",
+                'boot_id'    => "INT UNSIGNED NOT NULL DEFAULT 1",
+                'seq_no'     => "INT UNSIGNED NOT NULL DEFAULT 0",
+                'v_bat'      => "DECIMAL(5,2) NOT NULL DEFAULT 12.60",
+                'rpm'        => "INT NOT NULL DEFAULT 0",
+                'speed_kmh'  => "SMALLINT NOT NULL DEFAULT 0",
+                'created_at' => "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            ],
+        ];
+
+        $added = [];
+        $verified = [];
+        $viewReady = false;
+
+        if (!$force && is_file($lockFile)) {
+            foreach ($tableColumnDefs as $tbl => $cols) {
+                foreach (array_keys($cols) as $col) {
+                    $verified[] = "{$tbl}.{$col}";
+                }
+            }
+            return [
+                'added'        => $added,
+                'verified'     => $verified,
+                'unique_index' => 'uniq_mv_unit_boot_seq_type',
+                'view_ready'   => true,
+            ];
+        }
+
+        foreach ($tableColumnDefs as $table => $cols) {
+            $existing = [];
+            $stmtCols = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+            foreach ($stmtCols->fetchAll() as $row) {
+                if (!empty($row['Field'])) {
+                    $existing[(string)$row['Field']] = true;
+                }
+            }
+
+            foreach ($cols as $col => $ddl) {
+                if (!isset($existing[$col])) {
+                    $pdo->exec("ALTER TABLE `{$table}` ADD COLUMN `{$col}` {$ddl}");
+                    $added[] = "{$table}.{$col}";
+                }
+                $verified[] = "{$table}.{$col}";
+            }
+        }
+
+        // Prevent duplicate (unit_id, boot_id, seq_no, event_type) across legacy seeded movement_events rows
+        $pdo->exec("
+            UPDATE `movement_events`
+            SET `seq_no` = (CRC32(`id`) % 900) + 1,
+                `event_epoch` = IF(`event_epoch` = 0 AND `departed` IS NOT NULL, UNIX_TIMESTAMP(`departed`), `event_epoch`)
+            WHERE `seq_no` = 0
+        ");
+
+        $stmtIdx = $pdo->query("SHOW INDEX FROM `movement_events` WHERE Key_name = 'uniq_mv_unit_boot_seq_type'");
+        if (!$stmtIdx->fetch()) {
+            $pdo->exec("ALTER TABLE `movement_events` ADD UNIQUE KEY `uniq_mv_unit_boot_seq_type` (`unit_id`, `boot_id`, `seq_no`, `event_type`)");
+            $added[] = 'movement_events.UNIQUE(uniq_mv_unit_boot_seq_type)';
+        }
+
+        try {
+            $pdo->exec("CREATE OR REPLACE VIEW `vehicle_units` AS SELECT * FROM `vehicles`");
+            $viewReady = true;
+        } catch (Exception $ignored) {
+            $viewReady = false;
+        }
+
+        @file_put_contents($lockFile, (string)time());
+        return [
+            'added'        => $added,
+            'verified'     => $verified,
+            'unique_index' => 'uniq_mv_unit_boot_seq_type',
+            'view_ready'   => $viewReady,
+        ];
     }
 }
 

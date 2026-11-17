@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS `vehicles` (
   `rtc_temp_c` DECIMAL(5,2) NOT NULL DEFAULT 30.00,
   `can_ok` TINYINT(1) NOT NULL DEFAULT 1,
   `rssi` INT NOT NULL DEFAULT -60,
+  `net_zone` VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN',
+  `sync_ssid` VARCHAR(32) NOT NULL DEFAULT '',
   `buffer_used` INT NOT NULL DEFAULT 0,
   `last_boot` INT NOT NULL DEFAULT 1,
   `last_seq` INT NOT NULL DEFAULT 0,
@@ -65,6 +67,9 @@ CREATE TABLE IF NOT EXISTS `telemetry_logs` (
   `rtc_temp_c` DECIMAL(5,2) NOT NULL DEFAULT 30.00,
   `shunt_sleep_ua` INT NOT NULL DEFAULT 0,
   `can_ok` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = TWAI CAN Loopback OK, 0 = CAN Fault',
+  `net_zone` VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN',
+  `zone_exit_epoch` INT UNSIGNED NOT NULL DEFAULT 0,
+  `sync_ssid` VARCHAR(32) NOT NULL DEFAULT '',
   `engine_on` TINYINT(1) NOT NULL DEFAULT 0,
   `crit_alert` TINYINT(1) NOT NULL DEFAULT 0,
   `rpm` INT NOT NULL DEFAULT -1,
@@ -127,6 +132,15 @@ CREATE TABLE IF NOT EXISTS `node_configs` (
 CREATE TABLE IF NOT EXISTS `movement_events` (
   `id` VARCHAR(32) NOT NULL,
   `unit_id` VARCHAR(64) NOT NULL,
+  `event_type` VARCHAR(24) NOT NULL DEFAULT 'EXIT_YARD',
+  `from_zone` VARCHAR(24) NOT NULL DEFAULT 'YARD',
+  `to_zone` VARCHAR(24) NOT NULL DEFAULT 'OFFLINE',
+  `event_epoch` INT UNSIGNED NOT NULL DEFAULT 0,
+  `boot_id` INT UNSIGNED NOT NULL DEFAULT 1,
+  `seq_no` INT UNSIGNED NOT NULL DEFAULT 0,
+  `v_bat` DECIMAL(5,2) NOT NULL DEFAULT 12.60,
+  `rpm` INT NOT NULL DEFAULT 0,
+  `speed_kmh` SMALLINT NOT NULL DEFAULT 0,
   `departed` DATETIME NOT NULL,
   `returned` DATETIME NULL,
   `away_min` INT NULL,
@@ -134,6 +148,7 @@ CREATE TABLE IF NOT EXISTS `movement_events` (
   `tag` ENUM('Test Drive', 'PDI Workshop', 'Detailing', 'Customer Delivery') NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_mv_unit_boot_seq_type` (`unit_id`, `boot_id`, `seq_no`, `event_type`),
   KEY `idx_unit_departed` (`unit_id`, `departed`),
   CONSTRAINT `fk_movement_vehicles`
     FOREIGN KEY (`unit_id`) REFERENCES `vehicles` (`unit_id`)
@@ -203,10 +218,10 @@ VALUES
   ('MITSUBISHI-STOCK-01', 41, 41, UNIX_TIMESTAMP(),         12.60, 2262, 31.2, 410, 0, 0, -1, -99, 0, 'NONE', -44, 300, 1613, 5.95, NOW());
 
 -- 4. Seed Movement Events (MITSUBISHI-STOCK-01 Only)
-INSERT IGNORE INTO `movement_events` (`id`, `unit_id`, `departed`, `returned`, `away_min`, `debounce_hits`, `tag`)
+INSERT IGNORE INTO `movement_events` (`id`, `unit_id`, `event_type`, `from_zone`, `to_zone`, `event_epoch`, `boot_id`, `seq_no`, `departed`, `returned`, `away_min`, `debounce_hits`, `tag`)
 VALUES
-  ('EV-0418', 'MITSUBISHI-STOCK-01', '2026-10-14 15:10:51', '2026-10-14 16:02:17', 51,   3, 'PDI Workshop'),
-  ('EV-0415', 'MITSUBISHI-STOCK-01', '2026-10-12 08:30:00', '2026-10-12 10:15:44', 105,  3, 'Customer Delivery');
+  ('EV-0418', 'MITSUBISHI-STOCK-01', 'EXIT_YARD', 'YARD', 'OFFLINE', UNIX_TIMESTAMP('2026-10-14 15:10:51'), 1, 418, '2026-10-14 15:10:51', '2026-10-14 16:02:17', 51,   3, 'PDI Workshop'),
+  ('EV-0415', 'MITSUBISHI-STOCK-01', 'EXIT_YARD', 'YARD', 'OFFLINE', UNIX_TIMESTAMP('2026-10-12 08:30:00'), 1, 415, '2026-10-12 08:30:00', '2026-10-12 10:15:44', 105,  3, 'Customer Delivery');
 
 -- 5. Seed System Audit Events (MITSUBISHI-STOCK-01 Only)
 INSERT IGNORE INTO `system_events` (`id`, `unit_id`, `event_type`, `severity`, `message`, `created_at`)

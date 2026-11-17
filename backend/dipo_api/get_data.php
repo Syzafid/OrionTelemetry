@@ -45,7 +45,7 @@ try {
     $vehicles = $stmtVehicles->fetchAll();
 
     if (empty($vehicles)) {
-        sendJson(['units' => [], 'configs' => (object)[], 'movement' => []]);
+        sendJson(['units' => [], 'configs' => (object)[], 'movement' => [], 'movement_events' => []]);
     }
 
     $totalVehicles = count($vehicles);
@@ -186,82 +186,91 @@ try {
         // Susun objek telemetry dengan casting tipe data eksplisit (Numbers, Booleans, Strings)
         // Sesuai eksak dengan whitelist NUM_KEYS, BOOL_KEYS, STR_KEYS di telemetry-sync.ts
         $hasVehLiveSeq = isset($v['last_seq']) && (int)$v['last_seq'] > 0;
+        $resolvedNetZone = (string)($v['net_zone'] ?? ($log['net_zone'] ?? 'UNKNOWN'));
+        $resolvedSyncSsid = (string)($v['sync_ssid'] ?? ($log['sync_ssid'] ?? ''));
+
         if ($log) {
             $telemetry = [
-                'unit_id'        => (string)$v['unit_id'],
-                'seq'            => $hasVehLiveSeq ? (int)$v['last_seq'] : (int)$log['seq'],
-                'boot'           => $hasVehLiveSeq && isset($v['last_boot']) ? (int)$v['last_boot'] : (int)$log['boot'],
-                'ts_epoch'       => $hasVehLiveSeq && isset($v['last_ts_epoch']) ? (int)$v['last_ts_epoch'] : (int)$log['ts_epoch'],
-                'v_bat'          => $hasVehLiveSeq && isset($v['v_bat']) ? (float)$v['v_bat'] : (float)$log['v_bat'],
-                'engine_on'      => (bool)$log['engine_on'],
-                'crit_alert'     => (bool)$log['crit_alert'],
-                'can_ok'         => $hasVehLiveSeq && isset($v['can_ok']) ? (bool)$v['can_ok'] : (isset($log['can_ok']) ? (bool)$log['can_ok'] : true),
-                'rpm'            => (int)$log['rpm'],
-                'temp_c'         => (int)$log['temp_c'],
-                'dtc_cnt'        => (int)$log['dtc_cnt'],
-                'dtc'            => (string)$log['dtc'],
-                'rssi'           => $inYard ? ($hasVehLiveSeq && isset($v['rssi']) ? (int)$v['rssi'] : (int)$log['rssi']) : -127,
-                'sleep_cfg'      => (int)$log['sleep_cfg'],
-                'active_ms'      => (int)$log['active_ms'],
-                'daily_mah'      => (float)$log['daily_mah'],
-                'rtc_temp_c'     => $hasVehLiveSeq && isset($v['rtc_temp_c']) ? (float)$v['rtc_temp_c'] : (float)$log['rtc_temp_c'],
-                'adc_raw_mv'     => $hasVehLiveSeq && isset($v['adc_raw_mv']) ? (int)$v['adc_raw_mv'] : (int)$log['adc_raw_mv'],
-                'shunt_sleep_ua' => (int)$log['shunt_sleep_ua'],
+                'unit_id'         => (string)$v['unit_id'],
+                'seq'             => $hasVehLiveSeq ? (int)$v['last_seq'] : (int)$log['seq'],
+                'boot'            => $hasVehLiveSeq && isset($v['last_boot']) ? (int)$v['last_boot'] : (int)$log['boot'],
+                'ts_epoch'        => $hasVehLiveSeq && isset($v['last_ts_epoch']) ? (int)$v['last_ts_epoch'] : (int)$log['ts_epoch'],
+                'v_bat'           => $hasVehLiveSeq && isset($v['v_bat']) ? (float)$v['v_bat'] : (float)$log['v_bat'],
+                'engine_on'       => (bool)$log['engine_on'],
+                'crit_alert'      => (bool)$log['crit_alert'],
+                'can_ok'          => $hasVehLiveSeq && isset($v['can_ok']) ? (bool)$v['can_ok'] : (isset($log['can_ok']) ? (bool)$log['can_ok'] : true),
+                'net_zone'        => (string)($log['net_zone'] ?? $resolvedNetZone),
+                'zone_exit_epoch' => (int)($log['zone_exit_epoch'] ?? 0),
+                'sync_ssid'       => (string)($log['sync_ssid'] ?? $resolvedSyncSsid),
+                'rpm'             => (int)$log['rpm'],
+                'temp_c'          => (int)$log['temp_c'],
+                'dtc_cnt'         => (int)$log['dtc_cnt'],
+                'dtc'             => (string)$log['dtc'],
+                'rssi'            => $inYard ? ($hasVehLiveSeq && isset($v['rssi']) ? (int)$v['rssi'] : (int)$log['rssi']) : -127,
+                'sleep_cfg'       => (int)$log['sleep_cfg'],
+                'active_ms'       => (int)$log['active_ms'],
+                'daily_mah'       => (float)$log['daily_mah'],
+                'rtc_temp_c'      => $hasVehLiveSeq && isset($v['rtc_temp_c']) ? (float)$v['rtc_temp_c'] : (float)$log['rtc_temp_c'],
+                'adc_raw_mv'      => $hasVehLiveSeq && isset($v['adc_raw_mv']) ? (int)$v['adc_raw_mv'] : (int)$log['adc_raw_mv'],
+                'shunt_sleep_ua'  => (int)$log['shunt_sleep_ua'],
                 // 15 Parameter OBD-II Read-Only (Mode 0x01 / Mode 0x03 / 0x07)
-                'speed_kmh'      => $hasVehLiveSeq && isset($v['speed_kmh']) ? (int)$v['speed_kmh'] : (int)($log['speed_kmh'] ?? 0),
-                'iat_c'          => $hasVehLiveSeq && isset($v['iat_c']) ? (int)$v['iat_c'] : (int)($log['iat_c'] ?? 0),
-                'map_kpa'        => $hasVehLiveSeq && isset($v['map_kpa']) ? (int)$v['map_kpa'] : (int)($log['map_kpa'] ?? 0),
-                'load_pct'       => $hasVehLiveSeq && isset($v['load_pct']) ? (float)$v['load_pct'] : (float)($log['load_pct'] ?? 0.0),
-                'tps_pct'        => $hasVehLiveSeq && isset($v['tps_pct']) ? (float)$v['tps_pct'] : (float)($log['tps_pct'] ?? 0.0),
-                'ign_deg'        => $hasVehLiveSeq && isset($v['ign_deg']) ? (float)$v['ign_deg'] : (float)($log['ign_deg'] ?? 0.0),
-                'maf_gs'         => $hasVehLiveSeq && isset($v['maf_gs']) ? (float)$v['maf_gs'] : (float)($log['maf_gs'] ?? 0.0),
-                'run_time_s'     => $hasVehLiveSeq && isset($v['run_time_s']) ? (int)$v['run_time_s'] : (int)($log['run_time_s'] ?? 0),
-                'fuel_pct'       => $hasVehLiveSeq && isset($v['fuel_pct']) ? (float)$v['fuel_pct'] : (float)($log['fuel_pct'] ?? 74.5),
-                'fuel_rate_lh'   => $hasVehLiveSeq && isset($v['fuel_rate_lh']) ? (float)$v['fuel_rate_lh'] : (float)($log['fuel_rate_lh'] ?? 0.0),
-                'o2_v'           => $hasVehLiveSeq && isset($v['o2_v']) ? (float)$v['o2_v'] : (float)($log['o2_v'] ?? 0.0),
-                'stft_pct'       => $hasVehLiveSeq && isset($v['stft_pct']) ? (float)$v['stft_pct'] : (float)($log['stft_pct'] ?? 0.0),
-                'mil_on'         => $hasVehLiveSeq && isset($v['mil_on']) ? (bool)$v['mil_on'] : !empty($log['mil_on']),
-                'ecu_v'          => $hasVehLiveSeq && isset($v['ecu_v']) ? (float)$v['ecu_v'] : (float)($log['ecu_v'] ?? 0.0),
-                'dist_clr_km'    => $hasVehLiveSeq && isset($v['dist_clr_km']) ? (int)$v['dist_clr_km'] : (int)($log['dist_clr_km'] ?? 1420),
+                'speed_kmh'       => $hasVehLiveSeq && isset($v['speed_kmh']) ? (int)$v['speed_kmh'] : (int)($log['speed_kmh'] ?? 0),
+                'iat_c'           => $hasVehLiveSeq && isset($v['iat_c']) ? (int)$v['iat_c'] : (int)($log['iat_c'] ?? 0),
+                'map_kpa'         => $hasVehLiveSeq && isset($v['map_kpa']) ? (int)$v['map_kpa'] : (int)($log['map_kpa'] ?? 0),
+                'load_pct'        => $hasVehLiveSeq && isset($v['load_pct']) ? (float)$v['load_pct'] : (float)($log['load_pct'] ?? 0.0),
+                'tps_pct'         => $hasVehLiveSeq && isset($v['tps_pct']) ? (float)$v['tps_pct'] : (float)($log['tps_pct'] ?? 0.0),
+                'ign_deg'         => $hasVehLiveSeq && isset($v['ign_deg']) ? (float)$v['ign_deg'] : (float)($log['ign_deg'] ?? 0.0),
+                'maf_gs'          => $hasVehLiveSeq && isset($v['maf_gs']) ? (float)$v['maf_gs'] : (float)($log['maf_gs'] ?? 0.0),
+                'run_time_s'      => $hasVehLiveSeq && isset($v['run_time_s']) ? (int)$v['run_time_s'] : (int)($log['run_time_s'] ?? 0),
+                'fuel_pct'        => $hasVehLiveSeq && isset($v['fuel_pct']) ? (float)$v['fuel_pct'] : (float)($log['fuel_pct'] ?? 74.5),
+                'fuel_rate_lh'    => $hasVehLiveSeq && isset($v['fuel_rate_lh']) ? (float)$v['fuel_rate_lh'] : (float)($log['fuel_rate_lh'] ?? 0.0),
+                'o2_v'            => $hasVehLiveSeq && isset($v['o2_v']) ? (float)$v['o2_v'] : (float)($log['o2_v'] ?? 0.0),
+                'stft_pct'        => $hasVehLiveSeq && isset($v['stft_pct']) ? (float)$v['stft_pct'] : (float)($log['stft_pct'] ?? 0.0),
+                'mil_on'          => $hasVehLiveSeq && isset($v['mil_on']) ? (bool)$v['mil_on'] : !empty($log['mil_on']),
+                'ecu_v'           => $hasVehLiveSeq && isset($v['ecu_v']) ? (float)$v['ecu_v'] : (float)($log['ecu_v'] ?? 0.0),
+                'dist_clr_km'     => $hasVehLiveSeq && isset($v['dist_clr_km']) ? (int)$v['dist_clr_km'] : (int)($log['dist_clr_km'] ?? 1420),
             ];
         } else {
             // Fallback nominal jika belum ada log masuk
             $telemetry = [
-                'unit_id'        => (string)$v['unit_id'],
-                'seq'            => (int)($v['last_seq'] ?? 1),
-                'boot'           => (int)($v['last_boot'] ?? 1),
-                'ts_epoch'       => (int)($v['last_ts_epoch'] ?? 0),
-                'v_bat'          => 12.60,
-                'engine_on'      => false,
-                'crit_alert'     => false,
-                'can_ok'         => true,
-                'rpm'            => 0,
-                'temp_c'         => 0,
-                'dtc_cnt'        => 0,
-                'dtc'            => 'NONE',
-                'rssi'           => -50,
-                'sleep_cfg'      => 300,
-                'active_ms'      => 1500,
-                'daily_mah'      => 5.0,
-                'rtc_temp_c'     => 30.0,
-                'adc_raw_mv'     => 2260,
-                'shunt_sleep_ua' => 410,
+                'unit_id'         => (string)$v['unit_id'],
+                'seq'             => (int)($v['last_seq'] ?? 1),
+                'boot'            => (int)($v['last_boot'] ?? 1),
+                'ts_epoch'        => (int)($v['last_ts_epoch'] ?? 0),
+                'v_bat'           => 12.60,
+                'engine_on'       => false,
+                'crit_alert'      => false,
+                'can_ok'          => true,
+                'net_zone'        => $resolvedNetZone,
+                'zone_exit_epoch' => 0,
+                'sync_ssid'       => $resolvedSyncSsid,
+                'rpm'             => 0,
+                'temp_c'          => 0,
+                'dtc_cnt'         => 0,
+                'dtc'             => 'NONE',
+                'rssi'            => -50,
+                'sleep_cfg'       => 300,
+                'active_ms'       => 1500,
+                'daily_mah'       => 5.0,
+                'rtc_temp_c'      => 30.0,
+                'adc_raw_mv'      => 2260,
+                'shunt_sleep_ua'  => 410,
                 // 15 Parameter OBD-II Read-Only Fallback
-                'speed_kmh'      => 0,
-                'iat_c'          => 0,
-                'map_kpa'        => 0,
-                'load_pct'       => 0.0,
-                'tps_pct'        => 0.0,
-                'ign_deg'        => 0.0,
-                'maf_gs'         => 0.0,
-                'run_time_s'     => 0,
-                'fuel_pct'       => 74.5,
-                'fuel_rate_lh'   => 0.0,
-                'o2_v'           => 0.0,
-                'stft_pct'       => 0.0,
-                'mil_on'         => false,
-                'ecu_v'          => 0.0,
-                'dist_clr_km'    => 1420,
+                'speed_kmh'       => 0,
+                'iat_c'           => 0,
+                'map_kpa'         => 0,
+                'load_pct'        => 0.0,
+                'tps_pct'         => 0.0,
+                'ign_deg'         => 0.0,
+                'maf_gs'          => 0.0,
+                'run_time_s'      => 0,
+                'fuel_pct'        => 74.5,
+                'fuel_rate_lh'    => 0.0,
+                'o2_v'            => 0.0,
+                'stft_pct'        => 0.0,
+                'mil_on'          => false,
+                'ecu_v'           => 0.0,
+                'dist_clr_km'     => 1420,
             ];
         }
 
@@ -279,6 +288,8 @@ try {
             'status_label'     => (string)$statusLabel,
             'state'            => (string)$state,
             'in_yard'          => (bool)$inYard,
+            'net_zone'         => $resolvedNetZone,
+            'sync_ssid'        => $resolvedSyncSsid,
             'online_status'    => $onlineStatus,
             'last_seen_sec'    => (int)$item['lastSeenSec'],
             'last_seen'        => $v['last_seen'] ? (string)$v['last_seen'] : null,
@@ -304,18 +315,32 @@ try {
         ];
     }
 
-    // 6. Query movement_events untuk sinkronisasi dua arah Modul 04
-    $stmtMovements = $pdo->query("SELECT * FROM `movement_events` ORDER BY `departed` DESC LIMIT 50");
+    // 6. Query movement_events untuk sinkronisasi dua arah Modul 04 (termasuk transisi 4-zona)
+    try {
+        $stmtMovements = $pdo->query("SELECT * FROM `movement_events` ORDER BY `event_epoch` DESC, `departed` DESC, `id` DESC LIMIT 50");
+    } catch (Exception $e) {
+        $stmtMovements = $pdo->query("SELECT * FROM `movement_events` ORDER BY `departed` DESC LIMIT 50");
+    }
     $movementsList = [];
     foreach ($stmtMovements->fetchAll() as $m) {
         $movementsList[] = [
             'id'            => (string)$m['id'],
             'unit_id'       => (string)$m['unit_id'],
+            'event_type'    => (string)($m['event_type'] ?? 'EXIT_YARD'),
+            'from_zone'     => (string)($m['from_zone'] ?? 'YARD'),
+            'to_zone'       => (string)($m['to_zone'] ?? 'OFFLINE'),
+            'event_epoch'   => isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0,
+            'boot_id'       => isset($m['boot_id']) ? (int)$m['boot_id'] : 1,
+            'seq_no'        => isset($m['seq_no']) ? (int)$m['seq_no'] : 0,
+            'v_bat'         => isset($m['v_bat']) ? (float)$m['v_bat'] : 12.60,
+            'rpm'           => isset($m['rpm']) ? (int)$m['rpm'] : 0,
+            'speed_kmh'     => isset($m['speed_kmh']) ? (int)$m['speed_kmh'] : 0,
             'departed'      => (string)$m['departed'],
             'returned'      => $m['returned'] ? (string)$m['returned'] : null,
             'away_min'      => $m['away_min'] !== null ? (int)$m['away_min'] : null,
             'debounce_hits' => (int)$m['debounce_hits'],
             'tag'           => $m['tag'] ? (string)$m['tag'] : null,
+            'created_at'    => isset($m['created_at']) ? (string)$m['created_at'] : null,
         ];
     }
 
@@ -359,15 +384,16 @@ try {
     }
 
     $finalPayload = [
-        'status' => 'OK',
-        'timestamp' => date('c'),
+        'status'                => 'OK',
+        'timestamp'             => date('c'),
         'mass_disconnect_guard' => $isMassDisconnect,
-        'units' => $formattedUnits,
-        'configs' => $configsMap,
-        'movement' => $movementsList,
-        'history' => $historyMap,
-        'audit_logs' => $auditLogsList,
-        'tickets' => $ticketsList,
+        'units'                 => $formattedUnits,
+        'configs'               => $configsMap,
+        'movement'              => $movementsList,
+        'movement_events'       => $movementsList,
+        'history'               => $historyMap,
+        'audit_logs'            => $auditLogsList,
+        'tickets'               => $ticketsList,
     ];
 
     @file_put_contents($cacheFile, json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

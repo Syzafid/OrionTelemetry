@@ -21,6 +21,9 @@ try {
     // 2. Ensure Read-Only OBD-II columns exist on telemetry_logs & vehicles
     $obdMigration = ensureObd2ReadOnlyColumns($pdo, true);
 
+    // 2b. Ensure ORION v1.6.0 net_zone, sync_ssid, zone_exit_epoch, and movement_events schema
+    $netZoneMigration = ensureNetZoneAndMovementSchema($pdo, true);
+
     // 3. Purge all legacy dummy seed records (STOCK-02 .. STOCK-12)
     // Runs automatically upon hitting migrate.php, with explicit tracking if ?purge_dummy=1 is provided
     if (!empty($_SERVER['QUERY_STRING']) && empty($_GET)) {
@@ -43,7 +46,7 @@ try {
     // Active units in vehicles table for immediate confirmation
     $activeUnits = [];
     try {
-        $stmtUnits = $pdo->query("SELECT `unit_id`, `model`, `trim`, `vin`, `v_bat`, `online_status` FROM `vehicles` ORDER BY `unit_id` ASC");
+        $stmtUnits = $pdo->query("SELECT `unit_id`, `model`, `trim`, `vin`, `v_bat`, `online_status`, `net_zone`, `sync_ssid` FROM `vehicles` ORDER BY `unit_id` ASC");
         $activeUnits = $stmtUnits->fetchAll();
     } catch (Exception $ignored) {
         $activeUnits = [];
@@ -56,10 +59,11 @@ try {
         'php_tz'               => date_default_timezone_get(),
         'migrated'             => $initResult['migrated'] ?? false,
         'obd2_readonly_policy' => 'STRICT_MODE_01_03_07_ONLY_NO_MODE_04',
-        'vehicle_units_view'   => $obdMigration['view_ready'],
+        'vehicle_units_view'   => ($obdMigration['view_ready'] && $netZoneMigration['view_ready']),
         'obd2_columns_added'   => $obdMigration['added'],
         'obd2_columns_count'   => count($obdMigration['verified']),
         'obd2_columns_verified'=> $obdMigration['verified'],
+        'net_zone_schema'      => $netZoneMigration,
         'purge_dummy'          => [
             'executed'         => true,
             'mode'             => $purgeParamProvided ? 'explicit_param_purge_dummy' : 'auto_migration_purge',

@@ -108,6 +108,7 @@ function ensureTelemetrySchema(PDO $pdo, bool $force = false): void {
             $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.3580");
         }
         ensureObd2ReadOnlyColumns($pdo, $force);
+        ensureNetZoneAndMovementSchema($pdo, $force);
         markOrionSchemaReady();
     } catch (Exception $ignored) {
         // Jangan gagalkan request jika user DB tidak punya hak DDL
@@ -119,8 +120,9 @@ if (isset($_GET['migrate']) && $_GET['migrate'] === '1') {
     ensureTelemetrySchema($pdo, true);
 }
 
-// 3. Baca Headers ESP32 v1.4.1 & Body Payload JSON
+// 3. Baca Headers ESP32 v1.4.1 / v1.6.0 & Body Payload JSON
 $isBurstHeader = isset($_SERVER['HTTP_X_BURST_SYNC']) && strtolower(trim((string)$_SERVER['HTTP_X_BURST_SYNC'])) === 'true';
+$headerSyncSsid = sanitizeSyncSsid((string)($_SERVER['HTTP_X_SYNC_SSID'] ?? ''));
 
 $payload = readJsonBody();
 
@@ -159,49 +161,67 @@ foreach ($records as $r) {
         ], 403);
     }
     $seq = isset($r['seq']) ? (int)$r['seq'] : (isset($r['boot']) ? (int)$r['boot'] : 1);
+    $recSyncSsid = (isset($r['sync_ssid']) && is_string($r['sync_ssid']) && trim($r['sync_ssid']) !== '')
+        ? sanitizeSyncSsid($r['sync_ssid'])
+        : $headerSyncSsid;
+
     $normalized[] = [
-        'unit_id'        => $unitId,
-        'seq'            => $seq,
-        'boot'           => (int)($r['boot'] ?? 1),
-        'ts_epoch'       => (int)($r['ts_epoch'] ?? time()),
-        'v_bat'          => round((float)($r['v_bat'] ?? 12.0), 2),
-        'adc_raw_mv'     => (int)($r['adc_raw_mv'] ?? 2150),
-        'rtc_temp_c'     => round((float)($r['rtc_temp_c'] ?? 30.0), 2),
-        'shunt_sleep_ua' => (int)($r['shunt_sleep_ua'] ?? 0),
-        'can_ok'         => (!isset($r['can_ok']) || !empty($r['can_ok'])) ? 1 : 0,
-        'engine_on'      => !empty($r['engine_on']) ? 1 : 0,
-        'crit_alert'     => !empty($r['crit_alert']) ? 1 : 0,
-        'rpm'            => (int)($r['rpm'] ?? 0),
-        'temp_c'         => (int)($r['temp_c'] ?? 0),
-        'dtc_cnt'        => (int)($r['dtc_cnt'] ?? 0),
-        'dtc'            => (string)($r['dtc'] ?? 'NONE'),
-        'rssi'           => (int)($r['rssi'] ?? -60),
-        'sleep_cfg'      => parseSleepCfgSeconds($r['sleep_cfg'] ?? 300),
-        'buffer_used'    => isset($r['buffer_used']) ? (int)$r['buffer_used'] : (isset($payload['buffer_used']) ? (int)$payload['buffer_used'] : 0),
-        'active_ms'      => (int)($r['active_ms'] ?? 1500),
-        'daily_mah'      => round((float)($r['daily_mah'] ?? 0.0), 2),
+        'unit_id'         => $unitId,
+        'seq'             => $seq,
+        'boot'            => (int)($r['boot'] ?? 1),
+        'ts_epoch'        => (int)($r['ts_epoch'] ?? time()),
+        'v_bat'           => round((float)($r['v_bat'] ?? 12.0), 2),
+        'adc_raw_mv'      => (int)($r['adc_raw_mv'] ?? 2150),
+        'rtc_temp_c'      => round((float)($r['rtc_temp_c'] ?? 30.0), 2),
+        'shunt_sleep_ua'  => (int)($r['shunt_sleep_ua'] ?? 0),
+        'can_ok'          => (!isset($r['can_ok']) || !empty($r['can_ok'])) ? 1 : 0,
+        'net_zone'        => normalizeOrionNetZone($r['net_zone'] ?? 'UNKNOWN'),
+        'zone_exit_epoch' => isset($r['zone_exit_epoch']) ? max(0, (int)$r['zone_exit_epoch']) : 0,
+        'sync_ssid'       => $recSyncSsid,
+        'engine_on'       => !empty($r['engine_on']) ? 1 : 0,
+        'crit_alert'      => !empty($r['crit_alert']) ? 1 : 0,
+        'rpm'             => (int)($r['rpm'] ?? 0),
+        'temp_c'          => (int)($r['temp_c'] ?? 0),
+        'dtc_cnt'         => (int)($r['dtc_cnt'] ?? 0),
+        'dtc'             => (string)($r['dtc'] ?? 'NONE'),
+        'rssi'            => (int)($r['rssi'] ?? -60),
+        'sleep_cfg'       => parseSleepCfgSeconds($r['sleep_cfg'] ?? 300),
+        'buffer_used'     => isset($r['buffer_used']) ? (int)$r['buffer_used'] : (isset($payload['buffer_used']) ? (int)$payload['buffer_used'] : 0),
+        'active_ms'       => (int)($r['active_ms'] ?? 1500),
+        'daily_mah'       => round((float)($r['daily_mah'] ?? 0.0), 2),
         // 15 Parameter OBD-II Read-Only (Mode 0x01 / Mode 0x03 / 0x07)
-        'speed_kmh'      => max(0, min(255, (int)($r['speed_kmh'] ?? 0))),
-        'iat_c'          => max(-40, min(215, (int)($r['iat_c'] ?? 0))),
-        'map_kpa'        => max(0, min(255, (int)($r['map_kpa'] ?? 0))),
-        'load_pct'       => round((float)($r['load_pct'] ?? 0.0), 1),
-        'tps_pct'        => round((float)($r['tps_pct'] ?? 0.0), 1),
-        'ign_deg'        => round((float)($r['ign_deg'] ?? 0.0), 1),
-        'maf_gs'         => round((float)($r['maf_gs'] ?? 0.0), 2),
-        'run_time_s'     => max(0, (int)($r['run_time_s'] ?? 0)),
-        'fuel_pct'       => round((float)($r['fuel_pct'] ?? 0.0), 1),
-        'fuel_rate_lh'   => round((float)($r['fuel_rate_lh'] ?? 0.0), 2),
-        'o2_v'           => round((float)($r['o2_v'] ?? 0.0), 2),
-        'stft_pct'       => round((float)($r['stft_pct'] ?? 0.0), 1),
-        'mil_on'         => !empty($r['mil_on']) ? 1 : 0,
-        'ecu_v'          => round((float)($r['ecu_v'] ?? 0.0), 2),
-        'dist_clr_km'    => max(0, (int)($r['dist_clr_km'] ?? 0)),
+        'speed_kmh'       => max(0, min(255, (int)($r['speed_kmh'] ?? 0))),
+        'iat_c'           => max(-40, min(215, (int)($r['iat_c'] ?? 0))),
+        'map_kpa'         => max(0, min(255, (int)($r['map_kpa'] ?? 0))),
+        'load_pct'        => round((float)($r['load_pct'] ?? 0.0), 1),
+        'tps_pct'         => round((float)($r['tps_pct'] ?? 0.0), 1),
+        'ign_deg'         => round((float)($r['ign_deg'] ?? 0.0), 1),
+        'maf_gs'          => round((float)($r['maf_gs'] ?? 0.0), 2),
+        'run_time_s'      => max(0, (int)($r['run_time_s'] ?? 0)),
+        'fuel_pct'        => round((float)($r['fuel_pct'] ?? 0.0), 1),
+        'fuel_rate_lh'    => round((float)($r['fuel_rate_lh'] ?? 0.0), 2),
+        'o2_v'            => round((float)($r['o2_v'] ?? 0.0), 2),
+        'stft_pct'        => round((float)($r['stft_pct'] ?? 0.0), 1),
+        'mil_on'          => !empty($r['mil_on']) ? 1 : 0,
+        'ecu_v'           => round((float)($r['ecu_v'] ?? 0.0), 2),
+        'dist_clr_km'     => max(0, (int)($r['dist_clr_km'] ?? 0)),
     ];
 }
 
 if (empty($normalized)) {
     sendJson(['error' => 'NO_RECORDS', 'message' => 'No valid records with unit_id found in payload.'], 400);
 }
+
+// WAJIB urutkan array rekaman di memori PHP secara kronologis perangkat (boot ASC, seq ASC, ts_epoch ASC)
+usort($normalized, static function (array $a, array $b): int {
+    if ($a['boot'] !== $b['boot']) {
+        return $a['boot'] <=> $b['boot'];
+    }
+    if ($a['seq'] !== $b['seq']) {
+        return $a['seq'] <=> $b['seq'];
+    }
+    return $a['ts_epoch'] <=> $b['ts_epoch'];
+});
 
 $isBurstSync = $isBurstHeader || count($normalized) > 1;
 
@@ -210,140 +230,261 @@ $isBurstSync = $isBurstHeader || count($normalized) > 1;
 $sqlInsertLog = "
     INSERT INTO `telemetry_logs` (
         `unit_id`, `seq`, `boot`, `ts_epoch`, `v_bat`, `adc_raw_mv`, `rtc_temp_c`,
-        `shunt_sleep_ua`, `can_ok`, `engine_on`, `crit_alert`, `rpm`, `temp_c`, `dtc_cnt`,
+        `shunt_sleep_ua`, `can_ok`, `net_zone`, `zone_exit_epoch`, `sync_ssid`,
+        `engine_on`, `crit_alert`, `rpm`, `temp_c`, `dtc_cnt`,
         `dtc`, `rssi`, `sleep_cfg`, `buffer_used`, `active_ms`, `daily_mah`,
         `speed_kmh`, `iat_c`, `map_kpa`, `load_pct`, `tps_pct`, `ign_deg`, `maf_gs`, `run_time_s`,
         `fuel_pct`, `fuel_rate_lh`, `o2_v`, `stft_pct`, `mil_on`, `ecu_v`, `dist_clr_km`,
         `created_at`
     ) VALUES (
         :unit_id, :seq, :boot, :ts_epoch, :v_bat, :adc_raw_mv, :rtc_temp_c,
-        :shunt_sleep_ua, :can_ok, :engine_on, :crit_alert, :rpm, :temp_c, :dtc_cnt,
+        :shunt_sleep_ua, :can_ok, :net_zone, :zone_exit_epoch, :sync_ssid,
+        :engine_on, :crit_alert, :rpm, :temp_c, :dtc_cnt,
         :dtc, :rssi, :sleep_cfg, :buffer_used, :active_ms, :daily_mah,
         :speed_kmh, :iat_c, :map_kpa, :load_pct, :tps_pct, :ign_deg, :maf_gs, :run_time_s,
         :fuel_pct, :fuel_rate_lh, :o2_v, :stft_pct, :mil_on, :ecu_v, :dist_clr_km,
         NOW()
     )
     ON DUPLICATE KEY UPDATE
-        `ts_epoch`       = VALUES(`ts_epoch`),
-        `v_bat`          = VALUES(`v_bat`),
-        `adc_raw_mv`     = VALUES(`adc_raw_mv`),
-        `rtc_temp_c`     = VALUES(`rtc_temp_c`),
-        `shunt_sleep_ua` = VALUES(`shunt_sleep_ua`),
-        `can_ok`         = VALUES(`can_ok`),
-        `engine_on`      = VALUES(`engine_on`),
-        `crit_alert`     = VALUES(`crit_alert`),
-        `rpm`            = VALUES(`rpm`),
-        `temp_c`         = VALUES(`temp_c`),
-        `dtc_cnt`        = VALUES(`dtc_cnt`),
-        `dtc`            = VALUES(`dtc`),
-        `rssi`           = VALUES(`rssi`),
-        `sleep_cfg`      = VALUES(`sleep_cfg`),
-        `buffer_used`    = VALUES(`buffer_used`),
-        `active_ms`      = VALUES(`active_ms`),
-        `daily_mah`      = VALUES(`daily_mah`),
-        `speed_kmh`      = VALUES(`speed_kmh`),
-        `iat_c`          = VALUES(`iat_c`),
-        `map_kpa`        = VALUES(`map_kpa`),
-        `load_pct`       = VALUES(`load_pct`),
-        `tps_pct`        = VALUES(`tps_pct`),
-        `ign_deg`        = VALUES(`ign_deg`),
-        `maf_gs`         = VALUES(`maf_gs`),
-        `run_time_s`     = VALUES(`run_time_s`),
-        `fuel_pct`       = VALUES(`fuel_pct`),
-        `fuel_rate_lh`   = VALUES(`fuel_rate_lh`),
-        `o2_v`           = VALUES(`o2_v`),
-        `stft_pct`       = VALUES(`stft_pct`),
-        `mil_on`         = VALUES(`mil_on`),
-        `ecu_v`          = VALUES(`ecu_v`),
-        `dist_clr_km`    = VALUES(`dist_clr_km`),
-        `created_at`     = NOW()
+        `ts_epoch`        = VALUES(`ts_epoch`),
+        `v_bat`           = VALUES(`v_bat`),
+        `adc_raw_mv`      = VALUES(`adc_raw_mv`),
+        `rtc_temp_c`      = VALUES(`rtc_temp_c`),
+        `shunt_sleep_ua`  = VALUES(`shunt_sleep_ua`),
+        `can_ok`          = VALUES(`can_ok`),
+        `net_zone`        = VALUES(`net_zone`),
+        `zone_exit_epoch` = VALUES(`zone_exit_epoch`),
+        `sync_ssid`       = VALUES(`sync_ssid`),
+        `engine_on`       = VALUES(`engine_on`),
+        `crit_alert`      = VALUES(`crit_alert`),
+        `rpm`             = VALUES(`rpm`),
+        `temp_c`          = VALUES(`temp_c`),
+        `dtc_cnt`         = VALUES(`dtc_cnt`),
+        `dtc`             = VALUES(`dtc`),
+        `rssi`            = VALUES(`rssi`),
+        `sleep_cfg`       = VALUES(`sleep_cfg`),
+        `buffer_used`     = VALUES(`buffer_used`),
+        `active_ms`       = VALUES(`active_ms`),
+        `daily_mah`       = VALUES(`daily_mah`),
+        `speed_kmh`       = VALUES(`speed_kmh`),
+        `iat_c`           = VALUES(`iat_c`),
+        `map_kpa`         = VALUES(`map_kpa`),
+        `load_pct`        = VALUES(`load_pct`),
+        `tps_pct`         = VALUES(`tps_pct`),
+        `ign_deg`         = VALUES(`ign_deg`),
+        `maf_gs`          = VALUES(`maf_gs`),
+        `run_time_s`      = VALUES(`run_time_s`),
+        `fuel_pct`        = VALUES(`fuel_pct`),
+        `fuel_rate_lh`    = VALUES(`fuel_rate_lh`),
+        `o2_v`            = VALUES(`o2_v`),
+        `stft_pct`        = VALUES(`stft_pct`),
+        `mil_on`          = VALUES(`mil_on`),
+        `ecu_v`           = VALUES(`ecu_v`),
+        `dist_clr_km`     = VALUES(`dist_clr_km`),
+        `created_at`      = NOW()
+";
+
+$sqlUpsertMovement = "
+    INSERT INTO `movement_events` (
+        `id`, `unit_id`, `event_type`, `from_zone`, `to_zone`, `event_epoch`,
+        `boot_id`, `seq_no`, `v_bat`, `rpm`, `speed_kmh`,
+        `departed`, `returned`, `away_min`, `debounce_hits`, `tag`, `created_at`
+    ) VALUES (
+        :id, :unit_id, :event_type, :from_zone, :to_zone, :event_epoch,
+        :boot_id, :seq_no, :v_bat, :rpm, :speed_kmh,
+        :departed, :returned, :away_min, :debounce_hits, :tag, NOW()
+    )
+    ON DUPLICATE KEY UPDATE
+        `event_epoch` = VALUES(`event_epoch`),
+        `from_zone`   = VALUES(`from_zone`),
+        `to_zone`     = VALUES(`to_zone`),
+        `v_bat`       = VALUES(`v_bat`),
+        `rpm`         = VALUES(`rpm`),
+        `speed_kmh`   = VALUES(`speed_kmh`)
 ";
 
 $stmtInsert = $pdo->prepare($sqlInsertLog);
+$stmtMove = $pdo->prepare($sqlUpsertMovement);
 
-$primaryUnitId = null;
+$primaryUnitId = $normalized[0]['unit_id'];
 $latestRecord = null;
-$highestTs = -1;
-$highestSeq = -1;
 $insertedCount = 0;
 $statusUpdated = false;
+$validZones = ['YARD', 'TECH_HOTSPOT', 'OFFLINE'];
 
 $pdo->beginTransaction();
 
 try {
+    // Kunci baris kendaraan sebelum evaluasi state machine agar transisi atomik & bebas race-condition
+    $stmtVeh = $pdo->prepare("
+        SELECT `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`, `net_zone`, `sync_ssid`
+        FROM `vehicles`
+        WHERE `unit_id` = :uid
+        FOR UPDATE
+    ");
+    $stmtVeh->execute([':uid' => $primaryUnitId]);
+    $vehRow = $stmtVeh->fetch();
+
+    $curBoot = $vehRow ? (int)$vehRow['last_boot'] : 0;
+    $curSeq  = $vehRow ? (int)$vehRow['last_seq'] : 0;
+    $curTs   = $vehRow ? (int)$vehRow['last_ts_epoch'] : 0;
+
+    // Tentukan $lastKnownZone awal sebelum iterasi rekaman kronologis
+    $firstRec = $normalized[0];
+    $stmtPriorZone = $pdo->prepare("
+        SELECT `net_zone`
+        FROM `telemetry_logs`
+        WHERE `unit_id` = :uid
+          AND `net_zone` IN ('YARD', 'TECH_HOTSPOT', 'OFFLINE')
+          AND (`boot` < :b1 OR (`boot` = :b2 AND `seq` < :s1))
+        ORDER BY `boot` DESC, `seq` DESC, `id` DESC
+        LIMIT 1
+    ");
+    $stmtPriorZone->execute([
+        ':uid' => $primaryUnitId,
+        ':b1'  => (int)$firstRec['boot'],
+        ':b2'  => (int)$firstRec['boot'],
+        ':s1'  => (int)$firstRec['seq'],
+    ]);
+    $priorZoneRow = $stmtPriorZone->fetch();
+
+    $vehStoredZone = ($vehRow && isset($vehRow['net_zone'])) ? (string)$vehRow['net_zone'] : 'UNKNOWN';
+    $firstIsNewerThanVeh = ((int)$firstRec['boot'] > $curBoot)
+        || ((int)$firstRec['boot'] === $curBoot && (int)$firstRec['seq'] > $curSeq);
+
+    if ($priorZoneRow && in_array((string)$priorZoneRow['net_zone'], $validZones, true)) {
+        $lastKnownZone = (string)$priorZoneRow['net_zone'];
+    } elseif ($firstIsNewerThanVeh && in_array($vehStoredZone, $validZones, true)) {
+        $lastKnownZone = $vehStoredZone;
+    } else {
+        $lastKnownZone = 'YARD';
+    }
+
+    $hasValidZoneInBatch = false;
+
     foreach ($normalized as $rec) {
         $primaryUnitId = $rec['unit_id'];
+        // Array $normalized sudah diurutkan kronologis (boot ASC, seq ASC, ts_epoch ASC)
+        $latestRecord = $rec;
 
-        // Pilih record terbaru di dalam batch berdasarkan (ts_epoch, seq) tertinggi
-        if (
-            $latestRecord === null ||
-            $rec['ts_epoch'] > $highestTs ||
-            ($rec['ts_epoch'] === $highestTs && $rec['seq'] >= $highestSeq) ||
-            $rec['seq'] > $highestSeq
-        ) {
-            if ($rec['ts_epoch'] > $highestTs) {
-                $highestTs = $rec['ts_epoch'];
-            }
-            if ($rec['seq'] > $highestSeq) {
-                $highestSeq = $rec['seq'];
-            }
-            $latestRecord = $rec;
-        }
-
+        // Simpan ke telemetry_logs tanpa pernah menghapus/mengubah rekaman YARD sebelumnya
         $stmtInsert->execute([
-            ':unit_id'        => $rec['unit_id'],
-            ':seq'            => $rec['seq'],
-            ':boot'           => $rec['boot'],
-            ':ts_epoch'       => $rec['ts_epoch'],
-            ':v_bat'          => $rec['v_bat'],
-            ':adc_raw_mv'     => $rec['adc_raw_mv'],
-            ':rtc_temp_c'     => $rec['rtc_temp_c'],
-            ':shunt_sleep_ua' => $rec['shunt_sleep_ua'],
-            ':can_ok'         => $rec['can_ok'],
-            ':engine_on'      => $rec['engine_on'],
-            ':crit_alert'     => $rec['crit_alert'],
-            ':rpm'            => $rec['rpm'],
-            ':temp_c'         => $rec['temp_c'],
-            ':dtc_cnt'        => $rec['dtc_cnt'],
-            ':dtc'            => $rec['dtc'],
-            ':rssi'           => $rec['rssi'],
-            ':sleep_cfg'      => $rec['sleep_cfg'],
-            ':buffer_used'    => $rec['buffer_used'],
-            ':active_ms'      => $rec['active_ms'],
-            ':daily_mah'      => $rec['daily_mah'],
-            ':speed_kmh'      => $rec['speed_kmh'],
-            ':iat_c'          => $rec['iat_c'],
-            ':map_kpa'        => $rec['map_kpa'],
-            ':load_pct'       => $rec['load_pct'],
-            ':tps_pct'        => $rec['tps_pct'],
-            ':ign_deg'        => $rec['ign_deg'],
-            ':maf_gs'         => $rec['maf_gs'],
-            ':run_time_s'     => $rec['run_time_s'],
-            ':fuel_pct'       => $rec['fuel_pct'],
-            ':fuel_rate_lh'   => $rec['fuel_rate_lh'],
-            ':o2_v'           => $rec['o2_v'],
-            ':stft_pct'       => $rec['stft_pct'],
-            ':mil_on'         => $rec['mil_on'],
-            ':ecu_v'          => $rec['ecu_v'],
-            ':dist_clr_km'    => $rec['dist_clr_km'],
+            ':unit_id'         => $rec['unit_id'],
+            ':seq'             => $rec['seq'],
+            ':boot'            => $rec['boot'],
+            ':ts_epoch'        => $rec['ts_epoch'],
+            ':v_bat'           => $rec['v_bat'],
+            ':adc_raw_mv'      => $rec['adc_raw_mv'],
+            ':rtc_temp_c'      => $rec['rtc_temp_c'],
+            ':shunt_sleep_ua'  => $rec['shunt_sleep_ua'],
+            ':can_ok'          => $rec['can_ok'],
+            ':net_zone'        => $rec['net_zone'],
+            ':zone_exit_epoch' => $rec['zone_exit_epoch'],
+            ':sync_ssid'       => $rec['sync_ssid'],
+            ':engine_on'       => $rec['engine_on'],
+            ':crit_alert'      => $rec['crit_alert'],
+            ':rpm'             => $rec['rpm'],
+            ':temp_c'          => $rec['temp_c'],
+            ':dtc_cnt'         => $rec['dtc_cnt'],
+            ':dtc'             => $rec['dtc'],
+            ':rssi'            => $rec['rssi'],
+            ':sleep_cfg'       => $rec['sleep_cfg'],
+            ':buffer_used'     => $rec['buffer_used'],
+            ':active_ms'       => $rec['active_ms'],
+            ':daily_mah'       => $rec['daily_mah'],
+            ':speed_kmh'       => $rec['speed_kmh'],
+            ':iat_c'           => $rec['iat_c'],
+            ':map_kpa'         => $rec['map_kpa'],
+            ':load_pct'        => $rec['load_pct'],
+            ':tps_pct'         => $rec['tps_pct'],
+            ':ign_deg'         => $rec['ign_deg'],
+            ':maf_gs'          => $rec['maf_gs'],
+            ':run_time_s'      => $rec['run_time_s'],
+            ':fuel_pct'        => $rec['fuel_pct'],
+            ':fuel_rate_lh'    => $rec['fuel_rate_lh'],
+            ':o2_v'            => $rec['o2_v'],
+            ':stft_pct'        => $rec['stft_pct'],
+            ':mil_on'          => $rec['mil_on'],
+            ':ecu_v'           => $rec['ecu_v'],
+            ':dist_clr_km'     => $rec['dist_clr_km'],
         ]);
+
+        // Evaluasi State Machine Transisi Lokasi 4-Zona
+        $z = $rec['net_zone'];
+        if ($z !== 'UNKNOWN') {
+            $hasValidZoneInBatch = true;
+
+            if ($lastKnownZone === 'YARD' && ($z === 'TECH_HOTSPOT' || $z === 'OFFLINE')) {
+                // EXIT_YARD: gunakan zone_exit_epoch jika valid & dalam jendela <= 620 detik
+                $exitEpoch = ($rec['zone_exit_epoch'] > 0
+                    && $rec['zone_exit_epoch'] <= $rec['ts_epoch']
+                    && ($rec['ts_epoch'] - $rec['zone_exit_epoch']) <= 620)
+                    ? (int)$rec['zone_exit_epoch']
+                    : (int)$rec['ts_epoch'];
+
+                $evId = sprintf('MV-%s-%d-%d-OUT', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
+                $stmtMove->execute([
+                    ':id'            => $evId,
+                    ':unit_id'       => $rec['unit_id'],
+                    ':event_type'    => 'EXIT_YARD',
+                    ':from_zone'     => 'YARD',
+                    ':to_zone'       => $z,
+                    ':event_epoch'   => $exitEpoch,
+                    ':boot_id'       => $rec['boot'],
+                    ':seq_no'        => $rec['seq'],
+                    ':v_bat'         => $rec['v_bat'],
+                    ':rpm'           => max(0, $rec['rpm']),
+                    ':speed_kmh'     => $rec['speed_kmh'],
+                    ':departed'      => date('Y-m-d H:i:s', max(1, $exitEpoch)),
+                    ':returned'      => null,
+                    ':away_min'      => null,
+                    ':debounce_hits' => 3,
+                    ':tag'           => 'Test Drive',
+                ]);
+                $lastKnownZone = $z;
+            } elseif (($lastKnownZone === 'TECH_HOTSPOT' || $lastKnownZone === 'OFFLINE') && ($z === 'TECH_HOTSPOT' || $z === 'OFFLINE')) {
+                // Transisi antar-luar (TECH_HOTSPOT <-> OFFLINE): update zona tanpa membuat EXIT_YARD baru
+                $lastKnownZone = $z;
+            } elseif (($lastKnownZone === 'TECH_HOTSPOT' || $lastKnownZone === 'OFFLINE') && $z === 'YARD') {
+                // ENTER_YARD: kembali masuk ke area gudang
+                $enterEpoch = (int)$rec['ts_epoch'];
+                $evId = sprintf('MV-%s-%d-%d-IN', substr(md5($rec['unit_id']), 0, 6), $rec['boot'], $rec['seq']);
+                $stmtMove->execute([
+                    ':id'            => $evId,
+                    ':unit_id'       => $rec['unit_id'],
+                    ':event_type'    => 'ENTER_YARD',
+                    ':from_zone'     => $lastKnownZone,
+                    ':to_zone'       => 'YARD',
+                    ':event_epoch'   => $enterEpoch,
+                    ':boot_id'       => $rec['boot'],
+                    ':seq_no'        => $rec['seq'],
+                    ':v_bat'         => $rec['v_bat'],
+                    ':rpm'           => max(0, $rec['rpm']),
+                    ':speed_kmh'     => $rec['speed_kmh'],
+                    ':departed'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
+                    ':returned'      => date('Y-m-d H:i:s', max(1, $enterEpoch)),
+                    ':away_min'      => null,
+                    ':debounce_hits' => 2,
+                    ':tag'           => 'Test Drive',
+                ]);
+                $lastKnownZone = 'YARD';
+            }
+        }
 
         $insertedCount++;
     }
 
     // 4. Perbarui tabel status live `vehicles` HANYA jika seq atau ts_epoch lebih baru
     if ($primaryUnitId && $latestRecord) {
-        $stmtVeh = $pdo->prepare("SELECT `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch` FROM `vehicles` WHERE `unit_id` = :uid FOR UPDATE");
-        $stmtVeh->execute([':uid' => $primaryUnitId]);
-        $vehRow = $stmtVeh->fetch();
-
-        $curBoot = $vehRow ? (int)$vehRow['last_boot'] : 0;
-        $curSeq  = $vehRow ? (int)$vehRow['last_seq'] : 0;
-        $curTs   = $vehRow ? (int)$vehRow['last_ts_epoch'] : 0;
-
         $incomingSeq  = (int)$latestRecord['seq'];
         $incomingTs   = (int)$latestRecord['ts_epoch'];
         $incomingBoot = (int)$latestRecord['boot'];
+
+        $finalVehNetZone = $hasValidZoneInBatch ? $lastKnownZone : $vehStoredZone;
+        $finalVehSyncSsid = ($latestRecord['sync_ssid'] !== '')
+            ? $latestRecord['sync_ssid']
+            : (string)($vehRow['sync_ssid'] ?? '');
+        $inYardVal = ($finalVehNetZone === 'TECH_HOTSPOT' || $finalVehNetZone === 'OFFLINE') ? 0 : 1;
 
         // Paket live tunggal selalu dianggap pembaruan real-time terbaru (meski ESP32 habis reset/cold boot
         // atau RTC lokal lebih kecil dari epoch seed). Paket burst hanya memperbarui jika lebih baru / boot berbeda.
@@ -395,13 +536,15 @@ try {
                 SET
                     `state`         = :state,
                     `status_label`  = :status_label,
-                    `in_yard`       = 1,
+                    `in_yard`       = :in_yard,
                     `online_status` = 'ONLINE',
                     `v_bat`         = :v_bat,
                     `adc_raw_mv`    = :adc_raw_mv,
                     `rtc_temp_c`    = :rtc_temp_c,
                     `can_ok`        = :can_ok,
                     `rssi`          = :rssi,
+                    `net_zone`      = :net_zone,
+                    `sync_ssid`     = :sync_ssid,
                     `buffer_used`   = :buffer_used,
                     `last_boot`     = :last_boot,
                     `last_seq`      = :last_seq,
@@ -428,11 +571,14 @@ try {
             $stmtUpdateVeh->execute([
                 ':state'         => $newState,
                 ':status_label'  => $newStatusLabel,
+                ':in_yard'       => $inYardVal,
                 ':v_bat'         => $latestRecord['v_bat'],
                 ':adc_raw_mv'    => $latestRecord['adc_raw_mv'],
                 ':rtc_temp_c'    => $latestRecord['rtc_temp_c'],
                 ':can_ok'        => $latestRecord['can_ok'],
                 ':rssi'          => $latestRecord['rssi'],
+                ':net_zone'      => $finalVehNetZone,
+                ':sync_ssid'     => $finalVehSyncSsid,
                 ':buffer_used'   => $bufferUsed,
                 ':last_boot'     => $incomingBoot,
                 ':last_seq'      => $incomingSeq,
@@ -456,6 +602,20 @@ try {
             ]);
 
             $statusUpdated = true;
+        } elseif ($hasValidZoneInBatch) {
+            $stmtUpdateZoneOnly = $pdo->prepare("
+                UPDATE `vehicles`
+                SET `net_zone` = :net_zone,
+                    `sync_ssid` = :sync_ssid,
+                    `in_yard`   = :in_yard
+                WHERE `unit_id` = :uid
+            ");
+            $stmtUpdateZoneOnly->execute([
+                ':net_zone'  => $finalVehNetZone,
+                ':sync_ssid' => $finalVehSyncSsid,
+                ':in_yard'   => $inYardVal,
+                ':uid'       => $primaryUnitId,
+            ]);
         }
 
         // Catat audit trail saat terjadi Burst Sync offline
