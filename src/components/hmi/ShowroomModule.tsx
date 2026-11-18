@@ -32,7 +32,8 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
   const activeUnitRef = useRef<HTMLButtonElement>(null);
   const t = selected.telemetry;
   const resolvedSsid = (t.sync_ssid || selected.sync_ssid || "").trim();
-  const tone = unitTone(selected, configs[selected.unit_id]?.crit_v ?? 11.80);
+  const selectedConfig = configs[selected.unit_id];
+  const tone = unitTone(selected, selectedConfig?.crit_v ?? 11.80);
   const conn = getUnitConnectionState(selected, dataSource === "LIVE_API");
 
   const filteredSidebarUnits = useMemo(
@@ -51,44 +52,81 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
     <div className="module-showroom grid h-full min-h-0 gap-4 [&>*]:min-w-0 lg:grid-cols-[290px_1fr]">
       {/* Main Telemetry & Electrical Topology Workbench */}
       <section className="showroom-stage panel relative order-1 flex min-h-[400px] flex-col overflow-hidden md:order-2 lg:min-h-0">
-        {/* Stage Heading */}
-        <div className="stage-heading relative z-10 flex shrink-0 items-start justify-between gap-3 border-b border-border/80 p-3.5 sm:p-4 md:p-5">
-          <div className="min-w-0 flex-1">
-            {/* Quick unit switcher pill row for mobile screens (Single source on mobile) */}
-            <div className="card-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
-              <span className="label-hmi mr-0.5 shrink-0 text-[10px]">UNIT:</span>
-              {units.map((u) => {
-                const on = u.unit_id === selected.unit_id;
-                const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.80);
-                return (
-                  <button
-                    key={u.unit_id}
-                    onClick={() => selectUnit(u.unit_id)}
-                    type="button"
-                    className={cn(
-                      "flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[10.5px] uppercase transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                      on
-                        ? "border-foreground/70 bg-foreground/[0.06] font-semibold text-foreground"
-                        : "border-border text-muted-foreground hover:bg-card/60 hover:text-foreground",
-                    )}
-                  >
-                    <Led tone={tn} pulse={tn === "crimson"} />
-                    <span>{u.bay}</span>
-                    <span className="text-muted-foreground">({fmtV(u.telemetry.v_bat)}V)</span>
-                  </button>
-                );
-              })}
+        {/* Stage Heading (Compact 2-Row HMI Header) */}
+        <div className="stage-heading relative z-10 flex shrink-0 flex-col border-b border-border/80 px-3.5 py-2.5 sm:px-4">
+          {/* Quick unit switcher pill row for mobile screens */}
+          <div className="card-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
+            <span className="label-hmi mr-0.5 shrink-0 text-[10px]">UNIT:</span>
+            {units.map((u) => {
+              const on = u.unit_id === selected.unit_id;
+              const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.80);
+              return (
+                <button
+                  key={u.unit_id}
+                  onClick={() => selectUnit(u.unit_id)}
+                  type="button"
+                  className={cn(
+                    "flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[10.5px] uppercase transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    on
+                      ? "border-foreground/70 bg-foreground/[0.06] font-semibold text-foreground"
+                      : "border-border text-muted-foreground hover:bg-card/60 hover:text-foreground",
+                  )}
+                >
+                  <Led tone={tn} pulse={tn === "crimson"} />
+                  <span>{u.bay}</span>
+                  <span className="text-muted-foreground">({fmtV(u.telemetry.v_bat)}V)</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Row 1: Bay + Model Title + VIN / Manual Sync Trigger */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="num text-[10.5px] font-medium text-muted-foreground uppercase tracking-wider">
+                Bay {selected.bay} · {selected.unit_id}
+              </div>
+              <h1 className="mt-0.5 truncate font-display text-base font-semibold uppercase tracking-[0.06em] sm:text-lg sm:tracking-[0.08em]">
+                Mitsubishi {selected.model}{" "}
+                <span className="font-normal text-muted-foreground">{selected.trim}</span>
+              </h1>
             </div>
 
-            <div className="num text-[11px] font-medium text-muted-foreground">
-              Bay {selected.bay} ({selected.unit_id})
+            <div className="flex shrink-0 items-center gap-2">
+              {dataSource === "LIVE_API" && (
+                <button
+                  type="button"
+                  onClick={pollNow}
+                  title={
+                    isOfflineSnapshot || apiStatus === "FALLBACK_ERROR"
+                      ? "Koneksi bermasalah (Offline Cache). Klik untuk sinkronisasi ulang."
+                      : "Sinkronisasi paksa endpoint get_data.php sekarang"
+                  }
+                  className={cn(
+                    "num inline-flex min-h-[34px] sm:min-h-[30px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot
+                      ? "border-amber/60 bg-amber/15 text-amber hover:bg-amber/25"
+                      : "border-border bg-card text-foreground hover:border-foreground/60",
+                  )}
+                >
+                  <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
+                  <span>Poll Live API ({lastSyncTime ?? "--"})</span>
+                </button>
+              )}
+              <div className="hidden shrink-0 rounded-[2px] border border-border bg-background/80 px-2.5 py-1 text-right sm:block">
+                <div className="label-hmi text-[9.5px]">VIN · {selected.color}</div>
+                <div className="num text-[11px] font-medium text-foreground">{selected.vin}</div>
+              </div>
             </div>
-            <h1 className="mt-0.5 truncate font-display text-lg font-semibold uppercase tracking-[0.06em] sm:mt-1 sm:text-xl sm:tracking-[0.08em] md:text-2xl md:tracking-[0.1em]">
-              {selected.model} <span className="font-normal text-muted-foreground">{selected.trim}</span>
-            </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <Led tone={tone} pulse={tone === "crimson" || tone === "amber"} />
-              <span className="num text-xs">{selected.status_label}</span>
+          </div>
+
+          {/* Row 2: Live Status & Contextual Module Shortcuts */}
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <Led tone={tone} pulse={tone === "crimson" || tone === "amber"} />
+                <span className="num text-xs font-medium text-foreground">{selected.status_label}</span>
+              </div>
               <span
                 className={cn(
                   "num inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
@@ -104,88 +142,65 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               </span>
               {(selected.last_seen || (conn.lastSeenSec !== null && !conn.isOnline)) && (
                 <span className="num text-[10.5px] text-muted-foreground">
-                  Last seen: <strong className="text-foreground">{selected.last_seen ?? formatDurationCompact(conn.lastSeenSec)}</strong>
-                  {selected.last_seen && conn.lastSeenSec !== null ? ` (${formatDurationCompact(conn.lastSeenSec)})` : ""}
+                  Last seen:{" "}
+                  <strong className="text-foreground">
+                    {selected.last_seen ?? formatDurationCompact(conn.lastSeenSec)}
+                  </strong>
+                  {selected.last_seen && conn.lastSeenSec !== null
+                    ? ` (${formatDurationCompact(conn.lastSeenSec)})`
+                    : ""}
                 </span>
               )}
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              {dataSource === "LIVE_API" && (
-                <button
-                  type="button"
-                  onClick={pollNow}
-                  title={
-                    isOfflineSnapshot || apiStatus === "FALLBACK_ERROR"
-                      ? "Koneksi bermasalah (Offline Cache). Klik untuk sinkronisasi ulang."
-                      : "Sinkronisasi paksa endpoint get_data.php sekarang"
-                  }
-                  className={cn(
-                    "num inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot
-                      ? "border-amber/60 bg-amber/15 text-amber hover:bg-amber/25"
-                      : "border-border bg-card text-foreground hover:border-foreground/60",
-                  )}
-                >
-                  <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
-                  <span>Poll Live API (Sync: {lastSyncTime ?? "--"})</span>
-                </button>
-              )}
               {tone === "crimson" && (
                 <button
                   type="button"
                   onClick={() => setActiveModule("03")}
-                  className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  Dispatch Pemanasan (Modul 03)
+                  Antrean Pemanasan (03)
                 </button>
               )}
               {(t.dtc_cnt > 0 || t.can_ok === false) && (
                 <button
                   type="button"
                   onClick={() => setActiveModule("04")}
-                  className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  Buka Diagnostik OBD (Modul 04)
+                  Diagnostik OBD (04)
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setActiveModule("06")}
-                className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                Kalibrasi &amp; Config (Modul 06)
+                Kalibrasi &amp; Config (06)
               </button>
-            </div>
-            <div className="hidden shrink-0 rounded-[2px] border border-border bg-card/90 px-3.5 py-2 text-right md:block">
-              <div className="label-hmi text-[10px]">VIN</div>
-              <div className="num text-xs font-medium">{selected.vin}</div>
-              <div className="label-hmi mt-0.5 text-[10px]">{selected.color}</div>
             </div>
           </div>
         </div>
 
         {/* Viewport: Orthographic Topology Blueprint & Component Diagnostic Inspector */}
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-2 sm:p-3">
+        <div className="card-scroll relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2 sm:p-3">
           <VehicleTopologyMap
             unit={selected}
             activeNode={activeTopologyNode}
             onSelectNode={setActiveTopologyNode}
-            config={configs[selected.unit_id]}
+            config={selectedConfig}
             isLiveApi={dataSource === "LIVE_API"}
-            className="flex-1 min-h-[380px]"
+            className="shrink-0"
           />
           <ComponentNodeInspector
             unit={selected}
             activeNode={activeTopologyNode}
             onSelectNode={setActiveTopologyNode}
-            config={configs[selected.unit_id]}
+            config={selectedConfig}
             historyPoints={history[selected.unit_id]}
             isLiveApi={dataSource === "LIVE_API"}
-            onNavigateModule={setActiveModule}
-            className="mt-2.5"
+            className="shrink-0"
           />
         </div>
 
@@ -302,8 +317,8 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   onClick={() => selectUnit(u.unit_id)}
                   type="button"
                   className={cn(
-                    "panel shrink-0 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full",
-                    on ? "border-foreground/70 bg-foreground/[0.05]" : "hover:border-muted-foreground/60",
+                    "shrink-0 rounded-[2px] border border-border bg-card/85 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full",
+                    on ? "border-foreground/70 bg-foreground/[0.06]" : "hover:border-muted-foreground/60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -332,6 +347,18 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 </button>
               );
             })}
+            {dataSource === "LIVE_API" && filteredSidebarUnits.length === 1 && (
+              <div className="rounded-[2px] border border-border/60 bg-background/50 p-2.5 num text-[10.5px] text-muted-foreground space-y-1">
+                <div className="flex items-center justify-between text-foreground font-medium">
+                  <span>Node Live API Aktif</span>
+                  <span className="text-emerald">Poll 3s</span>
+                </div>
+                <p className="leading-relaxed">
+                  Terhubung ke node tunggal <strong className="text-foreground">{selected.unit_id}</strong>.{" "}
+                  Sinkronisasi terakhir: {selected.last_seen ?? (lastSyncTime || "--")}.
+                </p>
+              </div>
+            )}
             {filteredSidebarUnits.length === 0 && (
               <div className="py-6 text-center num text-xs text-muted-foreground">
                 Tidak ada unit cocok dengan &ldquo;{sidebarQuery}&rdquo;.
@@ -357,7 +384,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             />
             <Stat
               label="ECU V / MIL"
-              value={!t.engine_on || !t.ecu_v || t.ecu_v <= 0 ? "----" : t.ecu_v.toFixed(2)}
+              value={!t.engine_on || !t.ecu_v || t.ecu_v <= 0 ? "OFF" : t.ecu_v.toFixed(2)}
               unit={`${!t.engine_on || !t.ecu_v || t.ecu_v <= 0 ? "" : "V · "}${t.mil_on || t.dtc_cnt > 0 ? "MIL ON" : "MIL OFF"}`}
               tone={t.mil_on || t.dtc_cnt > 0 ? "crimson" : "dim"}
             />
@@ -370,7 +397,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             <Stat
               label="Daily Budget"
               value={t.daily_mah.toFixed(2)}
-              unit={`mAh · Sleep ${formatSleepInterval(t.sleep_cfg)}`}
+              unit="mAh"
               tone={t.daily_mah > 65 ? "amber" : "dim"}
             />
             <Stat
@@ -378,6 +405,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               value={selected.buffer_used > 0 ? `${selected.buffer_used} Recs` : "LIVE (0)"}
               tone={selected.buffer_used > 0 ? "amber" : "emerald"}
             />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5 num text-[10px] text-muted-foreground">
+            <span className="truncate">
+              Siklus: <strong className="text-foreground">{formatSleepInterval(selectedConfig?.sleep_cfg ?? t.sleep_cfg)}</strong>
+            </span>
+            <span className="truncate text-right">
+              Jaringan: <strong className="text-foreground">{resolvedSsid || selected.net_zone || "YARD"}</strong>
+            </span>
           </div>
         </Panel>
       </div>

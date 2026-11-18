@@ -311,8 +311,8 @@ html.is-fullscreen body::-webkit-scrollbar {
     min-height: 0;
     height: 100%;
   }
-  .stage-heading { padding: 12px; }
-  .stage-heading h1 { font-size: 24px; letter-spacing: 0; }
+  .stage-heading { padding: 10px 14px; }
+  .stage-heading h1 { font-size: 19px; letter-spacing: 0.02em; }
   .stage-heading .glass { flex-shrink: 0; }
   .stage-controls button { padding: 10px 6px; letter-spacing: 0; }
   .module-fleet {

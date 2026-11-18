@@ -6,7 +6,6 @@ import {
   type VehicleUnit,
   type VoltagePoint,
 } from "@/data/mockTelemetry";
-import type { ModuleId } from "@/context/TelemetryContext";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 import {
@@ -24,7 +23,6 @@ interface ComponentNodeInspectorProps {
   config?: PiggybackConfig | undefined;
   historyPoints?: VoltagePoint[] | undefined;
   isLiveApi?: boolean | undefined;
-  onNavigateModule?: ((mod: ModuleId) => void) | undefined;
   className?: string;
 }
 
@@ -383,7 +381,6 @@ export function ComponentNodeInspector({
   config,
   historyPoints,
   isLiveApi,
-  onNavigateModule,
   className,
 }: ComponentNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"matrix" | "transducer" | "sop">("matrix");
@@ -591,7 +588,7 @@ export function ComponentNodeInspector({
   return (
     <div
       className={cn(
-        "panel flex flex-col rounded-[2px] border border-border bg-card/90 p-3 sm:p-4 text-foreground",
+        "shrink-0 flex flex-col rounded-[2px] border border-border bg-card/90 p-3 sm:p-4 text-foreground",
         className,
       )}
     >
@@ -611,33 +608,6 @@ export function ComponentNodeInspector({
               className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Tampilkan Semua (8 Saluran)
-            </button>
-          )}
-          {onNavigateModule && isBatteryCrit && (
-            <button
-              type="button"
-              onClick={() => onNavigateModule("03")}
-              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Antrean Pemanasan (03)
-            </button>
-          )}
-          {onNavigateModule && isCanFault && (
-            <button
-              type="button"
-              onClick={() => onNavigateModule("04")}
-              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Diagnostik DTC (04)
-            </button>
-          )}
-          {onNavigateModule && (!isCalibrated || pendingAck) && (
-            <button
-              type="button"
-              onClick={() => onNavigateModule("06")}
-              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-amber/60 bg-amber/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber transition-colors hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {!isCalibrated ? "Kalibrasi SOP C.1 (06)" : "Cek Pending ACK (06)"}
             </button>
           )}
         </div>
@@ -907,63 +877,36 @@ export function ComponentNodeInspector({
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
                   <div className="text-[10px] text-muted-foreground uppercase">ADC RAW PIN 34</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{t.adc_raw_mv} mV</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">R-Divider 300k/68k</div>
+                  <div className={cn("text-sm font-bold mt-0.5", isBatteryCrit ? "text-crimson" : "text-foreground")}>
+                    {t.adc_raw_mv} mV
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    300k/68k · Ambang {critV.toFixed(2)}V
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SLOPE (m) / OFFSET (c)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">KONSTANTA OLS (m &amp; c)</div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     m: {calSlope.toFixed(6)}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">c: {calOffset.toFixed(3)} V</div>
+                  <div className={cn("text-[9.5px] mt-0.5", pendingAck ? "text-amber" : "text-muted-foreground")}>
+                    c: {calOffset.toFixed(3)}V · {pendingAck ? "PENDING ACK" : "ACK SYNC"}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">HASIL KALKULASI OLS</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">KALKULASI OLS vs AKTUAL</div>
                   <div className="text-sm font-bold text-emerald mt-0.5">{vCalculated.toFixed(2)} V</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Terkalibrasi OLS</div>
-                </div>
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">DELTA DRIFT HARDWARE</div>
-                  <div className={cn("text-sm font-bold mt-0.5", isCalibrated ? "text-foreground" : "text-amber")}>
-                    {vDelta.toFixed(3)} V
-                  </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi maks 0.080V</div>
-                </div>
-              </div>
-
-              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">AMBANG KRITIS AKTIF (CRIT_V)</div>
-                  <div className={cn("text-sm font-bold mt-0.5", isBatteryCrit ? "text-crimson" : "text-foreground")}>
-                    {critV.toFixed(2)} V
-                  </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    {isBatteryCrit ? "DI BAWAH AMBANG (CRITICAL)" : "AMAN (>= CRIT_V)"}
+                  <div className={cn("text-[9.5px] mt-0.5", isCalibrated ? "text-muted-foreground" : "text-amber")}>
+                    Delta Drift: {vDelta.toFixed(3)}V (Maks 0.080V)
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">ARUS TIDUR R-SENSE (SHUNT)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">ARUS TIDUR &amp; LOG MYSQL</div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {t.engine_on ? "BYPASSED (RUN)" : `${t.shunt_sleep_ua} µA`}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Status: {shuntStatus}</div>
-                </div>
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SINKRONISASI KONFIGURASI NODE</div>
-                  <div className={cn("text-sm font-bold mt-0.5", pendingAck ? "text-amber" : "text-emerald")}>
-                    {pendingAck ? "PENDING ACK" : "ACK TERSINKRONISASI"}
-                  </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    Interval Sleep Config: {config?.sleep_cfg ?? t.sleep_cfg}s
-                  </div>
-                </div>
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SAMPEL LOG HISTORIS (MYSQL)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">
-                    {effectiveHistory.length} Rekaman
-                  </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    Rentang: {minHistV.toFixed(2)}V s/d {maxHistV.toFixed(2)}V
+                    {effectiveHistory.length} sampel ({minHistV.toFixed(2)}V - {maxHistV.toFixed(2)}V)
                   </div>
                 </div>
               </div>

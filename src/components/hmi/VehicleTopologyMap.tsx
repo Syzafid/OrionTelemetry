@@ -221,27 +221,27 @@ export function VehicleTopologyMap({
   return (
     <div
       className={cn(
-        "relative flex w-full flex-col rounded-[2px] border border-border bg-card/60 p-3 sm:p-4",
+        "relative flex w-full flex-col rounded-[2px] border border-border bg-card/60 p-2.5 sm:p-3",
         className,
       )}
     >
       {/* Workbench Header */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2.5">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-2.5 flex flex-col gap-2 border-b border-border/70 pb-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
             <Led tone={overallTone} pulse={overallTone === "crimson"} />
             <span>TOPOLOGI KELISTRIKAN MITSUBISHI {unit.model}</span>
           </div>
-          <span className="num hidden text-[11px] text-muted-foreground md:inline">
+          <span className="num hidden text-[10.5px] text-muted-foreground sm:inline truncate">
             {profile.chassisLabel} ({profile.engineCode})
           </span>
         </div>
 
         {/* Quick Filter Pill Controls */}
-        <div className="flex flex-wrap items-center gap-1.5 num text-[10.5px]">
-          <span className="mr-1 text-muted-foreground text-[10px]">FILTER PROBE:</span>
+        <div className="card-scroll flex items-center gap-1 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible sm:pb-0 num text-[10px]">
+          <span className="mr-0.5 shrink-0 text-muted-foreground text-[9.5px] hidden sm:inline">PROBE:</span>
           {[
-            { id: "all", label: "SEMUA PROBE" },
+            { id: "all", label: "SEMUA" },
             { id: "battery", label: "AKI 12V", tone: batteryTone },
             { id: "alternator", label: "ALTERNATOR", tone: alternatorTone },
             { id: "powertrain", label: "MESIN / RPM", tone: powertrainTone },
@@ -256,7 +256,7 @@ export function VehicleTopologyMap({
                 type="button"
                 onClick={() => onSelectNode(item.id as TopologyNodeId)}
                 className={cn(
-                  "flex min-h-[44px] sm:min-h-[34px] items-center gap-1.5 rounded-[1px] border px-2.5 py-1 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
+                  "flex min-h-[40px] sm:min-h-[28px] shrink-0 items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
                   on
                     ? "border-foreground/80 bg-foreground/15 font-semibold text-foreground"
                     : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
@@ -271,10 +271,10 @@ export function VehicleTopologyMap({
       </div>
 
       {/* Main Orthographic Chassis Blueprint Container */}
-      <div className="relative flex-1 rounded-[2px] border border-border/80 bg-background/95 p-2 sm:p-3 flex items-center justify-center">
+      <div className="relative rounded-[2px] border border-border/80 bg-background/95 p-1.5 sm:p-2 flex items-center justify-center">
         <svg
           viewBox="0 0 960 400"
-          className="w-full h-auto aspect-[2.4/1] max-h-[380px] select-none"
+          className="w-full h-auto aspect-[2.4/1] max-h-[240px] xl:max-h-[280px] select-none"
           role="img"
           aria-label={`Topologi potongan chassis kendaraan Mitsubishi ${unit.model} dengan letak fisik komponen sensor`}
         >
