@@ -1404,9 +1404,6 @@ String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining)
   return String(buf);
 }
 
-static WiFiClientSecure sharedSecureClient;
-static bool             secureClientInitialized = false;
-
 bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
 #if ORION_DEBUG_SERIAL
   if (simZoneOverride == NET_ZONE_OFFLINE) return false;
@@ -1414,20 +1411,17 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
   if (simOfflineMode || WiFi.status() != WL_CONNECTED || count == 0) return false;
 
   HTTPClient http;
+  WiFiClientSecure client;
   String urlStr = String(API_ENDPOINT);
   if (urlStr.startsWith("https://")) {
-    if (!secureClientInitialized) {
-      sharedSecureClient.setInsecure();
-      sharedSecureClient.setTimeout(8);
-      secureClientInitialized = true;
-    }
-    http.begin(sharedSecureClient, API_ENDPOINT);
+    client.setInsecure();
+    client.setTimeout(6);
+    http.begin(client, API_ENDPOINT);
   } else {
     http.begin(API_ENDPOINT);
   }
 
-  http.setReuse(true);
-  http.setTimeout(urlStr.startsWith("https://") ? 8000 : 3500);
+  http.setTimeout(urlStr.startsWith("https://") ? 6000 : 3500);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Orion-Node", UNIT_ID);
   if (isBurst) http.addHeader("X-Burst-Sync", "true");
@@ -1456,13 +1450,13 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
       applyPiggybackAck(resp);
     }
     http.end();
+    client.stop();
     return true;
   }
-  Serial.printf("[HTTP WARN] POST gagal (kode: %d, len=%uB)\n", httpCode, (unsigned)payload.length());
+  Serial.printf("[HTTP WARN] POST gagal (kode: %d, err='%s', len=%uB)\n",
+                httpCode, http.errorToString(httpCode).c_str(), (unsigned)payload.length());
   http.end();
-  if (httpCode <= 0) {
-    sharedSecureClient.stop();
-  }
+  client.stop();
   return false;
 }
 
@@ -1568,8 +1562,11 @@ void setup() {
       Serial.printf("[WIFI EVENT] Terhubung fisik ke SSID: '%s' (Channel: %d)\n",
                     WiFi.SSID().c_str(), (int)WiFi.channel());
     } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
-      Serial.printf("[WIFI EVENT] Mendapatkan IP: %s (Gateway: %s)\n",
-                    WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str());
+      Serial.printf("[WIFI EVENT] Mendapatkan IP: %s (Gateway: %s, DNS: %s)\n",
+                    WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str(),
+                    WiFi.dnsIP(0).toString().c_str());
+      // Tetapkan DNS publik 8.8.8.8 sebagai sekunder jika DNS resolver internal hotspot bermasalah
+      WiFi.dnsIP(1, IPAddress(8, 8, 8, 8));
     } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
       uint8_t reason = info.wifi_sta_disconnected.reason;
       Serial.printf("[WIFI EVENT] Terputus / Gagal! Kode: %u (%s)\n",
