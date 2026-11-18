@@ -18,14 +18,14 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "ORION: Konsol Workbench Telemetri & Digital Twin Stock Yard" },
+      { title: "ORION: Konsol Workbench Telemetri & Topologi Stock Yard" },
       {
         name: "description",
         content:
-          "ORION Telemetry Workbench: Monitoring voltase baterai 12V real-time, digital twin 3D armada, antrean pemanasan mesin, dan diagnostik OBD-II stock yard.",
+          "ORION Telemetry Workbench: Monitoring voltase baterai 12V real-time, topologi kelistrikan & transduser armada, antrean pemanasan mesin, dan diagnostik OBD-II stock yard.",
       },
-      { property: "og:title", content: "ORION: Konsol Workbench Telemetri & Digital Twin Stock Yard" },
-      { property: "og:description", content: "ORION Fleet Telemetry HMI: 3D vehicle digital twin, warm-up queue, diagnostics and remote node config." },
+      { property: "og:title", content: "ORION: Konsol Workbench Telemetri & Topologi Stock Yard" },
+      { property: "og:description", content: "ORION Fleet Telemetry HMI: electrical topology & transducer inspector, warm-up queue, diagnostics and remote node config." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -37,7 +37,7 @@ function Workspace() {
   const { activeModule } = useTelemetry();
   return (
     <main className="workspace flex flex-1 min-h-0 flex-col lg:overflow-hidden p-3 sm:p-4 md:p-5">
-      {/* Showroom stays mounted (keeps the 3D stage alive); only its opacity fades in. */}
+      {/* Topologi Kelistrikan & Transduser stays mounted; only its opacity fades in. */}
       <m.div
         className={activeModule === "01" ? "showroom-host flex-1 min-h-0 flex flex-col" : "hidden"}
         initial={false}

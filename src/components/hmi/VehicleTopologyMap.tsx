@@ -12,11 +12,70 @@ export type TopologyNodeId =
   | "esp32_core"
   | "rf_network";
 
+export interface VehicleElectricalProfile {
+  engineCode: string;
+  batterySpec: string;
+  alternatorSpec: string;
+  alternatorAmps: string;
+  batteryAh: string;
+  idleRpmRange: string;
+  cutInRpm: string;
+  chassisLabel: string;
+}
+
+export function getVehicleElectricalProfile(model: string): VehicleElectricalProfile {
+  const upper = model.toUpperCase();
+  if (upper.includes("XFORCE") || upper.includes("XPANDER")) {
+    return {
+      engineCode: "1.5L 4A91 MIVEC DOHC",
+      batterySpec: "Aki 12V 55Ah (55B24L)",
+      alternatorSpec: "Alternator 12V 90A",
+      alternatorAmps: "90A",
+      batteryAh: "55Ah",
+      idleRpmRange: "650 - 750 RPM (Idle)",
+      cutInRpm: "600 RPM",
+      chassisLabel: "MPV / Compact SUV Unibody",
+    };
+  }
+  if (upper.includes("L300")) {
+    return {
+      engineCode: "2.2L 4N14 Euro-4 Turbo Diesel",
+      batterySpec: "Aki 12V 65Ah (75D26R)",
+      alternatorSpec: "Alternator Denso 12V 110A",
+      alternatorAmps: "110A",
+      batteryAh: "65Ah",
+      idleRpmRange: "700 - 800 RPM (Idle)",
+      cutInRpm: "650 RPM",
+      chassisLabel: "Cab-Over Ladder Frame",
+    };
+  }
+  return {
+    engineCode: "2.4L 4N15 MIVEC / 2.5L 4D56 Diesel",
+    batterySpec: "Aki 12V 70Ah (80D26L)",
+    alternatorSpec: "Alternator Denso 12V 130A",
+    alternatorAmps: "130A",
+    batteryAh: "70Ah",
+    idleRpmRange: "700 - 800 RPM (Idle)",
+    cutInRpm: "650 RPM",
+    chassisLabel: "Ladder Frame Chassis",
+  };
+}
+
+const NODE_SEQUENCE: TopologyNodeId[] = [
+  "all",
+  "battery",
+  "alternator",
+  "powertrain",
+  "can_obd",
+  "esp32_core",
+  "rf_network",
+];
+
 interface VehicleTopologyMapProps {
   unit: VehicleUnit;
   activeNode: TopologyNodeId;
   onSelectNode: (node: TopologyNodeId) => void;
-  config?: PiggybackConfig;
+  config?: PiggybackConfig | undefined;
   className?: string;
 }
 
@@ -30,6 +89,7 @@ export function VehicleTopologyMap({
   const [focusedNode, setFocusedNode] = useState<TopologyNodeId | null>(null);
 
   const t = unit.telemetry;
+  const profile = getVehicleElectricalProfile(unit.model);
   const isCharging = t.engine_on && t.v_bat >= 13.2;
   const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
@@ -44,10 +104,25 @@ export function VehicleTopologyMap({
   const vDelta = Math.abs(t.v_bat - vCalculated);
   const isCalibrated = vDelta < 0.08;
 
+  const altVoltage = t.ecu_v && t.ecu_v > 0 ? t.ecu_v : t.v_bat;
+
   const batteryTone: Tone = isBatteryCrit ? "crimson" : isBatteryLow || !isCalibrated ? "amber" : "emerald";
   const alternatorTone: Tone = isCharging ? "emerald" : t.engine_on ? "amber" : "dim";
+  const powertrainTone: Tone = t.engine_on ? (t.temp_c > 105 ? "crimson" : "emerald") : "dim";
   const canTone: Tone = isCanFault ? "crimson" : "emerald";
   const rfTone: Tone = isOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald";
+  const overallTone: Tone =
+    isBatteryCrit || isCanFault
+      ? "crimson"
+      : isBatteryLow || !isCalibrated || (t.engine_on && !isCharging)
+        ? "amber"
+        : "emerald";
+
+  const cycleNextNode = () => {
+    const idx = NODE_SEQUENCE.indexOf(activeNode);
+    const nextNode = NODE_SEQUENCE[(idx + 1) % NODE_SEQUENCE.length] ?? "battery";
+    onSelectNode(nextNode);
+  };
 
   // Helper to determine node opacity based on active selection (C-1 Visual Hierarchy)
   const getNodeOpacityClass = (nodeId: TopologyNodeId) => {
@@ -64,29 +139,33 @@ export function VehicleTopologyMap({
   > = {
     all: {
       title: "SELURUH HARNESS KELISTRIKAN",
-      location: "Chassis Pajero Sport (6 Titik Probe)",
+      location: `Chassis Mitsubishi ${unit.model} (${profile.chassisLabel})`,
       reading: `${fmtV(t.v_bat)}V · ${t.engine_on ? `${t.rpm} RPM` : "Mesin Mati"} · ${t.can_ok === false ? "CAN ERR" : "CAN OK"}`,
-      tone: isBatteryCrit || isCanFault ? "crimson" : isBatteryLow ? "amber" : "emerald",
+      tone: overallTone,
     },
     battery: {
-      title: "PROBE 01: AKI 12V 70Ah & SHUNT RESISTOR",
+      title: `PROBE 01: AKI 12V ${profile.batteryAh} & SHUNT RESISTOR`,
       location: "Ruang Mesin Sisi Kiri (Dekat Box Filter Udara)",
-      reading: isCalibrated
-        ? `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | Arus Tidur: ${t.shunt_sleep_ua} µA`
-        : `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | KALIBRASI DRIFT (Δ=${vDelta.toFixed(3)}V)`,
+      reading: !isCalibrated
+        ? `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | KALIBRASI DRIFT (Δ=${vDelta.toFixed(3)}V)`
+        : t.engine_on
+          ? `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | Shunt: BYPASSED (RUN)`
+          : `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | Arus Tidur: ${t.shunt_sleep_ua} µA`,
       tone: batteryTone,
     },
     alternator: {
-      title: "PROBE 02: ALTERNATOR 130A & REGULATOR",
+      title: `PROBE 02: ALTERNATOR ${profile.alternatorAmps} & REGULATOR`,
       location: "Ruang Mesin Depan Tengah (Belt-Driven Pulley)",
-      reading: isCharging ? "13.80V (Pengisian Aktif Denso 130A)" : "0.0V (Standby / Kontak Mati)",
+      reading: isCharging
+        ? `${fmtV(altVoltage)} V (Pengisian Aktif ${profile.alternatorSpec})`
+        : `${fmtV(t.v_bat)} V B+ (Standby / Kontak Mati)`,
       tone: alternatorTone,
     },
     powertrain: {
       title: "PROBE 03: TRANSDUSER MESIN (RPM & COOLANT)",
-      location: "Blok Mesin 4D56 & Cover Timing Bawah",
+      location: `Blok Mesin ${profile.engineCode}`,
       reading: `${!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`} | Suhu: ${!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c}°C`}`,
-      tone: t.engine_on ? "emerald" : "dim",
+      tone: powertrainTone,
     },
     can_obd: {
       title: "PROBE 04: PORT OBD-II J1962 & CAN BUS",
@@ -119,24 +198,24 @@ export function VehicleTopologyMap({
     >
       {/* Workbench Header */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
-            <span className="h-2 w-2 rounded-full bg-crimson" />
-            <span>MITSUBISHI PAJERO SPORT HARNESS TOPOLOGY</span>
+            <Led tone={overallTone} pulse={overallTone === "crimson"} />
+            <span>TOPOLOGI KELISTRIKAN MITSUBISHI {unit.model}</span>
           </div>
           <span className="num hidden text-[11px] text-muted-foreground md:inline">
-            Orthographic Chassis Cutaway (Skala Rasio 1:1 OEM)
+            {profile.chassisLabel} ({profile.engineCode})
           </span>
         </div>
 
         {/* Quick Filter Pill Controls */}
-        <div className="flex flex-wrap items-center gap-1 num text-[10.5px]">
+        <div className="flex flex-wrap items-center gap-1.5 num text-[10.5px]">
           <span className="mr-1 text-muted-foreground text-[10px]">FILTER PROBE:</span>
           {[
             { id: "all", label: "SEMUA PROBE" },
             { id: "battery", label: "AKI 12V", tone: batteryTone },
             { id: "alternator", label: "ALTERNATOR", tone: alternatorTone },
-            { id: "powertrain", label: "MESIN / RPM", tone: "dim" as Tone },
+            { id: "powertrain", label: "MESIN / RPM", tone: powertrainTone },
             { id: "can_obd", label: "CAN BUS", tone: canTone },
             { id: "esp32_core", label: "ESP32", tone: "emerald" as Tone },
             { id: "rf_network", label: "GATEWAY RF", tone: rfTone },
@@ -148,7 +227,7 @@ export function VehicleTopologyMap({
                 type="button"
                 onClick={() => onSelectNode(item.id as TopologyNodeId)}
                 className={cn(
-                  "flex min-h-[32px] items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
+                  "flex min-h-[44px] sm:min-h-[34px] items-center gap-1.5 rounded-[1px] border px-2.5 py-1 uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
                   on
                     ? "border-foreground/80 bg-foreground/15 font-semibold text-foreground"
                     : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
@@ -168,7 +247,7 @@ export function VehicleTopologyMap({
           viewBox="0 0 960 400"
           className="w-full h-auto aspect-[2.4/1] max-h-[380px] select-none"
           role="img"
-          aria-label="Topologi potongan chassis kendaraan Mitsubishi Pajero Sport dengan letak fisik komponen sensor"
+          aria-label={`Topologi potongan chassis kendaraan Mitsubishi ${unit.model} dengan letak fisik komponen sensor`}
         >
           {/* High-Contrast Technical Dimension Axis / Centerline (R-25 Contrast WCAG AA) */}
           <line
@@ -378,7 +457,7 @@ export function VehicleTopologyMap({
               />
               <line x1="85" y1="32" x2="85" y2="92" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
               <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
-                PROBE 01: AKI 12V 70Ah
+                PROBE 01: AKI 12V {profile.batteryAh}
               </text>
               <text x="8" y="26" fill={isBatteryCrit ? "#F45B60" : isBatteryLow || !isCalibrated ? "#F59E0B" : "#10B981"} fontSize="11" fontWeight="bold" fontFamily="monospace">
                 {fmtV(t.v_bat)} V <tspan fill="oklch(0.72 0.01 260)" fontSize="9">({t.adc_raw_mv} mV)</tspan>
@@ -452,10 +531,12 @@ export function VehicleTopologyMap({
               />
               <line x1="100" y1="0" x2="145" y2="-25" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
               <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
-                PROBE 02: ALTERNATOR 130A
+                PROBE 02: ALTERNATOR {profile.alternatorAmps}
               </text>
               <text x="8" y="26" fill={isCharging ? "#10B981" : "oklch(0.75 0.01 260)"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
-                {isCharging ? "13.80V (PENGISIAN AKTIF)" : "0.0V (STANDBY / OFF)"}
+                {isCharging
+                  ? `${fmtV(altVoltage)}V (PENGISIAN AKTIF)`
+                  : `${fmtV(t.v_bat)}V B+ (STANDBY OFF)`}
               </text>
             </g>
           </g>
@@ -757,9 +838,13 @@ export function VehicleTopologyMap({
             </div>
           </div>
         </div>
-        <span className="shrink-0 text-[9.5px] uppercase font-semibold text-muted-foreground border border-border px-1.5 py-0.5 rounded-[1px]">
-          TAP SENSOR
-        </span>
+        <button
+          type="button"
+          onClick={cycleNextNode}
+          className="min-h-[40px] shrink-0 cursor-pointer rounded-[1px] border border-border bg-card px-2.5 py-1 text-[10px] font-semibold uppercase text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          Probe Berikutnya
+        </button>
       </div>
     </div>
   );

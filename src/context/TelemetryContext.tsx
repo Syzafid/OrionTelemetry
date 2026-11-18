@@ -43,6 +43,7 @@ const MODULE_PARAM_MAP: Record<string, ModuleId> = {
   "01": "01",
   "1": "01",
   showroom: "01",
+  topology: "01",
   "02": "02",
   "2": "02",
   fleet: "02",

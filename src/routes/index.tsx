@@ -87,8 +87,8 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     hardware: "MySQL Server (dipo_telemetry) + TanStack HMI",
     pinout: "Endpoint simpan_data.php & get_data.php",
     protocol: "Two-Way JSON REST Synchronization",
-    signals: ["Digital Twin 3D Status", "Antrean Pemanasan Mesin", "Remote Config ACK"],
-    description: "Server mencatat riwayat telemetri ke database relasional dan memperbarui digital twin 3D, memetakan unit ke bay parkir fisik, serta memicu peringatan jika voltase aki < 11.80 V.",
+    signals: ["Topologi Kelistrikan & Transduser", "Antrean Pemanasan Mesin", "Remote Config ACK"],
+    description: "Server mencatat riwayat telemetri ke database relasional dan memperbarui skema topologi sasis, memetakan unit ke bay parkir fisik, serta memicu peringatan jika voltase aki < 11.80 V.",
     Icon: Server,
   },
 ];
@@ -181,7 +181,7 @@ const SOP_TONE_STYLES: Record<"emerald" | "amber" | "crimson", { text: string; l
 };
 
 const FEATURES = [
-  "Digital Twin 3D interaktif dengan indikator status voltase per-bay",
+  "Topologi kelistrikan & transduser interaktif dengan indikator status voltase per-bay",
   "Antrean pemanasan mesin otomatis untuk mencegah aki drop saat serah terima",
   "Pencatatan riwayat pergerakan kendaraan dan log telemetri 24 jam",
   "Dukungan dua mode: Simulator Sandbox lokal dan MySQL REST Live API",
@@ -292,7 +292,7 @@ function Landing() {
                 Diagram Alur Sinyal Hardware Industri
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Arsitektur transmisi data end-to-end dari konektor fisik OBD-II kendaraan di stock yard hingga visualisasi digital twin 3D pada konsol server gudang.
+                Arsitektur transmisi data end-to-end dari konektor fisik OBD-II kendaraan di stock yard hingga HMI Topologi Sasis pada konsol server gudang.
               </p>
             </div>
             {/* Pipeline Stage Summary Pill */}
@@ -392,7 +392,7 @@ function Landing() {
                 <span className="text-muted-foreground font-mono">──[Wi-Fi 802.11n]──&gt;</span>
                 <span className="text-foreground font-medium">AP-GUDANG-01</span>
                 <span className="text-muted-foreground font-mono">──[REST API]──&gt;</span>
-                <span className="text-foreground font-medium">MySQL &amp; HMI 3D</span>
+                <span className="text-foreground font-medium">MySQL &amp; HMI Topologi</span>
               </div>
               <div className="text-muted-foreground text-[10px] shrink-0">
                 SOP Blueprint v3.3, Firmware v1.5.0
@@ -527,7 +527,7 @@ function Landing() {
               Integrasi Operasional Pengawas Lapangan &amp; PDI
             </h2>
             <p className="mt-3.5 text-sm leading-relaxed text-muted-foreground">
-              Memastikan setiap unit Mitsubishi siap kirim ke konsumen tanpa kendala baterai drop. Menghubungkan node fisik dengan visualisasi digital twin 3D, diagnostik OBD-II, dan antrean pemanasan terstruktur.
+              Memastikan setiap unit Mitsubishi siap kirim ke konsumen tanpa kendala baterai drop. Menghubungkan node fisik dengan skema topologi kelistrikan &amp; transduser, diagnostik OBD-II, dan antrean pemanasan terstruktur.
             </p>
 
             <div className="mt-6 space-y-3">
@@ -554,7 +554,7 @@ function Landing() {
                   Akses Konsol Pengawasan Armada
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Buka workbench interaktif untuk melihat model 3D kendaraan, antrean pemanasan, log riwayat baterai 24 jam, dan konfigurasi node.
+                  Buka workbench interaktif untuk memeriksa skema topologi kelistrikan kendaraan, antrean pemanasan, log riwayat baterai 24 jam, dan konfigurasi node.
                 </p>
               </div>
 

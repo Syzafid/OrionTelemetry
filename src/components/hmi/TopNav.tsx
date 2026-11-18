@@ -11,7 +11,7 @@ import * as m from "motion/react-m";
 import { DURATION, EASE_STANDARD } from "@/lib/motion-tokens";
 
 const MODULES: { id: ModuleId; label: string }[] = [
-  { id: "01", label: "Digital Twin 3D" },
+  { id: "01", label: "Topologi & Transduser" },
   { id: "02", label: "Armada & PDI" },
   { id: "03", label: "Antrean Pemanasan" },
   { id: "04", label: "OBD-II Diagnostik" },

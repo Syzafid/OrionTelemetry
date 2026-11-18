@@ -37,7 +37,7 @@ interface PaletteItem {
 }
 
 const MODULE_META: { id: ModuleId; name: string; shortcut: string }[] = [
-  { id: "01", name: "Digital Twin 3D", shortcut: "Alt+1" },
+  { id: "01", name: "Topologi Kelistrikan & Transduser", shortcut: "Alt+1" },
   { id: "02", name: "Armada & PDI Stock Yard", shortcut: "Alt+2" },
   { id: "03", name: "Antrean Pemanasan Mesin", shortcut: "Alt+3" },
   { id: "04", name: "Engine & OBD-II Diagnostics", shortcut: "Alt+4" },
@@ -431,7 +431,7 @@ export function CommandPaletteModal({
             <span>Select: Enter</span>
             <span>Close: Esc</span>
           </div>
-          <div>Shortcuts: Alt+1 .. Alt+5 (Switch Module)</div>
+          <div>Shortcuts: Alt+1 .. Alt+6 (Switch Module)</div>
         </div>
       </m.div>
     </m.div>

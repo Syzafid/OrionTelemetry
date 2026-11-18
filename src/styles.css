@@ -298,7 +298,7 @@ html.is-fullscreen body::-webkit-scrollbar {
     height: 100%;
     min-height: 0;
     display: grid;
-    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.65fr) auto;
     gap: 12px;
   }
   .unit-list {

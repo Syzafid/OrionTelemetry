@@ -186,14 +186,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   onChange={(e) => setSidebarQuery(e.target.value)}
                   placeholder="Filter Bay, Model, VIN..."
                   aria-label="Filter stock yard units"
-                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-8 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
                 />
                 {sidebarQuery && (
                   <button
                     type="button"
                     onClick={() => setSidebarQuery("")}
                     aria-label="Clear unit filter"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex min-h-[32px] min-w-[32px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
+                    className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <X size={13} strokeWidth={1.75} aria-hidden="true" />
                   </button>
@@ -252,36 +252,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           </div>
         </section>
 
-        {/* Live Payload Summary */}
-        <Panel title="Live Payload" code="RX" className="shrink-0">
+        {/* OBD-II & Node Summary (Complementary to Topology Map) */}
+        <Panel title="OBD-II & Node Summary" code="PID" className="shrink-0">
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-y-1.5">
-            <Stat label="Battery" value={fmtV(t.v_bat)} unit="V" tone={tone === "emerald" ? "dim" : tone} />
-            <Stat label="ADC Pin 34" value={t.adc_raw_mv} unit="mV" tone="dim" />
-            <Stat label="RPM" value={!t.engine_on || t.rpm <= 0 ? "----" : t.rpm} tone={t.engine_on ? "emerald" : "dim"} />
-            <Stat
-              label="Coolant"
-              value={!t.engine_on || t.temp_c <= 0 ? "----" : t.temp_c}
-              unit={!t.engine_on || t.temp_c <= 0 ? "" : "°C"}
-              tone={t.engine_on && t.temp_c > 105 ? "crimson" : "dim"}
-            />
-            <Stat label="RTC Temp" value={t.rtc_temp_c.toFixed(1)} unit="°C" tone="dim" />
-            <Stat label="Sleep Current" value={t.engine_on ? "ACTIVE" : t.shunt_sleep_ua} unit={t.engine_on ? "" : "µA"} tone="dim" />
-            <Stat
-              label="Burst Sync"
-              value={selected.buffer_used > 0 ? `${selected.buffer_used} Recs` : "LIVE (0)"}
-              tone={selected.buffer_used > 0 ? "amber" : "emerald"}
-            />
-            <Stat
-              label="CAN Bus TWAI"
-              value={t.can_ok === false ? "ERROR" : "OK (500k)"}
-              tone={t.can_ok === false ? "crimson" : "dim"}
-            />
-            <Stat
-              label="Uplink Seq"
-              value={`#${t.seq ?? t.boot}`}
-              unit={`${t.rssi} dBm`}
-              tone={t.rssi < -85 ? "amber" : "dim"}
-            />
             <Stat
               label="Speed / Load"
               value={!t.engine_on ? "----" : (t.speed_kmh ?? 0)}
@@ -305,6 +278,17 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               value={(t.dist_clr_km ?? 1420).toLocaleString("id-ID")}
               unit="km"
               tone="dim"
+            />
+            <Stat
+              label="Daily Budget"
+              value={t.daily_mah.toFixed(2)}
+              unit="mAh"
+              tone={t.daily_mah > 65 ? "amber" : "dim"}
+            />
+            <Stat
+              label="Burst Queue"
+              value={selected.buffer_used > 0 ? `${selected.buffer_used} Recs` : "LIVE (0)"}
+              tone={selected.buffer_used > 0 ? "amber" : "emerald"}
             />
           </div>
         </Panel>
