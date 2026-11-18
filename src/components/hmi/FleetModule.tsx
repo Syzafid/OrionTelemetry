@@ -160,6 +160,7 @@ export function FleetModule() {
     apiStatus,
     history,
     dispatchWarmup,
+    auditLogs,
     tickets,
     updateTicketStatus,
     setActiveModule,
@@ -247,11 +248,20 @@ export function FleetModule() {
         return;
       }
 
-      const csvContent = buildTelemetryCsv(units, history, targetUnitId);
+      const csvContent = buildTelemetryCsv(units, history, targetUnitId, {
+        isLiveApi: dataSource === "LIVE_API",
+      });
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const blobUrl = URL.createObjectURL(blob);
       const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
-      const safeId = targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
+      const selectedIds = targetUnitId
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const safeId =
+        selectedIds.length > 1
+          ? `FILTERED_${selectedIds.length}UNITS`
+          : targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `ORION_TELEMETRY_${safeId}_${stamp}.csv`;
@@ -277,11 +287,22 @@ export function FleetModule() {
         return;
       }
 
-      const excelHtml = buildFormattedExcelPrettier(units, configs, history, targetUnitId);
-      const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8;" });
+      const excelXml = buildFormattedExcelPrettier(units, configs, history, targetUnitId, {
+        isLiveApi: dataSource === "LIVE_API",
+        tickets,
+        auditLogs,
+      });
+      const blob = new Blob([excelXml], { type: "application/vnd.ms-excel;charset=utf-8;" });
       const blobUrl = URL.createObjectURL(blob);
       const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
-      const safeId = targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
+      const selectedIds = targetUnitId
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const safeId =
+        selectedIds.length > 1
+          ? `FILTERED_${selectedIds.length}UNITS`
+          : targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `ORION_TELEMETRY_REPORT_${safeId}_${stamp}.xls`;
@@ -290,7 +311,7 @@ export function FleetModule() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     },
-    [dataSource, apiStatus, apiUrl, units, configs, history],
+    [dataSource, apiStatus, apiUrl, units, configs, history, tickets, auditLogs],
   );
 
   const handleCopyDeepLink = useCallback(async (unitId: string) => {
@@ -328,6 +349,15 @@ export function FleetModule() {
       }),
     [units, configs, history, searchQuery, statusFilter, sortBy],
   );
+
+  const activeExportTarget = useMemo(() => {
+    if (filteredUnits.length === 0 || filteredUnits.length === units.length) {
+      return "ALL";
+    }
+    return filteredUnits.map((u) => u.unit_id).join(",");
+  }, [filteredUnits, units.length]);
+
+  const exportUnitCount = filteredUnits.length > 0 ? filteredUnits.length : units.length;
 
   // Motion: edge-triggered alarm flash (unit newly critical) and intro-only chart animation.
   const criticalMap = useMemo(() => {
@@ -548,23 +578,23 @@ export function FleetModule() {
 
             <button
               type="button"
-              onClick={() => handleExportExcel("ALL")}
+              onClick={() => handleExportExcel(activeExportTarget)}
               className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="Ekspor Laporan Eksekutif Excel berwarna untuk seluruh unit"
+              title={`Ekspor Workbook Excel 3-Sheet dengan AutoFilter (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <FileSpreadsheet size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span className="hidden sm:inline">Ekspor Laporan Excel</span>
-              <span className="inline sm:hidden">Excel</span>
+              <span className="hidden sm:inline">Ekspor Excel ({exportUnitCount} Unit)</span>
+              <span className="inline sm:hidden">Excel ({exportUnitCount})</span>
             </button>
 
             <button
               type="button"
-              onClick={() => handleExportCsv("ALL")}
+              onClick={() => handleExportCsv(activeExportTarget)}
               className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="Ekspor data mentah CSV seluruh unit"
+              title={`Ekspor data mentah CSV 39 kolom (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <Download size={12} strokeWidth={1.75} aria-hidden="true" />
-              <span>Unduh CSV</span>
+              <span>Unduh CSV ({exportUnitCount})</span>
             </button>
           </div>
         </div>
@@ -1267,6 +1297,7 @@ export function FleetModule() {
             key={pdiUnit.unit_id}
             unit={pdiUnit}
             critV={configs[pdiUnit.unit_id]?.crit_v ?? 11.8}
+            dataSource={dataSource}
             historyData={resolveUnitHistory(pdiUnit, dataSource, history)}
             inspectedAt={pdiTimestamp}
             onClose={() => setPdiUnitId(null)}
@@ -1305,6 +1336,7 @@ export function FleetModule() {
 interface PdiModalProps {
   unit: VehicleUnit;
   critV: number;
+  dataSource: "SIMULATOR" | "LIVE_API";
   historyData: Array<{ t: string; v: number; ts?: number }>;
   inspectedAt: string;
   onClose: () => void;
@@ -1315,6 +1347,7 @@ interface PdiModalProps {
 function PdiCertificateModal({
   unit,
   critV,
+  dataSource,
   historyData,
   inspectedAt,
   onClose,
@@ -1323,6 +1356,7 @@ function PdiCertificateModal({
 }: PdiModalProps) {
   const [deepLinkCopied, setDeepLinkCopied] = useState(false);
   const t = unit.telemetry;
+  const conn = getUnitConnectionState(unit, dataSource === "LIVE_API");
   const prediction = computeBatteryPrediction(
     historyData,
     t.v_bat,
@@ -1340,38 +1374,38 @@ function PdiCertificateModal({
 
   const checklist = [
     {
-      parameter: "Battery Open-Circuit Voltage",
-      reading: `${t.v_bat.toFixed(2)} V (Komp. 25°C: ${prediction.compensatedV25.toFixed(2)} V)`,
+      parameter: "Tegangan Baterai Terbuka (OCV & Komp. 25°C)",
+      reading: `${t.v_bat.toFixed(2)} V (Komp. 25°C: ${prediction.compensatedV25.toFixed(2)} V · SOC ${prediction.tempCompensatedSocPct}%)`,
       target: ">= 12.20 V",
       passed: t.v_bat >= 12.2,
     },
     {
-      parameter: "ADC Node Calibration (Pin 34)",
+      parameter: "Kalibrasi Node ADC (ESP32 Pin 34)",
       reading: `${t.adc_raw_mv} mV`,
       target: "1800 - 2800 mV",
       passed: t.adc_raw_mv >= 1800 && t.adc_raw_mv <= 2800,
     },
     {
-      parameter: "Parasitic Deep-Sleep Current",
+      parameter: "Arus Kuras Parasitik Deep-Sleep (INA219)",
       reading: `${t.shunt_sleep_ua} µA`,
       target: "<= 500 µA",
       passed: t.shunt_sleep_ua <= 500,
     },
     {
-      parameter: "OBD-II ECU Fault Memory (Mode 03)",
+      parameter: "Memori Kode Kerusakan ECU OBD-II (Mode 03)",
       reading: t.dtc,
       target: "NONE / 0 DTC",
       passed: t.dtc_cnt === 0 && (t.dtc === "NONE" || !t.dtc),
     },
     {
-      parameter: "TWAI / CAN-bus Communication Link",
+      parameter: "Jalur Komunikasi TWAI / CAN-Bus (500 kbps)",
       reading: t.can_ok === false ? "OFFLINE / Periksa Jalur CAN" : "ONLINE (TWAI 500 kbps)",
       target: "ONLINE / OK",
       passed: t.can_ok !== false,
     },
     {
-      parameter: "DS3231SN Thermal & Arrhenius Load",
-      reading: `${t.rtc_temp_c.toFixed(1)} °C (${prediction.thermalFactor.toFixed(2)}x Factor)`,
+      parameter: "Suhu Kabin DS3231SN & Beban Termal Arrhenius",
+      reading: `${t.rtc_temp_c.toFixed(1)} °C (Faktor ${prediction.thermalFactor.toFixed(2)}x)`,
       target: "< 60.0 °C",
       passed: t.rtc_temp_c < 60.0,
     },
@@ -1427,10 +1461,10 @@ function PdiCertificateModal({
                 id="pdi-cert-title"
                 className="font-display text-base sm:text-lg font-semibold uppercase tracking-wider text-foreground mt-0.5"
               >
-                PRE-DELIVERY INSPECTION (PDI) &amp; BATTERY HEALTH CERTIFICATE
+                SERTIFIKAT INSPEKSI PRA-KIRIM (PDI) &amp; KESEHATAN BATERAI
               </h2>
               <p className="num text-[11px] text-muted-foreground mt-0.5">
-                Stock Yard Electrical, Quiescent Shunt &amp; OBD-II ECU Readiness Report
+                Laporan Kesiapan Kelistrikan Stock Yard, Arus Shunt, &amp; ECU OBD-II Read-Only
               </p>
             </div>
           </div>
@@ -1440,7 +1474,7 @@ function PdiCertificateModal({
             <div className="flex flex-col items-center rounded-[2px] border border-border bg-background/60 p-2 text-center">
               <UnitQrCode value={deepLinkUrl} size={96} animateBuild />
               <span className="num mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                SCAN FOR MOBILE DEEP-LINK
+                PINDAI TAUTAN MOBILE UNIT
               </span>
               <button
                 type="button"
@@ -1498,7 +1532,7 @@ function PdiCertificateModal({
             </div>
           </div>
           <div className="num text-right text-[10.5px]">
-            <div className="text-muted-foreground">Drain Rate &amp; TTC</div>
+            <div className="text-muted-foreground">Laju Kuras &amp; Estimasi TTC</div>
             <div className="font-semibold text-foreground">{prediction.statusText}</div>
           </div>
         </div>
@@ -1515,18 +1549,21 @@ function PdiCertificateModal({
             <div className="num mt-0.5 text-xs font-semibold text-foreground">{unit.vin}</div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Bay Location</div>
+            <div className="label-hmi text-[10px]">Lokasi Bay</div>
             <div className="num mt-0.5 text-xs font-semibold text-foreground">
               Bay {unit.bay} ({unit.color})
             </div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Unit Telemetry ID</div>
+            <div className="label-hmi text-[10px]">ID Unit Telemetri</div>
             <div className="num mt-0.5 text-xs text-foreground">{unit.unit_id}</div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Waktu Inspeksi</div>
+            <div className="label-hmi text-[10px]">Waktu Inspeksi &amp; Sinkronisasi</div>
             <div className="num mt-0.5 text-xs text-foreground">{inspectedAt}</div>
+            <div className="num mt-0.5 text-[10px] text-muted-foreground">
+              Sinkron Terakhir: {unit.last_seen || "Live Stream"} ({conn.badgeText})
+            </div>
           </div>
           <div>
             <div className="label-hmi text-[10px]">Wake Counter &amp; Jaringan</div>

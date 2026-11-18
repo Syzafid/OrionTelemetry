@@ -7,16 +7,40 @@
  */
 
 /** @var PDO $pdo */
-require_once __DIR__ . '/db.php';
+$pdo = require __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendJson(['error' => 'METHOD_NOT_ALLOWED', 'message' => 'Use GET method.'], 405);
 }
 
 try {
+    ensureObd2ReadOnlyColumns($pdo);
+    ensureNetZoneAndMovementSchema($pdo);
+
     $rawUnit = isset($_GET['unit_id']) ? trim((string)$_GET['unit_id']) : '';
     $isAll = ($rawUnit === '' || strtoupper($rawUnit) === 'ALL');
-    $unitIdForFile = $isAll ? 'ALL' : preg_replace('/[^A-Za-z0-9_-]/', '_', $rawUnit);
+    $selectedIds = [];
+    if (!$isAll) {
+        $rawIds = array_values(array_filter(array_map('trim', explode(',', $rawUnit)), static fn($id) => $id !== ''));
+        foreach ($rawIds as $id) {
+            $cleanId = preg_replace('/[^A-Za-z0-9_-]/', '', $id);
+            if ($cleanId !== '' && strtoupper($cleanId) !== 'ALL') {
+                $selectedIds[] = $cleanId;
+            }
+        }
+        $selectedIds = array_values(array_unique($selectedIds));
+        if (empty($selectedIds)) {
+            $isAll = true;
+        }
+    }
+
+    if ($isAll) {
+        $unitIdForFile = 'ALL';
+    } elseif (count($selectedIds) === 1) {
+        $unitIdForFile = $selectedIds[0];
+    } else {
+        $unitIdForFile = 'FILTERED_' . count($selectedIds) . 'UNITS';
+    }
 
     $rawLimit = isset($_GET['limit']) ? (int)$_GET['limit'] : 500;
     $limit = max(1, min(5000, $rawLimit));
@@ -40,7 +64,6 @@ try {
         'adc_raw_mv',
         'rtc_temp_c',
         'shunt_sleep_ua',
-        'can_ok',
         'engine_on',
         'crit_alert',
         'rpm',
@@ -50,6 +73,9 @@ try {
         'rssi',
         'sleep_cfg',
         'buffer_used',
+        'can_ok',
+        'net_zone',
+        'sync_ssid',
         'active_ms',
         'daily_mah',
         'speed_kmh',
@@ -69,28 +95,42 @@ try {
         'dist_clr_km',
     ];
 
-    $selectCols = '`' . implode('`, `', $columns) . '`';
+    $selectExpressions = [];
+    foreach ($columns as $col) {
+        if ($col === 'net_zone') {
+            $selectExpressions[] = "COALESCE(`net_zone`, 'YARD') AS `net_zone`";
+        } elseif ($col === 'sync_ssid') {
+            $selectExpressions[] = "COALESCE(`sync_ssid`, '') AS `sync_ssid`";
+        } else {
+            $selectExpressions[] = "`{$col}`";
+        }
+    }
+    $selectCols = implode(', ', $selectExpressions);
 
     if ($isAll) {
         $sql = "
             SELECT {$selectCols}
             FROM `telemetry_logs`
             ORDER BY `id` DESC
-            LIMIT :limit
+            LIMIT ?
         ";
         $stmt = $pdo->prepare($sql);
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(1, $limit, PDO::PARAM_INT);
     } else {
+        $placeholders = implode(', ', array_fill(0, count($selectedIds), '?'));
         $sql = "
             SELECT {$selectCols}
             FROM `telemetry_logs`
-            WHERE `unit_id` = :unit_id
+            WHERE `unit_id` IN ({$placeholders})
             ORDER BY `id` DESC
-            LIMIT :limit
+            LIMIT ?
         ";
         $stmt = $pdo->prepare($sql);
-        $stmt->bindValue(':unit_id', $rawUnit, PDO::PARAM_STR);
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $pos = 1;
+        foreach ($selectedIds as $uid) {
+            $stmt->bindValue($pos++, $uid, PDO::PARAM_STR);
+        }
+        $stmt->bindValue($pos, $limit, PDO::PARAM_INT);
     }
 
     $stmt->execute();

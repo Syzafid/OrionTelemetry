@@ -93,6 +93,7 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     expect(twoCards[0]!.className).toContain("lg:w-[calc((100%-1rem)/2)]");
     expect(twoCards[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]")).toBeNull();
     expect(screen.getByText(/Lompat Cepat:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ekspor Excel \(2 Unit\)/i)).toBeInTheDocument();
 
     // 1 unit ("P0133"): full width + 2-column desktop card body + hidden Lompat Cepat bar
     fireEvent.change(searchInput, { target: { value: "P0133" } });
@@ -105,6 +106,7 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
       articlesAfterSearch[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]"),
     ).not.toBeNull();
     expect(screen.queryByText(/Lompat Cepat:/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Ekspor Excel \(1 Unit\)/i)).toBeInTheDocument();
 
     // Cross-module quick buttons navigate to Module 04 & Module 01 with unit selected
     fireEvent.click(
@@ -128,7 +130,7 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     expect(screen.getAllByRole("article")).toHaveLength(12);
   }, 15000);
 
-  it("opens and closes PdiCertificateModal with 6 checklist rows and dynamic CAN/SSID metadata", async () => {
+  it("opens and closes PdiCertificateModal with 6 standardized Indonesian rows and sync evidence", async () => {
     renderFleet();
 
     const pdiButtons = screen.getAllByRole("button", { name: /PDI Cert/i });
@@ -136,9 +138,16 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(
-      within(dialog).getByText(/PRE-DELIVERY INSPECTION \(PDI\) & BATTERY HEALTH CERTIFICATE/i),
+      within(dialog).getByText(/SERTIFIKAT INSPEKSI PRA-KIRIM \(PDI\) & KESEHATAN BATERAI/i),
     ).toBeInTheDocument();
-    expect(within(dialog).getByText(/TWAI \/ CAN-bus Communication Link/i)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Tegangan Baterai Terbuka \(OCV & Komp\. 25°C\)/i),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Jalur Komunikasi TWAI \/ CAN-Bus \(500 kbps\)/i),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Waktu Inspeksi & Sinkronisasi/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Sinkron Terakhir:/i)).toBeInTheDocument();
     expect(within(dialog).getAllByRole("row")).toHaveLength(7);
 
     fireEvent.click(within(dialog).getByRole("button", { name: /Tutup sertifikat PDI/i }));

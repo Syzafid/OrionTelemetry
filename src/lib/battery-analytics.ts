@@ -195,9 +195,116 @@ export const CSV_COLUMNS = [
   "dtc",
   "rssi",
   "sleep_cfg",
+  "buffer_used",
+  "can_ok",
+  "net_zone",
+  "sync_ssid",
   "active_ms",
   "daily_mah",
+  "speed_kmh",
+  "iat_c",
+  "map_kpa",
+  "load_pct",
+  "tps_pct",
+  "ign_deg",
+  "maf_gs",
+  "run_time_s",
+  "fuel_pct",
+  "fuel_rate_lh",
+  "o2_v",
+  "stft_pct",
+  "mil_on",
+  "ecu_v",
+  "dist_clr_km",
 ] as const;
+
+export interface ExportTargetResolution {
+  filteredUnits: VehicleUnit[];
+  isAll: boolean;
+  filterLabel: string;
+}
+
+export function parseExportTargetUnits(
+  units: VehicleUnit[],
+  targetUnitId?: string,
+): ExportTargetResolution {
+  const raw = (targetUnitId ?? "").trim();
+  if (!raw || raw.toUpperCase() === "ALL") {
+    return {
+      filteredUnits: units,
+      isAll: true,
+      filterLabel: "SELURUH ARMADA",
+    };
+  }
+
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.toUpperCase() !== "ALL");
+
+  if (ids.length === 0) {
+    return {
+      filteredUnits: units,
+      isAll: true,
+      filterLabel: "SELURUH ARMADA",
+    };
+  }
+
+  const idSet = new Set(ids);
+  const filteredUnits = units.filter((u) => idSet.has(u.unit_id));
+  const filterLabel = ids.length === 1 ? ids[0]! : `${ids.length} UNIT (${ids.join(", ")})`;
+
+  return {
+    filteredUnits,
+    isAll: false,
+    filterLabel,
+  };
+}
+
+export function resolveUnitLastSeenEpoch(unit: VehicleUnit, fallbackNowSec: number): number {
+  const rawEpoch = unit.telemetry.ts_epoch;
+  if (typeof rawEpoch === "number" && Number.isFinite(rawEpoch) && rawEpoch > 0) {
+    return Math.floor(rawEpoch);
+  }
+  if (unit.last_seen) {
+    const isoWib = unit.last_seen.trim().replace(" ", "T") + "+07:00";
+    const parsedMs = Date.parse(isoWib);
+    if (Number.isFinite(parsedMs) && parsedMs > 0) {
+      return Math.floor(parsedMs / 1000);
+    }
+  }
+  return fallbackNowSec;
+}
+
+export function resolveExportHistoryPoints(
+  unit: VehicleUnit,
+  historyMap: Record<string, Array<BatteryHistoryPoint>>,
+  isLiveApi: boolean,
+  fallbackNowSec: number,
+): Array<BatteryHistoryPoint> {
+  const existing = historyMap[unit.unit_id];
+  if (isLiveApi) {
+    if (existing && existing.length > 0) {
+      return existing;
+    }
+    const ts = resolveUnitLastSeenEpoch(unit, fallbackNowSec);
+    const label = unit.last_seen ? unit.last_seen.slice(11, 19) : "LIVE";
+    return [{ t: label, v: unit.telemetry.v_bat, ts }];
+  }
+
+  if (existing && existing.length >= 1) {
+    return existing;
+  }
+  return voltageHistory(unit.telemetry.v_bat, unit.telemetry.engine_on);
+}
+
+export function formatWibTimestamp(tsEpoch: number): string {
+  return new Date((tsEpoch + 7 * 3600) * 1000).toISOString().replace("T", " ").slice(0, 19);
+}
+
+export interface TelemetryCsvOptions {
+  isLiveApi?: boolean;
+}
 
 function escapeCsvCell(val: string | number | boolean | null | undefined): string {
   const str = val === null || val === undefined ? "" : String(val);
@@ -208,18 +315,17 @@ function escapeCsvCell(val: string | number | boolean | null | undefined): strin
 }
 
 /**
- * Generates an RFC 4180 CSV string matching `export_csv.php` columns from local state
- * when operating in SIMULATOR mode or when offline fallback is needed.
+ * Generates an RFC 4180 39-column CSV string matching `export_csv.php` columns from local state.
+ * In `isLiveApi` mode, never fabricates synthetic `voltageHistory()` rows.
  */
 export function buildTelemetryCsv(
   units: VehicleUnit[],
   historyMap: Record<string, Array<BatteryHistoryPoint>>,
-  targetUnitId?: string,
+  targetUnitId: string = "ALL",
+  options?: TelemetryCsvOptions,
 ): string {
-  const filteredUnits =
-    !targetUnitId || targetUnitId.toUpperCase() === "ALL"
-      ? units
-      : units.filter((u) => u.unit_id === targetUnitId);
+  const isLiveApi = Boolean(options?.isLiveApi);
+  const { filteredUnits } = parseExportTargetUnits(units, targetUnitId);
 
   const lines: string[] = [CSV_COLUMNS.join(",")];
   const nowSec = Math.floor(Date.now() / 1000);
@@ -227,39 +333,63 @@ export function buildTelemetryCsv(
 
   for (const u of filteredUnits) {
     const t = u.telemetry;
-    const hist =
-      historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 1
-        ? historyMap[u.unit_id]!
-        : voltageHistory(t.v_bat, t.engine_on);
-
+    const hist = resolveExportHistoryPoints(u, historyMap, isLiveApi, nowSec);
     const points = hist.slice().reverse();
+    const baseEpoch = resolveUnitLastSeenEpoch(u, nowSec);
+
     points.forEach((pt, idx) => {
-      const tsEpoch = typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : nowSec - idx * 3600;
-      const isoCreated = new Date(tsEpoch * 1000).toISOString().replace("T", " ").slice(0, 19);
-      const seq = Math.max(1, t.boot - idx);
+      const tsEpoch =
+        typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : Math.max(0, baseEpoch - idx * 3600);
+      const wibCreated =
+        idx === 0 && isLiveApi && u.last_seen ? u.last_seen : formatWibTimestamp(tsEpoch);
+      const baseSeq = typeof t.seq === "number" && t.seq > 0 ? t.seq : t.boot;
+      const seq = Math.max(1, baseSeq - idx);
       const vBat = idx === 0 ? t.v_bat : pt.v;
-      const adcMv = idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
+      const adcMv: number | string =
+        idx === 0 ? t.adc_raw_mv : isLiveApi ? "" : Math.round((vBat - 0.069) / 0.005412);
+      const netZone = (t.net_zone || u.net_zone || (u.in_yard ? "YARD" : "OFFLINE")).trim();
+      const syncSsid = (t.sync_ssid || u.sync_ssid || "").trim();
+
       const row = [
         rowId++,
         u.unit_id,
         seq,
-        seq,
+        t.boot,
         tsEpoch,
-        isoCreated,
+        wibCreated,
         vBat.toFixed(2),
         adcMv,
         t.rtc_temp_c.toFixed(1),
         t.shunt_sleep_ua,
-        t.engine_on ? 1 : 0,
-        vBat < 11.8 ? 1 : t.crit_alert ? 1 : 0,
-        t.rpm,
-        t.temp_c,
+        t.engine_on && idx === 0 ? 1 : 0,
+        vBat < 11.8 || (idx === 0 && t.crit_alert) ? 1 : 0,
+        t.engine_on && idx === 0 ? t.rpm : 0,
+        t.engine_on && idx === 0 ? t.temp_c : 0,
         t.dtc_cnt,
         t.dtc,
         t.rssi,
         t.sleep_cfg,
+        u.buffer_used,
+        t.can_ok === false ? 0 : 1,
+        netZone,
+        syncSsid,
         t.active_ms,
         t.daily_mah.toFixed(2),
+        t.speed_kmh ?? 0,
+        t.iat_c ?? 0,
+        t.map_kpa ?? 0,
+        (t.load_pct ?? 0).toFixed(1),
+        (t.tps_pct ?? 0).toFixed(1),
+        (t.ign_deg ?? 0).toFixed(1),
+        (t.maf_gs ?? 0).toFixed(2),
+        t.run_time_s ?? 0,
+        (t.fuel_pct ?? 0).toFixed(1),
+        (t.fuel_rate_lh ?? 0).toFixed(2),
+        (t.o2_v ?? 0).toFixed(2),
+        (t.stft_pct ?? 0).toFixed(1),
+        t.mil_on ? 1 : 0,
+        (t.ecu_v ?? 0).toFixed(2),
+        t.dist_clr_km ?? 0,
       ];
       lines.push(row.map(escapeCsvCell).join(","));
     });
