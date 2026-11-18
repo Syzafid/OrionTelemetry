@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { VehicleUnit } from "@/data/mockTelemetry";
+import type { VehicleUnit, PiggybackConfig } from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ interface VehicleTopologyMapProps {
   unit: VehicleUnit;
   activeNode: TopologyNodeId;
   onSelectNode: (node: TopologyNodeId) => void;
+  config?: PiggybackConfig;
   className?: string;
 }
 
@@ -23,6 +24,7 @@ export function VehicleTopologyMap({
   unit,
   activeNode,
   onSelectNode,
+  config,
   className,
 }: VehicleTopologyMapProps) {
   const [focusedNode, setFocusedNode] = useState<TopologyNodeId | null>(null);
@@ -35,7 +37,14 @@ export function VehicleTopologyMap({
   const isOffline =
     unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
 
-  const batteryTone: Tone = isBatteryCrit ? "crimson" : isBatteryLow ? "amber" : "emerald";
+  // OLS Calibration status check (Finding #3)
+  const calSlope = config?.cal_slope ?? 0.005412;
+  const calOffset = config?.cal_offset ?? 0.069;
+  const vCalculated = (t.adc_raw_mv * calSlope) + calOffset;
+  const vDelta = Math.abs(t.v_bat - vCalculated);
+  const isCalibrated = vDelta < 0.08;
+
+  const batteryTone: Tone = isBatteryCrit ? "crimson" : isBatteryLow || !isCalibrated ? "amber" : "emerald";
   const alternatorTone: Tone = isCharging ? "emerald" : t.engine_on ? "amber" : "dim";
   const canTone: Tone = isCanFault ? "crimson" : "emerald";
   const rfTone: Tone = isOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald";
@@ -62,7 +71,9 @@ export function VehicleTopologyMap({
     battery: {
       title: "PROBE 01: AKI 12V 70Ah & SHUNT RESISTOR",
       location: "Ruang Mesin Sisi Kiri (Dekat Box Filter Udara)",
-      reading: `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | Arus Tidur: ${t.shunt_sleep_ua} µA`,
+      reading: isCalibrated
+        ? `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | Arus Tidur: ${t.shunt_sleep_ua} µA`
+        : `${fmtV(t.v_bat)} V (${t.adc_raw_mv} mV) | KALIBRASI DRIFT (Δ=${vDelta.toFixed(3)}V)`,
       tone: batteryTone,
     },
     alternator: {
@@ -369,8 +380,11 @@ export function VehicleTopologyMap({
               <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
                 PROBE 01: AKI 12V 70Ah
               </text>
-              <text x="8" y="26" fill={isBatteryCrit ? "#F45B60" : isBatteryLow ? "#F59E0B" : "#10B981"} fontSize="11" fontWeight="bold" fontFamily="monospace">
+              <text x="8" y="26" fill={isBatteryCrit ? "#F45B60" : isBatteryLow || !isCalibrated ? "#F59E0B" : "#10B981"} fontSize="11" fontWeight="bold" fontFamily="monospace">
                 {fmtV(t.v_bat)} V <tspan fill="oklch(0.72 0.01 260)" fontSize="9">({t.adc_raw_mv} mV)</tspan>
+                {!isCalibrated && (
+                  <tspan fill="#F59E0B" fontSize="8.5" fontWeight="bold"> [DRIFT]</tspan>
+                )}
               </text>
             </g>
           </g>

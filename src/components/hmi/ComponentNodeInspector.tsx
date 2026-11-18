@@ -443,16 +443,16 @@ export function ComponentNodeInspector({
           </span>
         </div>
 
-        {/* Tab Switcher */}
+        {/* Tab Switcher - Mobile Ergonomic Touch Targets >= 42px (Finding #2) */}
         <div className="flex items-center gap-1 rounded-[1px] border border-border bg-background p-0.5 num text-[10.5px]">
           <button
             type="button"
             onClick={() => setActiveTab("matrix")}
             className={cn(
-              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "px-3 py-1.5 sm:py-1 min-h-[42px] sm:min-h-[32px] flex items-center justify-center uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
               activeTab === "matrix"
-                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30 shadow-sm"
+                : "text-muted-foreground/90 hover:text-foreground",
             )}
           >
             Matriks Data Stream
@@ -461,10 +461,10 @@ export function ComponentNodeInspector({
             type="button"
             onClick={() => setActiveTab("transducer")}
             className={cn(
-              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "px-3 py-1.5 sm:py-1 min-h-[42px] sm:min-h-[32px] flex items-center justify-center uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
               activeTab === "transducer"
-                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30 shadow-sm"
+                : "text-muted-foreground/90 hover:text-foreground",
             )}
           >
             Transduser & OLS
@@ -473,10 +473,10 @@ export function ComponentNodeInspector({
             type="button"
             onClick={() => setActiveTab("sop")}
             className={cn(
-              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "px-3 py-1.5 sm:py-1 min-h-[42px] sm:min-h-[32px] flex items-center justify-center uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
               activeTab === "sop"
-                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30 shadow-sm"
+                : "text-muted-foreground/90 hover:text-foreground",
             )}
           >
             Manual Servis (SOP)
@@ -629,62 +629,309 @@ export function ComponentNodeInspector({
         </div>
       )}
 
-      {/* Tab 2: Transduser & Kalibrasi OLS (Deep Engineering Workbench) */}
+      {/* Tab 2: Transduser & OLS (Context-Aware Engineering Analysis - Finding #1) */}
       {activeTab === "transducer" && (
         <div className="space-y-3 num text-[11px]">
-          {/* OLS Linear Regression Mathematical Calibration Card */}
-          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground uppercase tracking-wider">
-                  KALIBRASI OLS ADC (GPIO34 NODE M)
-                </span>
-                <span
-                  className={cn(
-                    "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                    isCalibrated ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-amber/15 text-amber border border-amber/30",
-                  )}
-                >
-                  {isCalibrated ? "IN CALIBRATION (OLS PASS)" : "CALIBRATION DRIFT DETECTED"}
+          {/* 1. Contextual Card for Battery (battery / all) */}
+          {(activeNode === "battery" || activeNode === "all") && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    KALIBRASI OLS ADC (GPIO34 NODE M)
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      isCalibrated ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-amber/15 text-amber border border-amber/30",
+                    )}
+                  >
+                    {isCalibrated ? "IN CALIBRATION (OLS PASS)" : "CALIBRATION DRIFT DETECTED"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Formula: V_bat = (ADC_raw * m) + c
                 </span>
               </div>
-              <span className="text-[10px] text-muted-foreground">
-                Formula: V_bat = (ADC_raw * m) + c
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">ADC RAW PIN 34</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{t.adc_raw_mv} mV</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">R-Divider 300k/68k</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SLOPE (m) / OFFSET (c)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    m: {calSlope.toFixed(6)}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">c: {calOffset.toFixed(3)} V</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">HASIL KALKULASI OLS</div>
+                  <div className="text-sm font-bold text-emerald mt-0.5">{vCalculated.toFixed(2)} V</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Terkalibrasi OLS</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">DELTA DRIFT HARDWARE</div>
+                  <div className={cn("text-sm font-bold mt-0.5", isCalibrated ? "text-foreground" : "text-amber")}>
+                    {vDelta.toFixed(3)} V
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi maks 0.080V</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Contextual Card for Alternator (alternator) */}
+          {activeNode === "alternator" && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    ANALISIS SIRKUIT PENGISIAN ALTERNATOR 130A
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      isCharging ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-secondary text-muted-foreground border border-border",
+                    )}
+                  >
+                    {isCharging ? "PENGISIAN AKTIF" : "STANDBY (OFF)"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Regulator IC Denso 12V 130A
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN TERMINAL B+</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{isCharging ? "13.80 V" : "0.00 V"}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Nominal: 13.2V - 14.6V</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">PUTARAN CUT-IN</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">650 RPM</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mulai regulasi cas</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">BATAS RIAK AC PENYEARAH</div>
+                  <div className="text-sm font-bold text-emerald mt-0.5">&lt; 250 mV RMS</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Kesehatan Dioda 3-Fase</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">STATUS KONTROL REGULATOR</div>
+                  <div className={cn("text-sm font-bold mt-0.5", isCharging ? "text-emerald" : "text-muted-foreground")}>
+                    {isCharging ? "CHARGING RUN" : "IDLE OFF"}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Terminal L / S Terhubung</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Contextual Card for Powertrain (powertrain) */}
+          {activeNode === "powertrain" && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    TRANSDUSER PUTARAN ENGKOL (CKP) & SUHU MESIN (ECT)
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      t.engine_on ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-secondary text-muted-foreground border border-border",
+                    )}
+                  >
+                    {t.engine_on ? "MESIN MENYALA" : "KONTAK MATI"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Blok Mesin Mitsubishi Pajero Sport 4D56 / 4N15
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SENSOR CKP (RPM)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Roda Reluktansi 60-2 Gigi</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SUHU PENDINGIN ECT</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c} °C`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Buka Termostat: 82°C</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">BEBAN MESIN TERHITUNG</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0%" : `${(t.load_pct ?? 0).toFixed(0)}%`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x04</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">LAJU INJEKSI BAHAN BAKAR</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0.00 L/h" : `${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x5E</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Contextual Card for OBD-II CAN Bus (can_obd) */}
+          {activeNode === "can_obd" && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    ARSITEKTUR PORT OBD-II J1962 & TRANSCEIVER CAN TWAI
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      isCanFault ? "bg-crimson/15 text-crimson border border-crimson/30" : "bg-emerald/15 text-emerald border border-emerald/30",
+                    )}
+                  >
+                    {isCanFault ? "CAN BUS FAULT" : "CAN HIGH-SPEED OK"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Protokol: ISO 11898-2 (500 kbps)
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">TERMINASI BUS (PIN 6-14)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">60 Ohm</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi: 54 - 66 Ohm</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">KODE KERUSAKAN DTC</div>
+                  <div className={cn("text-sm font-bold mt-0.5", isCanFault ? "text-crimson" : "text-emerald")}>
+                    {t.dtc} ({t.dtc_cnt})
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Read-Only Mode 03/07</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">LAMPU KERUSAKAN (MIL)</div>
+                  <div className={cn("text-sm font-bold mt-0.5", t.mil_on || t.dtc_cnt > 0 ? "text-crimson" : "text-emerald")}>
+                    {t.mil_on || t.dtc_cnt > 0 ? "ILLUMINATED" : "OFF / NORMAL"}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x01</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">KECEPATAN LAJU (SPEED)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0 km/h" : `${t.speed_kmh ?? 0} km/h`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x0D</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Contextual Card for ESP32 Gateway Core (esp32_core) */}
+          {activeNode === "esp32_core" && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    HARDWARE ORION GATEWAY v1.0 & MEMORI LITTLEFS
+                  </span>
+                  <span className="rounded bg-emerald/15 text-emerald border border-emerald/30 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase">
+                    SYSTEM HEALTHY
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Firmware ESP32 v1.4.1 Production
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SUHU RTC DS3231SN</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{t.rtc_temp_c.toFixed(2)} °C</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">TCXO Drift &lt; 2ppm</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">PARTISI BUFFER FLASH</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.buffer_used} / 20 Slot</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">LittleFS 1.5MB Partition</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">KONSUMSI HARIAN DAYA</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{t.daily_mah} mAh</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Target: &lt; 65 mAh/hari</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">REGULATOR STEP-DOWN BUCK</div>
+                  <div className="text-sm font-bold text-emerald mt-0.5">3.30 V</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">TI TPS54302 (12V ke 3.3V)</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Contextual Card for RF Network & Uplink (rf_network) */}
+          {activeNode === "rf_network" && (
+            <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground uppercase tracking-wider">
+                    RF LINK BUDGET & GEOFENCE TELEMETRY UPLINK
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      isOffline
+                        ? "bg-secondary text-muted-foreground border border-border"
+                        : unit.net_zone === "TECH_HOTSPOT"
+                          ? "bg-amber/15 text-amber border border-amber/30"
+                          : "bg-emerald/15 text-emerald border border-emerald/30",
+                    )}
+                  >
+                    {unit.net_zone ?? "YARD"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Transceiver: 2.4 GHz 802.11 b/g/n
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">KEKUATAN SINYAL (RSSI)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{t.rssi} dBm</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Ambang Real-time: &gt;= -85dBm</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SSID JARINGAN TERHUBUNG</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5 truncate">{unit.net_zone === "TECH_HOTSPOT" ? (t.sync_ssid || "POCO Hotspot") : "YARD_AP_HQ"}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">WPA2-PSK Authentication</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">STATUS ANTISIPASI GEOFENCE</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.in_yard ? "IN YARD BOUNDARY" : "DEPARTED"}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Hysteresis: 3 Siklus Miss</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">BURST SYNC FLUSH QUEUE</div>
+                  <div className="text-sm font-bold text-emerald mt-0.5">{unit.buffer_used === 0 ? "IDLE (0)" : `${unit.buffer_used} PENDING`}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Maksimal 20 slot per batch</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Physical Harness Pinout & Wiring Specifications (Clean Title - Finding #4) */}
+          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <span className="font-semibold text-foreground uppercase tracking-wider">
+                SPESIFIKASI WIRING HARNESS & TERMINAL
               </span>
-            </div>
-
-            <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded border border-border/50 bg-card/60 p-2">
-                <div className="text-[10px] text-muted-foreground uppercase">ADC RAW PIN 34</div>
-                <div className="text-sm font-bold text-foreground mt-0.5">{t.adc_raw_mv} mV</div>
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">R-Divider 300k/68k</div>
-              </div>
-              <div className="rounded border border-border/50 bg-card/60 p-2">
-                <div className="text-[10px] text-muted-foreground uppercase">SLOPE (m) / OFFSET (c)</div>
-                <div className="text-sm font-bold text-foreground mt-0.5">
-                  m: {calSlope.toFixed(6)}
-                </div>
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">c: {calOffset.toFixed(3)} V</div>
-              </div>
-              <div className="rounded border border-border/50 bg-card/60 p-2">
-                <div className="text-[10px] text-muted-foreground uppercase">HASIL KALKULASI OLS</div>
-                <div className="text-sm font-bold text-emerald mt-0.5">{vCalculated.toFixed(2)} V</div>
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">Terkalibrasi OLS</div>
-              </div>
-              <div className="rounded border border-border/50 bg-card/60 p-2">
-                <div className="text-[10px] text-muted-foreground uppercase">DELTA DRIFT HARDWARE</div>
-                <div className={cn("text-sm font-bold mt-0.5", isCalibrated ? "text-foreground" : "text-amber")}>
-                  {vDelta.toFixed(3)} V
-                </div>
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi maks 0.080V</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Physical Harness Pinout & Wiring Specifications */}
-          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
-            <div className="font-semibold text-foreground border-b border-border/60 pb-1.5 uppercase tracking-wider">
-              SPESIFIKASI WIRING HARNESS & TERMINAL
+              <span className="text-[10px] text-muted-foreground uppercase">
+                Standar OEM Mitsubishi Pajero Sport
+              </span>
             </div>
             <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <div>
