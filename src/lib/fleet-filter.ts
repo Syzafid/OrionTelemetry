@@ -14,13 +14,13 @@ export interface FleetFilterCounts {
 
 export function classifyUnitHealthCategory(
   u: VehicleUnit,
-  critV: number = 11.80,
+  critV: number = 11.8,
 ): Exclude<FleetStatusFilter, "ALL"> {
   const t = u.telemetry;
   if (t.crit_alert || t.v_bat < critV || t.dtc_cnt > 0 || u.state === "CRITICAL") {
     return "CRITICAL";
   }
-  if (!t.engine_on && t.v_bat < 12.30) {
+  if (!t.engine_on && t.v_bat < 12.3) {
     return "WARNING";
   }
   return "HEALTHY";
@@ -37,7 +37,7 @@ export function computeFleetStatusCounts(
     HEALTHY: 0,
   };
   for (const u of units) {
-    const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+    const crit = configs[u.unit_id]?.crit_v ?? 11.8;
     const cat = classifyUnitHealthCategory(u, crit);
     counts[cat]++;
   }
@@ -63,7 +63,7 @@ export function matchesFleetSearch(u: VehicleUnit, rawQuery: string): boolean {
 function getTriagePriorityRank(u: VehicleUnit, critV: number): number {
   const t = u.telemetry;
   if (t.crit_alert || t.v_bat < critV || t.dtc_cnt > 0 || u.state === "CRITICAL") return 0; // Critical
-  if (!t.engine_on && t.v_bat < 12.30) return 1; // Low Warning
+  if (!t.engine_on && t.v_bat < 12.3) return 1; // Low Warning
   if (t.engine_on || u.state === "WARMUP") return 2; // Active Warm-Up
   if (u.in_yard) return 3; // Healthy Standby in yard
   return 4; // Departed / Out of Yard
@@ -86,14 +86,14 @@ export function filterAndSortFleetUnits(
   const filtered = units.filter((u) => {
     if (!matchesFleetSearch(u, searchQuery)) return false;
     if (statusFilter === "ALL") return true;
-    const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+    const crit = configs[u.unit_id]?.crit_v ?? 11.8;
     return classifyUnitHealthCategory(u, crit) === statusFilter;
   });
 
   const ttcCache = new Map<string, number>();
   if (sortBy === "SHORTEST_TTC") {
     for (const u of filtered) {
-      const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+      const crit = configs[u.unit_id]?.crit_v ?? 11.8;
       const hist =
         historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 2
           ? historyMap[u.unit_id]!
@@ -106,18 +106,14 @@ export function filterAndSortFleetUnits(
         u.telemetry.rtc_temp_c,
       );
       const effectiveTtc =
-        pred.ttcHours !== null
-          ? pred.ttcHours
-          : u.telemetry.engine_on
-            ? 99999
-            : 9999;
+        pred.ttcHours !== null ? pred.ttcHours : u.telemetry.engine_on ? 99999 : 9999;
       ttcCache.set(u.unit_id, effectiveTtc);
     }
   }
 
   return filtered.slice().sort((a, b) => {
-    const critA = configs[a.unit_id]?.crit_v ?? 11.80;
-    const critB = configs[b.unit_id]?.crit_v ?? 11.80;
+    const critA = configs[a.unit_id]?.crit_v ?? 11.8;
+    const critB = configs[b.unit_id]?.crit_v ?? 11.8;
 
     switch (sortBy) {
       case "LOWEST_V":
@@ -155,4 +151,3 @@ export function resolveSafeSelectedUnitId(
   }
   return visibleUnits[0]?.unit_id ?? "MITSUBISHI-STOCK-01";
 }
-

@@ -138,7 +138,10 @@ interface Ctx {
     handoverNote?: string,
   ) => void;
   tagMovement: (evId: string, tag: OperationalTag) => void;
-  pairUnit: (oldId: string, data: { vin: string; model: string; color: string; bay: string }) => void;
+  pairUnit: (
+    oldId: string,
+    data: { vin: string; model: string; color: string; bay: string },
+  ) => void;
   registerUnit: (data: {
     unit_id: string;
     vin: string;
@@ -174,10 +177,18 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const [configs, setConfigs] = useState<Record<string, PiggybackConfig>>(() =>
     Object.fromEntries(EXPANDED_YARD_UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)])),
   );
-  const [history, setHistory] = useState<Record<string, Array<{ t: string; v: number; ts?: number }>>>({});
-  const [movement, setMovement] = useState<MovementEvent[]>(() => MOVEMENT_LOG.map((m) => ({ ...m })));
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => AUDIT_LOGS.map((a) => ({ ...a })));
-  const [tickets, setTickets] = useState<MaintenanceTicket[]>(() => INITIAL_TICKETS.map((t) => ({ ...t })));
+  const [history, setHistory] = useState<
+    Record<string, Array<{ t: string; v: number; ts?: number }>>
+  >({});
+  const [movement, setMovement] = useState<MovementEvent[]>(() =>
+    MOVEMENT_LOG.map((m) => ({ ...m })),
+  );
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() =>
+    AUDIT_LOGS.map((a) => ({ ...a })),
+  );
+  const [tickets, setTickets] = useState<MaintenanceTicket[]>(() =>
+    INITIAL_TICKETS.map((t) => ({ ...t })),
+  );
   const [unpaired, setUnpaired] = useState<string[]>([]);
   const [dataSource, setDataSource] = useState<DataSource>("SIMULATOR");
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
@@ -267,26 +278,32 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       const nowStr = new Date().toISOString().replace("T", " ").slice(0, 19);
       setAuditLogs((prev) => {
         const nextId = (prev[0]?.id ?? 0) + 1;
-        return [{ id: nextId, unit_id, event_type, severity, message, created_at: nowStr }, ...prev].slice(0, 15);
+        return [
+          { id: nextId, unit_id, event_type, severity, message, created_at: nowStr },
+          ...prev,
+        ].slice(0, 15);
       });
     },
     [],
   );
 
-  const sendMutation = useCallback(async (action: string, data: Record<string, unknown>) => {
-    if (dataSource !== "LIVE_API") return;
-    try {
-      const targetUrl = resolveUpdateEndpointUrl(apiUrl);
-      await fetch(targetUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ action, ...data }),
-      });
-      void pollRef.current?.();
-    } catch {
-      // Silent fallback for background sync to avoid breaking UI
-    }
-  }, [dataSource, apiUrl]);
+  const sendMutation = useCallback(
+    async (action: string, data: Record<string, unknown>) => {
+      if (dataSource !== "LIVE_API") return;
+      try {
+        const targetUrl = resolveUpdateEndpointUrl(apiUrl);
+        await fetch(targetUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ action, ...data }),
+        });
+        void pollRef.current?.();
+      } catch {
+        // Silent fallback for background sync to avoid breaking UI
+      }
+    },
+    [dataSource, apiUrl],
+  );
 
   const patchUnit = useCallback((id: string, fn: (u: VehicleUnit) => VehicleUnit) => {
     setAllUnits((us) => {
@@ -314,7 +331,10 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     (id: string, patch: Partial<PiggybackConfig>) => {
       setConfigs((c) => ({ ...c, [id]: { ...(c[id] ?? DEFAULT_CONFIG(id)), ...patch } }));
       if (patch.sleep_cfg)
-        patchUnit(id, (u) => ({ ...u, telemetry: { ...u.telemetry, sleep_cfg: patch.sleep_cfg! } }));
+        patchUnit(id, (u) => ({
+          ...u,
+          telemetry: { ...u.telemetry, sleep_cfg: patch.sleep_cfg! },
+        }));
       if (patch.cal_slope !== undefined || patch.cal_offset !== undefined) {
         appendLocalAudit(
           id,
@@ -327,7 +347,9 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           id,
           "CONFIG_UPDATE",
           "INFO",
-          `Node config staged for next wake (${Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(", ")})`,
+          `Node config staged for next wake (${Object.entries(patch)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ")})`,
         );
       }
       void sendMutation("UPDATE_CONFIG", { unit_id: id, ...patch });
@@ -347,9 +369,19 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         },
       }));
       if (code) {
-        appendLocalAudit(id, "DTC_ALERT", "CRITICAL", `OBD-II Mode 03 read-only diagnostic fault code ${code} detected`);
+        appendLocalAudit(
+          id,
+          "DTC_ALERT",
+          "CRITICAL",
+          `OBD-II Mode 03 read-only diagnostic fault code ${code} detected`,
+        );
       } else {
-        appendLocalAudit(id, "DTC_SANDBOX_PREVIEW", "INFO", "Sandbox Mode 03 read preview restored to nominal (100% Read-Only ECU policy)");
+        appendLocalAudit(
+          id,
+          "DTC_SANDBOX_PREVIEW",
+          "INFO",
+          "Sandbox Mode 03 read preview restored to nominal (100% Read-Only ECU policy)",
+        );
       }
     },
     [patchUnit, appendLocalAudit],
@@ -358,7 +390,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const flushBuffer = useCallback(
     (id: string) => {
       patchUnit(id, (u) => ({ ...u, buffer_used: 0 }));
-      appendLocalAudit(id, "BUFFER_FLUSH", "INFO", "Operator cleared offline sync badge and acknowledged burst buffer");
+      appendLocalAudit(
+        id,
+        "BUFFER_FLUSH",
+        "INFO",
+        "Operator cleared offline sync badge and acknowledged burst buffer",
+      );
       void sendMutation("FLUSH_BUFFER", { unit_id: id });
     },
     [patchUnit, appendLocalAudit, sendMutation],
@@ -384,7 +421,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const dispatchWarmup = useCallback(
     (id: string) => {
       patchUnit(id, (u) => ({ ...u, status_label: "Warm-Up Dispatched" }));
-      appendLocalAudit(id, "WARMUP_DISPATCH", "WARN", "Operator dispatched staff for 10-min engine alternator warm-up");
+      appendLocalAudit(
+        id,
+        "WARMUP_DISPATCH",
+        "WARN",
+        "Operator dispatched staff for 10-min engine alternator warm-up",
+      );
       void sendMutation("DISPATCH_WARMUP", { unit_id: id });
     },
     [patchUnit, appendLocalAudit, sendMutation],
@@ -420,7 +462,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const tagMovement = useCallback(
     (evId: string, tag: OperationalTag) => {
       setMovement((m) => m.map((e) => (e.id === evId ? { ...e, tag } : e)));
-      appendLocalAudit("YARD-GATEWAY", "MOVEMENT_TAG", "INFO", `Movement event ${evId} tagged as ${tag}`);
+      appendLocalAudit(
+        "YARD-GATEWAY",
+        "MOVEMENT_TAG",
+        "INFO",
+        `Movement event ${evId} tagged as ${tag}`,
+      );
       void sendMutation("TAG_MOVEMENT", { id: evId, tag });
     },
     [appendLocalAudit, sendMutation],
@@ -429,7 +476,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const unpairUnit = useCallback(
     (id: string) => {
       setUnpaired((p) => (p.includes(id) ? p : [...p, id]));
-      appendLocalAudit(id, "NODE_UNPAIRED", "WARN", "Vehicle sold / detached from OBD-II telemetry node");
+      appendLocalAudit(
+        id,
+        "NODE_UNPAIRED",
+        "WARN",
+        "Vehicle sold / detached from OBD-II telemetry node",
+      );
     },
     [appendLocalAudit],
   );
@@ -496,7 +548,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           buffer_used: 0,
           telemetry: {
             unit_id: newId,
-            v_bat: 12.60,
+            v_bat: 12.6,
             adc_raw_mv: 2260,
             rtc_temp_c: 30.0,
             shunt_sleep_ua: 380,
@@ -527,7 +579,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
             o2_v: 0.45,
             stft_pct: 0,
             mil_on: false,
-            ecu_v: 12.60,
+            ecu_v: 12.6,
             dist_clr_km: 0,
           },
         };
@@ -605,7 +657,9 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       if (json && typeof json === "object" && !Array.isArray(json)) {
         const obj = json as Record<string, unknown>;
         if (Array.isArray(obj["units"])) {
-          const remoteIds = (obj["units"] as Array<{ unit_id?: string }>).map((u) => u.unit_id).filter(Boolean) as string[];
+          const remoteIds = (obj["units"] as Array<{ unit_id?: string }>)
+            .map((u) => u.unit_id)
+            .filter(Boolean) as string[];
           if (remoteIds.length > 0) {
             setLiveUnitIds(remoteIds);
           }
@@ -646,20 +700,14 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           !Array.isArray(obj["history"]) &&
           hasSectionChanged("history", obj["history"])
         ) {
-          setHistory(obj["history"] as Record<string, Array<{ t: string; v: number; ts?: number }>>);
+          setHistory(
+            obj["history"] as Record<string, Array<{ t: string; v: number; ts?: number }>>,
+          );
         }
-        if (
-          Array.isArray(obj["audit_logs"]) &&
-          obj["audit_logs"].length > 0 &&
-          hasSectionChanged("audit", obj["audit_logs"])
-        ) {
+        if (Array.isArray(obj["audit_logs"]) && hasSectionChanged("audit", obj["audit_logs"])) {
           setAuditLogs(obj["audit_logs"] as AuditLogEntry[]);
         }
-        if (
-          Array.isArray(obj["tickets"]) &&
-          obj["tickets"].length > 0 &&
-          hasSectionChanged("tickets", obj["tickets"])
-        ) {
+        if (Array.isArray(obj["tickets"]) && hasSectionChanged("tickets", obj["tickets"])) {
           setTickets(obj["tickets"] as MaintenanceTicket[]);
         }
       }
@@ -703,7 +751,9 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
               setLastSyncedAt(parsed.lastSyncedAt);
             }
             if (Array.isArray(parsed.units) && parsed.units.length > 0) {
-              setAllUnits((us) => applyRemoteUpdate(us, { units: parsed.units }, selectedIdRef.current));
+              setAllUnits((us) =>
+                applyRemoteUpdate(us, { units: parsed.units }, selectedIdRef.current),
+              );
             }
           }
         } catch {
@@ -726,6 +776,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     if (dataSource !== "LIVE_API") {
       setApiStatus("SANDBOX");
       setIsOfflineSnapshot(false);
+      setTickets((prev) => (prev.length === 0 ? INITIAL_TICKETS : prev));
+      setAuditLogs((prev) => (prev.length === 0 ? AUDIT_LOGS : prev));
       return;
     }
 
@@ -746,7 +798,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           const isSettledOffline =
             u.last_seen_sec > 60 &&
             u.online_status === "OFFLINE" &&
-            (u.connection_badge === "OFFLINE / DEEP SLEEP" || u.connection_badge === "OFFLINE / OUT OF YARD");
+            (u.connection_badge === "OFFLINE / DEEP SLEEP" ||
+              u.connection_badge === "OFFLINE / OUT OF YARD");
           if (isSettledOffline) {
             continue;
           }

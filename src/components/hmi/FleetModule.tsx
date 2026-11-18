@@ -27,11 +27,21 @@ import {
   XCircle,
 } from "lucide-react";
 import { useTelemetry } from "@/context/TelemetryContext";
-import { ALT_VERIFY_V, getUnitConnectionState, voltageHistory, type TicketStatus, type VehicleUnit } from "@/data/mockTelemetry";
+import {
+  ALT_VERIFY_V,
+  getUnitConnectionState,
+  voltageHistory,
+  type TicketStatus,
+  type VehicleUnit,
+} from "@/data/mockTelemetry";
 import { OrionLogo } from "./OrionLogo";
 import { UnitQrCode, buildUnitDeepLinkUrl } from "./UnitQrCode";
-import { Led, Pill, Stat, unitTone, fmtV } from "./primitives";
-import { buildTelemetryCsv, computeBatteryPrediction, type PredictionTone } from "@/lib/battery-analytics";
+import { Led, Stat, unitTone, fmtV } from "./primitives";
+import {
+  buildTelemetryCsv,
+  computeBatteryPrediction,
+  type PredictionTone,
+} from "@/lib/battery-analytics";
 import { buildFormattedExcelPrettier } from "@/lib/excel-export";
 import {
   computeFleetStatusCounts,
@@ -39,6 +49,7 @@ import {
   type FleetSortMode,
   type FleetStatusFilter,
 } from "@/lib/fleet-filter";
+import { formatDurationCompact, formatSleepInterval } from "@/lib/vehicle-topology";
 import { cn } from "@/lib/utils";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
@@ -117,6 +128,26 @@ async function copyTextSafe(text: string): Promise<boolean> {
   return false;
 }
 
+function resolveUnitHistory(
+  u: VehicleUnit,
+  dataSource: "SIMULATOR" | "LIVE_API",
+  historyMap: Record<string, Array<{ t: string; v: number; ts?: number }>>,
+): Array<{ t: string; v: number; ts?: number }> {
+  const pts = historyMap[u.unit_id];
+  if (dataSource === "LIVE_API") {
+    if (pts && pts.length > 0) return pts;
+    const label = u.last_seen ? u.last_seen.slice(11, 16) : "LIVE";
+    return [
+      {
+        t: label,
+        v: u.telemetry.v_bat,
+        ...(typeof u.telemetry.ts_epoch === "number" ? { ts: u.telemetry.ts_epoch } : {}),
+      },
+    ];
+  }
+  return pts && pts.length >= 2 ? pts : voltageHistory(u.telemetry.v_bat, u.telemetry.engine_on);
+}
+
 export function FleetModule() {
   const {
     units,
@@ -148,9 +179,11 @@ export function FleetModule() {
   const [pdiTimestamp, setPdiTimestamp] = useState<string>("");
   const [copiedUnitId, setCopiedUnitId] = useState<string | null>(null);
   const [resolvingTicketUnitId, setResolvingTicketUnitId] = useState<string | null>(null);
-  const [techAction, setTechAction] = useState("Pengisian Daya Aki (Battery Charger 2 Jam)");
+  const [techAction, setTechAction] = useState("Pengisian Daya Baterai (Charger 2 Jam)");
   const [techName, setTechName] = useState("Teknisi Shift Pagi");
-  const [techNotes, setTechNotes] = useState("Tegangan baterai berhasil dinaikkan ke kondisi aman (> 12.40V) dan siap verifikasi PDI.");
+  const [techNotes, setTechNotes] = useState(
+    "Tegangan baterai berhasil dinaikkan ke kondisi aman (> 12.40V) dan siap verifikasi PDI.",
+  );
 
   // Reset deck page and scroll track to start whenever filter, search, or sort changes
   useEffect(() => {
@@ -175,7 +208,11 @@ export function FleetModule() {
       const now = Date.now();
       for (const u of units) {
         if (u.telemetry.engine_on && !next[u.unit_id]) {
-          const initialOffsetMs = Math.min(u.telemetry.active_ms || 180000, WARMUP_TARGET_SEC * 1000);
+          const runSec =
+            typeof u.telemetry.run_time_s === "number" && u.telemetry.run_time_s > 0
+              ? u.telemetry.run_time_s
+              : 0;
+          const initialOffsetMs = Math.min(runSec * 1000, WARMUP_TARGET_SEC * 1000);
           next[u.unit_id] = now - initialOffsetMs;
           changed = true;
         } else if (!u.telemetry.engine_on && next[u.unit_id]) {
@@ -298,7 +335,7 @@ export function FleetModule() {
   const criticalMap = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const u of units) {
-      const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+      const crit = configs[u.unit_id]?.crit_v ?? 11.8;
       map[u.unit_id] = u.telemetry.crit_alert || u.telemetry.v_bat < crit;
     }
     return map;
@@ -313,7 +350,9 @@ export function FleetModule() {
   // Tickets already RESOLVED when the module opened render a static check; new resolutions draw it.
   const initialResolvedRef = useRef<Set<string> | null>(null);
   if (initialResolvedRef.current === null) {
-    initialResolvedRef.current = new Set(tickets.filter((tk) => tk.status === "RESOLVED").map((tk) => tk.unit_id));
+    initialResolvedRef.current = new Set(
+      tickets.filter((tk) => tk.status === "RESOLVED").map((tk) => tk.unit_id),
+    );
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredUnits.length / CARDS_PER_DECK));
@@ -395,7 +434,9 @@ export function FleetModule() {
     carouselRef.current?.scrollTo?.({ left: 0, behavior: "instant" });
   }, []);
 
-  const pdiUnit: VehicleUnit | null = pdiUnitId ? (units.find((u) => u.unit_id === pdiUnitId) ?? null) : null;
+  const pdiUnit: VehicleUnit | null = pdiUnitId
+    ? (units.find((u) => u.unit_id === pdiUnitId) ?? null)
+    : null;
 
   return (
     <div className="module-fleet flex h-full min-h-0 flex-1 flex-col gap-3">
@@ -417,15 +458,15 @@ export function FleetModule() {
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Bay, Model, VIN, or DTC (e.g. P0133)..."
-              aria-label="Search fleet by Bay, Model, VIN, Unit ID, or DTC code"
+              placeholder="Cari Bay, Model, VIN, atau kode DTC (mis. P0133)..."
+              aria-label="Cari armada berdasarkan Bay, Model, VIN, Unit ID, atau kode DTC"
               className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-9 pr-8 py-2 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                aria-label="Clear search query"
+                aria-label="Hapus kata kunci pencarian"
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex min-h-[32px] min-w-[32px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
               >
                 <X size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -437,10 +478,15 @@ export function FleetModule() {
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
-                { id: "ALL", label: "All", count: counts.ALL, tone: "dim" },
-                { id: "CRITICAL", label: "Critical", count: counts.CRITICAL, tone: "crimson" },
-                { id: "WARNING", label: "Low Warning", count: counts.WARNING, tone: "amber" },
-                { id: "HEALTHY", label: "Healthy / Charging", count: counts.HEALTHY, tone: "emerald" },
+                { id: "ALL", label: "Semua", count: counts.ALL, tone: "dim" },
+                { id: "CRITICAL", label: "Kritis", count: counts.CRITICAL, tone: "crimson" },
+                { id: "WARNING", label: "Peringatan", count: counts.WARNING, tone: "amber" },
+                {
+                  id: "HEALTHY",
+                  label: "Normal / Mengisi",
+                  count: counts.HEALTHY,
+                  tone: "emerald",
+                },
               ] as const
             ).map((f) => {
               const active = statusFilter === f.id;
@@ -459,13 +505,15 @@ export function FleetModule() {
                   )}
                 >
                   <span>{f.label}</span>
-                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[10px] font-bold">{f.count}</span>
+                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[10px] font-bold">
+                    {f.count}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* Triage Sort Selector, Fleet Scale Toggle, & Global Exports */}
+          {/* Triage Sort Selector & Global Exports */}
           <div className="flex flex-wrap items-center gap-1.5">
             <label className="relative inline-flex items-center">
               <ArrowUpDown
@@ -477,21 +525,26 @@ export function FleetModule() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as FleetSortMode)}
-                aria-label="Sort fleet units by triage priority"
+                aria-label="Urutkan unit armada berdasarkan prioritas triage"
                 className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground outline-none focus:border-foreground/60"
               >
-                <option value="PRIORITY">Sort: Priority Triage</option>
-                <option value="LOWEST_V">Sort: Lowest Battery (V)</option>
-                <option value="SHORTEST_TTC">Sort: Shortest TTC Forecast</option>
-                <option value="BAY">Sort: Bay Location (A-C)</option>
+                <option value="PRIORITY">Urut: Prioritas Triage</option>
+                <option value="LOWEST_V">Urut: Voltase Terendah</option>
+                <option value="SHORTEST_TTC">Urut: Estimasi TTC Terdekat</option>
+                <option value="BAY">Urut: Lokasi Bay (A-C)</option>
               </select>
             </label>
 
             <div
               className="num inline-flex min-h-[44px] items-center gap-1.5 rounded-[2px] border border-border bg-secondary/30 px-3 py-1.5 text-[11px] text-muted-foreground"
-              title="Total 12 unit kendaraan terdaftar di armada yard"
+              title={`Total ${units.length} unit kendaraan terdaftar di armada yard`}
             >
-              <Layers size={13} strokeWidth={1.75} className="shrink-0 text-foreground" aria-hidden="true" />
+              <Layers
+                size={13}
+                strokeWidth={1.75}
+                className="shrink-0 text-foreground"
+                aria-hidden="true"
+              />
               <span>Armada: {units.length} Unit</span>
             </div>
 
@@ -502,7 +555,7 @@ export function FleetModule() {
               title="Ekspor Laporan Eksekutif Excel berwarna untuk seluruh unit"
             >
               <FileSpreadsheet size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span className="hidden sm:inline">Export Excel Report</span>
+              <span className="hidden sm:inline">Ekspor Laporan Excel</span>
               <span className="inline sm:hidden">Excel</span>
             </button>
 
@@ -513,18 +566,18 @@ export function FleetModule() {
               title="Ekspor data mentah CSV seluruh unit"
             >
               <Download size={12} strokeWidth={1.75} aria-hidden="true" />
-              <span>Raw CSV</span>
+              <span>Unduh CSV</span>
             </button>
           </div>
         </div>
 
-        {/* Deck Pagination & Quick-Jump Bay Pills */}
-        {filteredUnits.length > 0 && (
+        {/* Deck Pagination & Quick-Jump Bay Pills (Hidden when <= 1 unit) */}
+        {filteredUnits.length > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2">
             <div className="flex items-center gap-1.5 overflow-x-auto card-scroll py-0.5 max-w-full">
-              <span className="label-hmi mr-1 shrink-0 text-[10px]">Quick Jump:</span>
+              <span className="label-hmi mr-1 shrink-0 text-[10px]">Lompat Cepat:</span>
               {filteredUnits.map((u, idx) => {
-                const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+                const crit = configs[u.unit_id]?.crit_v ?? 11.8;
                 const tn = unitTone(u, crit);
                 const isOnCurrentDeck =
                   idx >= safeDeckPage * CARDS_PER_DECK && idx < (safeDeckPage + 1) * CARDS_PER_DECK;
@@ -555,8 +608,9 @@ export function FleetModule() {
             {filteredUnits.length > CARDS_PER_DECK && (
               <div className="flex shrink-0 items-center gap-1.5 ml-auto">
                 <span className="num text-[11px] text-muted-foreground mr-1">
-                  Page <strong className="text-foreground">{safeDeckPage + 1}</strong> of{" "}
-                  <strong className="text-foreground">{totalPages}</strong> ({filteredUnits.length} Units)
+                  Hal <strong className="text-foreground">{safeDeckPage + 1}</strong> /{" "}
+                  <strong className="text-foreground">{totalPages}</strong> ({filteredUnits.length}{" "}
+                  Unit)
                 </span>
                 <button
                   type="button"
@@ -591,7 +645,8 @@ export function FleetModule() {
               Tidak Ada Unit Kendaraan yang Cocok
             </div>
             <p className="num mt-1 text-xs text-muted-foreground">
-              Pencarian &ldquo;{searchQuery}&rdquo; pada filter {statusFilter} tidak mengembalikan hasil.
+              Pencarian &ldquo;{searchQuery}&rdquo; pada filter {statusFilter} tidak mengembalikan
+              hasil.
             </p>
           </div>
           <button
@@ -600,7 +655,7 @@ export function FleetModule() {
             className="num inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[2px] border border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <RotateCcw size={14} strokeWidth={1.75} aria-hidden="true" />
-            <span>Reset Search &amp; Filters</span>
+            <span>Reset Pencarian &amp; Filter</span>
           </button>
         </div>
       ) : (
@@ -609,20 +664,22 @@ export function FleetModule() {
           layoutScroll
           onScroll={handleCarouselScroll}
           tabIndex={0}
-          aria-label="Fleet vehicle cards carousel"
+          aria-label="Daftar kartu kesehatan baterai armada"
           className="fleet-carousel-track flex flex-nowrap gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth card-scroll flex-1 min-h-0 pb-1 [&>*]:min-w-0"
         >
           {filteredUnits.map((u, idx) => {
             const globalRank = idx + 1;
-            const crit = configs[u.unit_id]?.crit_v ?? 11.80;
+            const crit = configs[u.unit_id]?.crit_v ?? 11.8;
             const t = u.telemetry;
             const tone = unitTone(u, crit);
-            const liveHistory = dataSource === "LIVE_API" ? history[u.unit_id] : null;
-            const data =
-              liveHistory && liveHistory.length >= 2
-                ? liveHistory
-                : voltageHistory(t.v_bat, t.engine_on);
-            const prediction = computeBatteryPrediction(data, t.v_bat, crit, t.engine_on, t.rtc_temp_c);
+            const data = resolveUnitHistory(u, dataSource, history);
+            const prediction = computeBatteryPrediction(
+              data,
+              t.v_bat,
+              crit,
+              t.engine_on,
+              t.rtc_temp_c,
+            );
             const c = HEX[tone];
             const isCritical = tone === "crimson" || t.v_bat < crit || t.dtc_cnt > 0;
             const isWarmup = t.engine_on;
@@ -631,12 +688,27 @@ export function FleetModule() {
             const verified = t.v_bat >= ALT_VERIFY_V;
             const unitTicket = tickets.find((tk) => tk.unit_id === u.unit_id) ?? null;
             const conn = getUnitConnectionState(u, dataSource === "LIVE_API");
+            const resolvedSsid = (t.sync_ssid || u.sync_ssid || "").trim();
+            const zoneOrSsid = resolvedSsid || u.net_zone || (u.in_yard ? "YARD" : "OFFLINE");
 
-            const startTime = warmupStartTimes[u.unit_id] ?? Date.now();
-            const elapsedSec = Math.min(WARMUP_TARGET_SEC, Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
+            const warmupStarted = warmupStartTimes[u.unit_id];
+            const rawElapsedSec =
+              typeof warmupStarted === "number"
+                ? Math.floor((Date.now() - warmupStarted) / 1000)
+                : typeof t.run_time_s === "number" && t.run_time_s > 0
+                  ? t.run_time_s
+                  : 0;
+            const elapsedSec = Math.min(WARMUP_TARGET_SEC, Math.max(0, rawElapsedSec));
             const progressPct = Math.min(100, Math.round((elapsedSec / WARMUP_TARGET_SEC) * 100));
             const isComplete = elapsedSec >= WARMUP_TARGET_SEC;
             const isCopied = copiedUnitId === u.unit_id;
+
+            const cardWidthClasses =
+              filteredUnits.length === 1
+                ? "w-full md:max-h-none md:h-full md:min-h-0"
+                : filteredUnits.length === 2
+                  ? "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0"
+                  : "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0 lg:w-[calc((100%-2rem)/3)] lg:snap-start lg:h-full lg:min-h-0";
 
             return (
               <m.article
@@ -652,9 +724,7 @@ export function FleetModule() {
                 onClick={() => selectUnit(u.unit_id)}
                 className={cn(
                   "panel relative flex flex-col shrink-0 overflow-hidden transition-[border-color,background-color,box-shadow] duration-200",
-                  "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh]",
-                  "md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0",
-                  "lg:w-[calc((100%-2rem)/3)] lg:snap-start lg:h-full lg:min-h-0",
+                  cardWidthClasses,
                   isCritical && "border-crimson/70 bg-crimson/[0.03] shadow-md shadow-crimson/10",
                   isWarmup && "border-emerald/60 bg-emerald/[0.03]",
                   isSelected && "ring-1 ring-foreground/60",
@@ -669,7 +739,9 @@ export function FleetModule() {
                         #{String(globalRank).padStart(2, "0")}
                       </span>
                       <span className="num text-xs font-semibold text-foreground">BAY {u.bay}</span>
-                      <span className="num text-[10.5px] text-muted-foreground truncate">({u.unit_id})</span>
+                      <span className="num text-[10.5px] text-muted-foreground truncate">
+                        ({u.unit_id})
+                      </span>
                     </div>
                     <h3 className="mt-1 font-display text-sm font-semibold uppercase tracking-wider text-foreground truncate">
                       {u.model} <span className="font-normal text-muted-foreground">{u.trim}</span>
@@ -680,9 +752,12 @@ export function FleetModule() {
                   </div>
                   <div className="shrink-0 text-right">
                     <div className={cn("num text-xl font-bold leading-none", `text-${tone}`)}>
-                      {fmtV(t.v_bat)} <span className="text-xs font-normal text-muted-foreground">V</span>
+                      {fmtV(t.v_bat)}{" "}
+                      <span className="text-xs font-normal text-muted-foreground">V</span>
                     </div>
-                    <div className="num mt-0.5 text-[10px] text-muted-foreground">{t.adc_raw_mv} mV (ADC)</div>
+                    <div className="num mt-0.5 text-[10px] text-muted-foreground">
+                      {t.adc_raw_mv} mV (ADC)
+                    </div>
                     <div className="mt-1.5 flex items-center justify-end">
                       <span
                         className={cn(
@@ -700,11 +775,18 @@ export function FleetModule() {
                 </header>
 
                 {/* 2. INTERNAL CARD SCROLLABLE BODY (flex-1 min-h-0 overflow-y-auto card-scroll) */}
-                <div className="card-scroll flex-1 min-h-0 overflow-y-auto p-4 space-y-3" tabIndex={0}>
+                <div
+                  className="card-scroll flex-1 min-h-0 overflow-y-auto p-4 space-y-3"
+                  tabIndex={0}
+                >
                   {/* Visual Alarm / Warm-up Banner */}
                   {isCritical ? (
                     <div className="flex items-start gap-2 rounded-[2px] border border-crimson/50 bg-crimson/10 px-3 py-2">
-                      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-crimson" aria-hidden="true" />
+                      <AlertTriangle
+                        size={15}
+                        className="mt-0.5 shrink-0 text-crimson"
+                        aria-hidden="true"
+                      />
                       <div className="min-w-0 leading-tight">
                         <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-crimson">
                           {t.dtc_cnt > 0
@@ -712,13 +794,18 @@ export function FleetModule() {
                             : `Alarm Voltase Kritis (< ${fmtV(crit)} V)`}
                         </div>
                         <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
-                          Risiko sulfasi sel timbal-asam. Prioritaskan pemanasan mesin alternator 10 menit.
+                          Risiko sulfasi sel timbal-asam. Prioritaskan pemanasan mesin alternator 10
+                          menit.
                         </div>
                       </div>
                     </div>
                   ) : isWarmup ? (
                     <div className="flex items-start gap-2 rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-2">
-                      <BadgeCheck size={15} className="mt-0.5 shrink-0 text-emerald" aria-hidden="true" />
+                      <BadgeCheck
+                        size={15}
+                        className="mt-0.5 shrink-0 text-emerald"
+                        aria-hidden="true"
+                      />
                       <div className="min-w-0 leading-tight">
                         <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-emerald">
                           Pemanasan Mesin Alternator Aktif
@@ -732,7 +819,8 @@ export function FleetModule() {
                     <div className="flex items-center gap-2 rounded-[2px] border border-amber/40 bg-amber/10 px-3 py-2">
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
                       <span className="num text-[10px] text-amber">
-                        Peringatan: Voltase mendekati ambang kritis ({fmtV(crit)} V). Jadwalkan pemanasan.
+                        Peringatan: Voltase mendekati ambang kritis ({fmtV(crit)} V). Jadwalkan
+                        pemanasan.
                       </span>
                     </div>
                   ) : null}
@@ -742,20 +830,33 @@ export function FleetModule() {
                     <div className="rounded-[2px] border border-emerald/40 bg-background/70 p-2.5">
                       <div className="flex justify-between num text-[10px] text-muted-foreground">
                         <span className="flex items-center gap-1 text-foreground">
-                          <Timer size={12} strokeWidth={1.5} className="text-emerald" aria-hidden="true" />
+                          <Timer
+                            size={12}
+                            strokeWidth={1.5}
+                            className="text-emerald"
+                            aria-hidden="true"
+                          />
                           <span>Sesi Pemanasan {formatMmSs(elapsedSec)} / 10:00</span>
                         </span>
-                        <span className={isComplete ? "font-semibold text-emerald" : "text-foreground"}>
+                        <span
+                          className={isComplete ? "font-semibold text-emerald" : "text-foreground"}
+                        >
                           {isComplete ? "100% Selesai" : `${progressPct}%`}
                         </span>
                       </div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-[1px] bg-muted">
-                        <div className="h-full bg-emerald transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                        <div
+                          className="h-full bg-emerald transition-all duration-500"
+                          style={{ width: `${progressPct}%` }}
+                        />
                       </div>
                       {verified && (
                         <div className="mt-1.5 flex items-center gap-1.5 num text-[10px] text-emerald">
                           <BadgeCheck size={12} strokeWidth={1.5} aria-hidden="true" />
-                          <span>Pengisian alternator terverifikasi ({fmtV(t.v_bat)} V &ge; {ALT_VERIFY_V.toFixed(2)} V)</span>
+                          <span>
+                            Pengisian alternator terverifikasi ({fmtV(t.v_bat)} V &ge;{" "}
+                            {ALT_VERIFY_V.toFixed(2)} V)
+                          </span>
                         </div>
                       )}
                     </div>
@@ -765,7 +866,12 @@ export function FleetModule() {
                   <div className="rounded-[2px] border border-border bg-background/60 px-3 py-2 space-y-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="label-hmi flex items-center gap-1.5 text-[10px]">
-                        <TrendingDown size={13} strokeWidth={1.5} className="text-muted-foreground" aria-hidden="true" />
+                        <TrendingDown
+                          size={13}
+                          strokeWidth={1.5}
+                          className="text-muted-foreground"
+                          aria-hidden="true"
+                        />
                         <span>Drain Rate &amp; TTC</span>
                       </span>
                       <span
@@ -779,13 +885,28 @@ export function FleetModule() {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[10px] text-muted-foreground">
                       <span className="flex items-center gap-1 text-foreground/90">
-                        <Thermometer size={11} strokeWidth={1.75} className="text-muted-foreground" aria-hidden="true" />
+                        <Thermometer
+                          size={11}
+                          strokeWidth={1.75}
+                          className="text-muted-foreground"
+                          aria-hidden="true"
+                        />
                         <span>
-                          25&deg;C Comp: <strong className="text-foreground">{prediction.compensatedV25.toFixed(2)}V</strong> ({prediction.tempCompensatedSocPct}% SOC)
+                          25&deg;C Comp:{" "}
+                          <strong className="text-foreground">
+                            {prediction.compensatedV25.toFixed(2)}V
+                          </strong>{" "}
+                          ({prediction.tempCompensatedSocPct}% SOC)
                         </span>
                       </span>
-                      <span className={cn("font-medium", prediction.thermalFactor > 1.35 ? "text-amber" : "text-muted-foreground")}>
-                        Thermal Load: {prediction.thermalFactor.toFixed(2)}x @ {t.rtc_temp_c.toFixed(1)}&deg;C
+                      <span
+                        className={cn(
+                          "font-medium",
+                          prediction.thermalFactor > 1.35 ? "text-amber" : "text-muted-foreground",
+                        )}
+                      >
+                        Thermal Load: {prediction.thermalFactor.toFixed(2)}x @{" "}
+                        {t.rtc_temp_c.toFixed(1)}&deg;C
                       </span>
                     </div>
                   </div>
@@ -795,8 +916,15 @@ export function FleetModule() {
                     <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
-                          <Wrench size={12} strokeWidth={1.75} className="text-muted-foreground" aria-hidden="true" />
-                          <span>{unitTicket ? `Ticket ${unitTicket.ticket_code}` : "Maintenance Triage"}</span>
+                          <Wrench
+                            size={12}
+                            strokeWidth={1.75}
+                            className="text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span>
+                            {unitTicket ? `Ticket ${unitTicket.ticket_code}` : "Maintenance Triage"}
+                          </span>
                         </span>
                         <span
                           className={cn(
@@ -822,10 +950,19 @@ export function FleetModule() {
                       </div>
                       <div className="num text-[10px] leading-relaxed text-muted-foreground">
                         <div>
-                          PIC: <span className="font-medium text-foreground">{unitTicket?.assigned_to ?? "Unassigned"}</span>
+                          PIC:{" "}
+                          <span className="font-medium text-foreground">
+                            {unitTicket?.assigned_to ?? "Unassigned"}
+                          </span>
                         </div>
-                        <div className="truncate" title={unitTicket?.handover_note ?? u.status_label}>
-                          Note: <span className="text-foreground/85">{unitTicket?.handover_note ?? u.status_label}</span>
+                        <div
+                          className="truncate"
+                          title={unitTicket?.handover_note ?? u.status_label}
+                        >
+                          Note:{" "}
+                          <span className="text-foreground/85">
+                            {unitTicket?.handover_note ?? u.status_label}
+                          </span>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
@@ -839,14 +976,14 @@ export function FleetModule() {
                               "IN_PROGRESS",
                               unitTicket?.assigned_to && unitTicket.assigned_to !== "Unassigned"
                                 ? unitTicket.assigned_to
-                                : "Tech Shift A",
-                              "Technician claimed ticket; performing yard inspection.",
+                                : "Teknisi Shift Aktif",
+                              "Tiket diklaim teknisi; sedang dilakukan pemeriksaan di stock yard.",
                             );
                           }}
                           className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <Wrench size={12} strokeWidth={1.75} aria-hidden="true" />
-                          <span>Claim Ticket</span>
+                          <span>Klaim Tiket</span>
                         </button>
                         <button
                           type="button"
@@ -904,66 +1041,76 @@ export function FleetModule() {
                     </ResponsiveContainer>
                   </div>
 
-                  {/* Key Telemetry Metrics */}
+                  {/* Complementary Hardware Metrics (Non-duplicated from header) */}
                   <div className="grid grid-cols-3 gap-2 border-t border-border pt-2.5">
-                    <Stat label="Baterai" value={fmtV(t.v_bat)} unit="V" tone={tone} />
-                    <Stat label="Runtime" value={t.active_ms.toLocaleString("id-ID")} unit="ms" />
-                    <Stat label="Harian" value={t.daily_mah.toFixed(2)} unit="mAh" />
+                    <Stat
+                      label="Arus Tidur"
+                      value={t.engine_on ? "BYPASS" : t.shunt_sleep_ua}
+                      unit={t.engine_on ? "" : "µA"}
+                      tone={!t.engine_on && t.shunt_sleep_ua > 450 ? "amber" : "dim"}
+                    />
+                    <Stat
+                      label="Durasi Bangun"
+                      value={t.active_ms.toLocaleString("id-ID")}
+                      unit="ms"
+                    />
+                    <Stat
+                      label="Beban Harian"
+                      value={t.daily_mah.toFixed(2)}
+                      unit="mAh"
+                      tone={t.daily_mah > 65 ? "amber" : "dim"}
+                    />
                   </div>
 
-                  {/* Hardware Node Breakdown (Always accessible via internal card scroll) */}
+                  {/* Ringkasan Diagnostik & Jaringan (Compact Single-Pass Hardware Breakdown) */}
                   <div
                     className={cn(
                       "rounded-[2px] border p-2.5 num text-[10px] space-y-1",
-                      isCritical ? "border-crimson/35 bg-background/85" : "border-border bg-background/45",
+                      isCritical
+                        ? "border-crimson/35 bg-background/85"
+                        : "border-border bg-background/45",
                     )}
                   >
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Tegangan &amp; ADC GPIO34:</span>
+                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                      <span>Status Unit:</span>
+                      <span className={cn("font-semibold truncate", `text-${tone}`)}>
+                        {u.status_label}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                      <span>CAN Bus &amp; Memori DTC:</span>
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          t.can_ok === false || t.dtc_cnt > 0 ? "text-crimson" : "text-emerald",
+                        )}
+                      >
+                        {t.can_ok === false ? "CAN FAULT" : "CAN OK"} ·{" "}
+                        {t.dtc_cnt > 0 ? `${t.dtc} (${t.dtc_cnt} DTC)` : "0 DTC (Normal)"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                      <span>Jaringan &amp; Buffer:</span>
                       <span className="font-medium text-foreground">
-                        {fmtV(t.v_bat)} V ({t.adc_raw_mv} mV)
+                        {zoneOrSsid} ({t.rssi} dBm) · {u.buffer_used} slot
                       </span>
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>RTC DS3231SN / Shunt:</span>
+                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                      <span>Siklus Tidur &amp; Sync:</span>
                       <span className="font-medium text-foreground">
-                        {t.rtc_temp_c.toFixed(1)} °C ({t.shunt_sleep_ua} µA)
+                        Sleep {formatSleepInterval(t.sleep_cfg)} ·{" "}
+                        {u.last_seen ??
+                          (conn.lastSeenSec !== null
+                            ? formatDurationCompact(conn.lastSeenSec)
+                            : "Real-time")}
                       </span>
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>CAN Bus WCMCU-230:</span>
-                      <span className={cn("font-semibold", t.can_ok === false ? "text-crimson" : "text-emerald")}>
-                        {t.can_ok === false ? "ERROR" : "OK"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Buffer Antrean &amp; WiFi:</span>
-                      <span className="font-medium text-foreground">
-                        {u.buffer_used} slot, {u.in_yard ? `${t.rssi} dBm` : (t.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT" ? `${t.rssi} dBm (HOTSPOT)` : "OUT OF YARD")}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>OBD-II Fault Memory:</span>
-                      <span className={cn("font-semibold", t.dtc_cnt > 0 ? "text-crimson" : "text-emerald")}>
-                        {t.dtc_cnt > 0 ? `${t.dtc} (${t.dtc_cnt} DTC)` : "NONE (0 DTC)"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <Pill active tone={tone}>{u.status_label}</Pill>
-                      <Pill>SLEEP {t.sleep_cfg}s</Pill>
-                    </div>
-                    <span className="num text-[10px] text-muted-foreground">
-                      {u.in_yard ? `${t.rssi} dBm` : (t.net_zone === "TECH_HOTSPOT" || u.net_zone === "TECH_HOTSPOT" ? `${t.rssi} dBm (HOTSPOT)` : "OUT OF YARD")}
-                    </span>
                   </div>
                 </div>
 
                 {/* 3. LOCKED CARD FOOTER (shrink-0) */}
                 <footer className="shrink-0 border-t border-border bg-card/95 p-3 space-y-2">
-                  {!t.engine_on && u.in_yard && t.v_bat < 12.40 && (
+                  {!t.engine_on && u.in_yard && t.v_bat < 12.4 && (
                     <button
                       type="button"
                       disabled={u.status_label === "Warm-Up Dispatched"}
@@ -976,7 +1123,9 @@ export function FleetModule() {
                     >
                       <Flame size={14} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
                       <span>
-                        {u.status_label === "Warm-Up Dispatched" ? "Staf Telah Ditugaskan" : "Tugaskan Pemanasan (Memo)"}
+                        {u.status_label === "Warm-Up Dispatched"
+                          ? "Staf Telah Ditugaskan"
+                          : "Tugaskan Pemanasan (Memo)"}
                       </span>
                     </button>
                   )}
@@ -991,7 +1140,12 @@ export function FleetModule() {
                       className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Unduh Laporan Excel Terformat (.xls)"
                     >
-                      <FileSpreadsheet size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+                      <FileSpreadsheet
+                        size={13}
+                        strokeWidth={1.75}
+                        className="shrink-0"
+                        aria-hidden="true"
+                      />
                       <span>Excel</span>
                     </button>
                     <button
@@ -1003,7 +1157,12 @@ export function FleetModule() {
                       className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Unduh Log Mentah CSV"
                     >
-                      <Download size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+                      <Download
+                        size={13}
+                        strokeWidth={1.75}
+                        className="shrink-0"
+                        aria-hidden="true"
+                      />
                       <span>CSV</span>
                     </button>
                     <button
@@ -1023,7 +1182,12 @@ export function FleetModule() {
                       {isCopied ? (
                         <Check size={13} strokeWidth={2} className="shrink-0" aria-hidden="true" />
                       ) : (
-                        <QrCode size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+                        <QrCode
+                          size={13}
+                          strokeWidth={1.75}
+                          className="shrink-0"
+                          aria-hidden="true"
+                        />
                       )}
                       <span>{isCopied ? "Copied" : "QR Link"}</span>
                     </button>
@@ -1035,7 +1199,12 @@ export function FleetModule() {
                       }}
                       className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <FileCheck2 size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+                      <FileCheck2
+                        size={13}
+                        strokeWidth={1.75}
+                        className="shrink-0"
+                        aria-hidden="true"
+                      />
                       <span>PDI Cert</span>
                     </button>
                   </div>
@@ -1051,12 +1220,8 @@ export function FleetModule() {
           <PdiCertificateModal
             key={pdiUnit.unit_id}
             unit={pdiUnit}
-            critV={configs[pdiUnit.unit_id]?.crit_v ?? 11.80}
-            historyData={
-              dataSource === "LIVE_API" && history[pdiUnit.unit_id] && history[pdiUnit.unit_id]!.length >= 2
-                ? history[pdiUnit.unit_id]!
-                : voltageHistory(pdiUnit.telemetry.v_bat, pdiUnit.telemetry.engine_on)
-            }
+            critV={configs[pdiUnit.unit_id]?.crit_v ?? 11.8}
+            historyData={resolveUnitHistory(pdiUnit, dataSource, history)}
             inspectedAt={pdiTimestamp}
             onClose={() => setPdiUnitId(null)}
             onExportExcel={() => handleExportExcel(pdiUnit.unit_id)}
@@ -1112,7 +1277,13 @@ function PdiCertificateModal({
 }: PdiModalProps) {
   const [deepLinkCopied, setDeepLinkCopied] = useState(false);
   const t = unit.telemetry;
-  const prediction = computeBatteryPrediction(historyData, t.v_bat, critV, t.engine_on, t.rtc_temp_c);
+  const prediction = computeBatteryPrediction(
+    historyData,
+    t.v_bat,
+    critV,
+    t.engine_on,
+    t.rtc_temp_c,
+  );
   const deepLinkUrl = buildUnitDeepLinkUrl(unit.unit_id, "fleet");
 
   const handleCopyModalUrl = async () => {
@@ -1126,7 +1297,7 @@ function PdiCertificateModal({
       parameter: "Battery Open-Circuit Voltage",
       reading: `${t.v_bat.toFixed(2)} V (25°C Comp: ${prediction.compensatedV25.toFixed(2)} V)`,
       target: ">= 12.20 V",
-      passed: t.v_bat >= 12.20,
+      passed: t.v_bat >= 12.2,
     },
     {
       parameter: "ADC Node Calibration (Pin 34)",
@@ -1148,9 +1319,9 @@ function PdiCertificateModal({
     },
     {
       parameter: "TWAI / CAN-bus Communication Link",
-      reading: t.can_ok ? "ONLINE (Active ACK)" : "OFFLINE / Check Wiring",
+      reading: t.can_ok === false ? "OFFLINE / Periksa Jalur CAN" : "ONLINE (TWAI 500 kbps)",
       target: "ONLINE / OK",
-      passed: Boolean(t.can_ok),
+      passed: t.can_ok !== false,
     },
     {
       parameter: "DS3231SN Thermal & Arrhenius Load",
@@ -1178,8 +1349,18 @@ function PdiCertificateModal({
       <m.div
         className="pdi-certificate-sheet panel card-scroll relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto border border-border bg-card p-4 sm:p-6 shadow-2xl"
         initial={{ opacity: 0, scale: 0.98, y: -8 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
-        exit={{ opacity: 0, scale: 0.98, y: -4, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          transition: { duration: DURATION.quick, ease: EASE_STANDARD },
+        }}
+        exit={{
+          opacity: 0,
+          scale: 0.98,
+          y: -4,
+          transition: { duration: DURATION.instant, ease: EASE_EXIT },
+        }}
       >
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
           <div className="flex flex-1 min-w-[240px] flex-wrap items-center gap-3.5">
@@ -1196,7 +1377,10 @@ function PdiCertificateModal({
               <div className="num text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD
               </div>
-              <h2 id="pdi-cert-title" className="font-display text-base sm:text-lg font-semibold uppercase tracking-wider text-foreground mt-0.5">
+              <h2
+                id="pdi-cert-title"
+                className="font-display text-base sm:text-lg font-semibold uppercase tracking-wider text-foreground mt-0.5"
+              >
                 PRE-DELIVERY INSPECTION (PDI) &amp; BATTERY HEALTH CERTIFICATE
               </h2>
               <p className="num text-[11px] text-muted-foreground mt-0.5">
@@ -1299,9 +1483,10 @@ function PdiCertificateModal({
             <div className="num mt-0.5 text-xs text-foreground">{inspectedAt}</div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Wake Counter &amp; RSSI</div>
+            <div className="label-hmi text-[10px]">Wake Counter &amp; Jaringan</div>
             <div className="num mt-0.5 text-xs text-foreground">
-              Boot #{t.boot} ({t.rssi} dBm)
+              Boot #{t.boot} · {t.rssi} dBm (
+              {(t.sync_ssid || unit.sync_ssid || "").trim() || unit.net_zone || "YARD"})
             </div>
           </div>
         </div>
@@ -1319,7 +1504,9 @@ function PdiCertificateModal({
             <tbody className="divide-y divide-border">
               {checklist.map((item) => (
                 <tr key={item.parameter} className="hover:bg-secondary/20">
-                  <td className="py-2.5 px-3 font-sans font-medium text-foreground">{item.parameter}</td>
+                  <td className="py-2.5 px-3 font-sans font-medium text-foreground">
+                    {item.parameter}
+                  </td>
                   <td className="py-2.5 px-3 font-semibold text-foreground">{item.reading}</td>
                   <td className="py-2.5 px-3 text-muted-foreground">{item.target}</td>
                   <td className="py-2.5 px-3 text-right">
@@ -1346,7 +1533,8 @@ function PdiCertificateModal({
         </div>
 
         <div className="mt-4 rounded-[2px] border border-border/80 bg-background/40 px-3.5 py-2.5 num text-[10px] leading-relaxed text-muted-foreground">
-          ORION Project (D4 TRPL IT Internship: Stock Yard Monitoring System). Independent telemetry platform; not an official product of or affiliated with Mitsubishi Motors.
+          ORION Project (D4 TRPL IT Internship: Stock Yard Monitoring System). Independent telemetry
+          platform; not an official product of or affiliated with Mitsubishi Motors.
         </div>
 
         <div className="print-hidden mt-4 flex flex-wrap items-center justify-end gap-2.5 border-t border-border pt-4">
@@ -1431,13 +1619,26 @@ function TicketResolutionModal({
       <m.div
         className="panel relative w-full max-w-lg border border-border bg-card p-4 sm:p-6 shadow-2xl"
         initial={{ opacity: 0, scale: 0.98, y: -8 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
-        exit={{ opacity: 0, scale: 0.98, y: -4, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          transition: { duration: DURATION.quick, ease: EASE_STANDARD },
+        }}
+        exit={{
+          opacity: 0,
+          scale: 0.98,
+          y: -4,
+          transition: { duration: DURATION.instant, ease: EASE_EXIT },
+        }}
       >
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <ClipboardCheck size={18} className="text-emerald" />
-            <h2 id="ticket-resolve-title" className="font-display text-sm font-semibold text-foreground uppercase tracking-wider">
+            <h2
+              id="ticket-resolve-title"
+              className="font-display text-sm font-semibold text-foreground uppercase tracking-wider"
+            >
               Form Penanganan &amp; Penutupan Tiket Pemeliharaan
             </h2>
           </div>
@@ -1455,7 +1656,9 @@ function TicketResolutionModal({
           <div className="rounded-[2px] border border-border bg-background/50 p-3 flex items-center justify-between">
             <div>
               <div className="label-hmi text-[10px]">Target Unit &amp; Lokasi</div>
-              <div className="font-bold text-foreground mt-0.5">{bay} — {model}</div>
+              <div className="font-bold text-foreground mt-0.5">
+                {bay} · {model}
+              </div>
             </div>
             <div className="text-right">
               <div className="label-hmi text-[10px]">Unit ID</div>
@@ -1485,10 +1688,18 @@ function TicketResolutionModal({
               onChange={(e) => setTechAction(e.target.value)}
               className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              <option value="Pengisian Daya Baterai (Charger 2 Jam)">Pengisian Daya Baterai (Charger 2 Jam)</option>
-              <option value="Jumper Starter &amp; Pemanasan 10 Menit">Jumper Starter &amp; Pemanasan 10 Menit</option>
-              <option value="Penggantian Unit Baterai Baru (GS Astra 55D23L)">Penggantian Unit Baterai Baru (GS Astra 55D23L)</option>
-              <option value="Pembersihan Sulfasi &amp; Pengencangan Terminal">Pembersihan Sulfasi &amp; Pengencangan Terminal</option>
+              <option value="Pengisian Daya Baterai (Charger 2 Jam)">
+                Pengisian Daya Baterai (Charger 2 Jam)
+              </option>
+              <option value="Jumper Starter &amp; Pemanasan 10 Menit">
+                Jumper Starter &amp; Pemanasan 10 Menit
+              </option>
+              <option value="Penggantian Unit Baterai Baru (GS Astra 55D23L)">
+                Penggantian Unit Baterai Baru (GS Astra 55D23L)
+              </option>
+              <option value="Pembersihan Sulfasi &amp; Pengencangan Terminal">
+                Pembersihan Sulfasi &amp; Pengencangan Terminal
+              </option>
             </select>
           </div>
 

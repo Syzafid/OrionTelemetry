@@ -36,14 +36,13 @@ export interface BatteryPrediction {
 export function computeBatteryPrediction(
   history: Array<BatteryHistoryPoint>,
   currentV: number,
-  critV: number = 11.80,
+  critV: number = 11.8,
   engineOn: boolean = false,
   rtcTempC: number = 25,
 ): BatteryPrediction {
   const safeCurrentV = Number.isFinite(currentV) ? currentV : critV;
-  const safeCritV = Number.isFinite(critV) ? critV : 11.80;
-  const safeRtcTempC =
-    typeof rtcTempC === "number" && Number.isFinite(rtcTempC) ? rtcTempC : 25;
+  const safeCritV = Number.isFinite(critV) ? critV : 11.8;
+  const safeRtcTempC = typeof rtcTempC === "number" && Number.isFinite(rtcTempC) ? rtcTempC : 25;
 
   // 6-cell Lead-Acid temperature compensation to 25°C reference (-3 mV/°C/cell = -0.018 V/°C)
   const compensatedV25 = Number((safeCurrentV + 0.018 * (25 - safeRtcTempC)).toFixed(2));
@@ -52,15 +51,11 @@ export function computeBatteryPrediction(
   const tempCompensatedSocPct =
     engineOn || safeCurrentV >= 13.5
       ? 100
-      : Math.round(
-        Math.max(0, Math.min(100, ((compensatedV25 - 11.60) / (12.70 - 11.60)) * 100)),
-      );
+      : Math.round(Math.max(0, Math.min(100, ((compensatedV25 - 11.6) / (12.7 - 11.6)) * 100)));
 
   // Arrhenius thermal self-discharge acceleration factor (Q10 = 2 above 25°C)
   const thermalFactor =
-    safeRtcTempC > 25
-      ? Number(Math.pow(2, Math.max(0, safeRtcTempC - 25) / 10).toFixed(2))
-      : 1.0;
+    safeRtcTempC > 25 ? Number(Math.pow(2, Math.max(0, safeRtcTempC - 25) / 10).toFixed(2)) : 1.0;
 
   const valid = Array.isArray(history)
     ? history.filter((p) => p && typeof p.v === "number" && Number.isFinite(p.v))
@@ -239,16 +234,11 @@ export function buildTelemetryCsv(
 
     const points = hist.slice().reverse();
     points.forEach((pt, idx) => {
-      const tsEpoch =
-        typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : nowSec - idx * 3600;
-      const isoCreated = new Date(tsEpoch * 1000)
-        .toISOString()
-        .replace("T", " ")
-        .slice(0, 19);
+      const tsEpoch = typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : nowSec - idx * 3600;
+      const isoCreated = new Date(tsEpoch * 1000).toISOString().replace("T", " ").slice(0, 19);
       const seq = Math.max(1, t.boot - idx);
       const vBat = idx === 0 ? t.v_bat : pt.v;
-      const adcMv =
-        idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
+      const adcMv = idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
       const row = [
         rowId++,
         u.unit_id,

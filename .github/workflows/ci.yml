@@ -27,25 +27,37 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: ESLint check (Menu 01 modules and tests)
-        run: >-
-          npx eslint --max-warnings 0
-          src/lib/vehicle-topology.ts
-          src/components/hmi/ShowroomModule.tsx
-          src/components/hmi/VehicleTopologyMap.tsx
-          src/components/hmi/ComponentNodeInspector.tsx
-          src/test/menu01-topology.test.tsx
+      - name: ESLint check (Menu 01 & Menu 02 modules and tests)
+        run: |
+          npx eslint --max-warnings 0 \
+            src/lib/vehicle-topology.ts \
+            src/lib/battery-analytics.ts \
+            src/lib/fleet-filter.ts \
+            src/lib/excel-export.ts \
+            src/components/hmi/ShowroomModule.tsx \
+            src/components/hmi/VehicleTopologyMap.tsx \
+            src/components/hmi/ComponentNodeInspector.tsx \
+            src/components/hmi/FleetModule.tsx \
+            src/test/menu01-topology.test.tsx \
+            src/test/menu02-fleet.test.tsx
+          npx eslint --quiet src/context/TelemetryContext.tsx
 
-      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01)
+      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01 & 02)
         run: |
           node -e '
             const fs = require("node:fs");
             const files = [
               "src/lib/vehicle-topology.ts",
+              "src/lib/battery-analytics.ts",
+              "src/lib/fleet-filter.ts",
+              "src/lib/excel-export.ts",
+              "src/context/TelemetryContext.tsx",
               "src/components/hmi/ShowroomModule.tsx",
               "src/components/hmi/VehicleTopologyMap.tsx",
               "src/components/hmi/ComponentNodeInspector.tsx",
+              "src/components/hmi/FleetModule.tsx",
               "src/test/menu01-topology.test.tsx",
+              "src/test/menu02-fleet.test.tsx",
               "src/styles.css"
             ];
             for (const f of files) {

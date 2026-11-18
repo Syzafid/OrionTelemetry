@@ -25,9 +25,7 @@ export function buildFormattedExcelPrettier(
   targetUnitId?: string,
 ): string {
   const isAll = !targetUnitId || targetUnitId.toUpperCase() === "ALL";
-  const filteredUnits = isAll
-    ? units
-    : units.filter((u) => u.unit_id === targetUnitId);
+  const filteredUnits = isAll ? units : units.filter((u) => u.unit_id === targetUnitId);
   const filterLabel = isAll ? "ALL FLEET UNITS" : targetUnitId!;
   const exportedAt = new Date().toISOString().replace("T", " ").slice(0, 19);
 
@@ -38,7 +36,7 @@ export function buildFormattedExcelPrettier(
 
   for (const u of filteredUnits) {
     const t = u.telemetry;
-    const critV = configs[u.unit_id]?.crit_v ?? 11.80;
+    const critV = configs[u.unit_id]?.crit_v ?? 11.8;
     const hist =
       historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 2
         ? historyMap[u.unit_id]!
@@ -46,15 +44,12 @@ export function buildFormattedExcelPrettier(
 
     const pred = computeBatteryPrediction(hist, t.v_bat, critV, t.engine_on, t.rtc_temp_c);
     const pdiPassed =
-      t.v_bat >= 12.20 &&
-      t.dtc_cnt === 0 &&
-      (t.dtc === "NONE" || !t.dtc) &&
-      t.shunt_sleep_ua <= 500;
+      t.v_bat >= 12.2 && t.dtc_cnt === 0 && (t.dtc === "NONE" || !t.dtc) && t.shunt_sleep_ua <= 500;
 
     let rowClass = "row-green";
-    if (t.v_bat < 11.80 || (t.dtc !== "NONE" && Boolean(t.dtc))) {
+    if (t.v_bat < 11.8 || (t.dtc !== "NONE" && Boolean(t.dtc))) {
       rowClass = "row-red";
-    } else if (t.v_bat < 12.20) {
+    } else if (t.v_bat < 12.2) {
       rowClass = "row-amber";
     }
 
@@ -75,17 +70,12 @@ export function buildFormattedExcelPrettier(
 
     const reversed = hist.slice().reverse();
     reversed.forEach((pt, idx) => {
-      const tsEpoch =
-        typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : nowSec - idx * 3600;
-      const isoTime = new Date(tsEpoch * 1000)
-        .toISOString()
-        .replace("T", " ")
-        .slice(0, 19);
+      const tsEpoch = typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : nowSec - idx * 3600;
+      const isoTime = new Date(tsEpoch * 1000).toISOString().replace("T", " ").slice(0, 19);
       const seq = Math.max(1, t.boot - idx);
       const vBat = idx === 0 ? t.v_bat : pt.v;
-      const adcMv =
-        idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
-      const isCrit = vBat < 11.80 || (idx === 0 && t.crit_alert);
+      const adcMv = idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
+      const isCrit = vBat < 11.8 || (idx === 0 && t.crit_alert);
       const logCls = isCrit ? "row-red" : logId % 2 === 0 ? "row-even" : "";
       const engStatus = t.engine_on && idx === 0 ? "RUNNING (WARM-UP)" : "STANDBY (SLEEP)";
       const rpmText = t.engine_on && idx === 0 && t.rpm >= 0 ? String(t.rpm) : "OFF";
@@ -178,4 +168,3 @@ ${logRowsHtml.join("\n")}
 </body>
 </html>`;
 }
-
