@@ -32,14 +32,26 @@ struct TelemetryItem;
 // Pilih 1 untuk PCB v1.0 (R1=300k, R2=68k) atau 2 untuk PCB v2.0 (R1=100k, R2=27k)
 #define ORION_PCB_VERSION 1
 
-// ======================== KONFIGURASI JARINGAN & SERVER ======================
-// Kredensial default untuk pengujian meja (development).
-// CATATAN KEAMANAN: Kredensial hardcoded ini hanya untuk pengembangan. Pada produksi penuh,
-// kredensial wajib diinjeksi via NVS (serta opsi verifikasi BSSID gudang pada fase rilis berikutnya).
-const char* DEFAULT_YARD_SSID = "POCOF6";             // SSID Gudang (Primary Yard AP)
-const char* DEFAULT_YARD_PASS = "88888888";           // Password SSID Gudang
-const char* DEFAULT_TECH_SSID = "POCOF5";  // SSID Hotspot Teknisi (Secondary)
-const char* DEFAULT_TECH_PASS = "88888888";       // Password Hotspot Teknisi
+// ==============================================================================
+// ORION DUAL-SSID WI-FI PROFILES (KONFIGURASI UTAMA LAPANGAN)
+// Cukup ganti nilai di dalam tanda kutip di bawah ini saat beralih dari pengujian
+// ke jaringan riil bengkel/gudang & HP teknisi.
+// Perangkat otomatis mengikat Profil #1 sebagai Yard Gateway (Prioritas Tertinggi)
+// dan Profil #2 sebagai Hotspot Teknisi (Fallback Saat di Luar Yard).
+// ==============================================================================
+
+// PROFIL 1: WI-FI UTAMA GUDANG / WORKSHOP (YARD GATEWAY - PRIORITAS #1 MUTLAK)
+// Status Zona: NET_ZONE_YARD. Begitu sinyal ini terdeteksi (>= -75 dBm), perangkat
+// WAJIB langsung terhubung ke sini (memutus hotspot teknisi jika masih aktif).
+const char* DEFAULT_YARD_SSID = "POCOF6";             // <-- Ganti dengan SSID Wi-Fi Gudang riil (misal: "DIPO-WORKSHOP")
+const char* DEFAULT_YARD_PASS = "88888888";           // <-- Ganti dengan Password Wi-Fi Gudang riil
+
+// PROFIL 2: WI-FI HOTSPOT TEKNISI LAPANGAN (SECONDARY / ROAD-TEST FALLBACK)
+// Status Zona: NET_ZONE_TECH. Digunakan saat unit dibawa keluar gudang & sinyal gudang hilang.
+// Catatan: Pastikan tethering HP disetel ke pita frekuensi 2.4 GHz (bukan 5 GHz).
+const char* DEFAULT_TECH_SSID = "POCOF5";             // <-- Ganti dengan SSID Hotspot Teknisi riil (misal: "HOTSPOT-TEKNISI")
+const char* DEFAULT_TECH_PASS = "88888888";           // <-- Ganti dengan Password Hotspot Teknisi riil
+// ==============================================================================
 
 String wifiYardSsid = DEFAULT_YARD_SSID;
 String wifiYardPass = DEFAULT_YARD_PASS;
@@ -1134,12 +1146,22 @@ void updateAsyncWifiScan() {
     // ATURAN 3: Hysteresis Masuk (Ambang -75 dBm) & Cross-Reset
     if (yardRssi >= -75) {
       rtcYardHitCount++;
-      Serial.printf("[ZONE HYSTERESIS] Yard SSID hit #%u/2 (RSSI: %d dBm >= -75)\n", rtcYardHitCount, yardRssi);
-      if (rtcYardHitCount >= 2) {
+      // PRIORITAS ABSOLUT YARD:
+      // 1. Jika sedang terhubung ke Hotspot Teknisi (NET_ZONE_TECH):
+      //    Begitu sinyal Gudang terdeteksi >= -75 dBm, LANGSUNG eksekusi handover putus dari Hotspot Teknisi
+      //    pada Hit #1 tanpa menunggu Hit #2 (Immediate Override), agar mobil yang kembali ke gudang
+      //    tidak tertahan di hotspot teknisi yang lupa dimatikan!
+      // 2. Jika sinyal gudang sangat kuat (>= -70 dBm): langsung override juga pada Hit #1.
+      // 3. Jika baru masuk dari OFFLINE murni dengan sinyal di batas ambang (-75 s/d -71 dBm): butuh Hit >= 2.
+      bool immediateYardOverride = (rtcCurrentZone == NET_ZONE_TECH) || (yardRssi >= -70) || (rtcYardHitCount >= 2);
+      Serial.printf("[ZONE HYSTERESIS] Yard SSID '%s' hit #%u (RSSI: %d dBm >= -75) -> %s\n",
+                    wifiYardSsid.c_str(), rtcYardHitCount, yardRssi,
+                    immediateYardOverride ? "OVERRIDE YARD LANGSUNG (PRIORITAS UTAMA)" : "MENUNGGU HIT #2 (STABILISASI GERBANG)");
+      if (immediateYardOverride) {
         const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
         // forceSwitch = true memastikan perangkat langsung melepas Hotspot Teknisi (jika teknisi lupa mematikan hotspot)
         startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str(), true);
-        setZone(NET_ZONE_YARD, "Handover Confirmed to Yard (Hit >= 2)");
+        setZone(NET_ZONE_YARD, "Handover Confirmed to Yard (Priority Override)");
         rtcYardHitCount       = 0;
         rtcYardMissCount      = 0;
         rtcFirstMissEpoch     = 0;
@@ -1211,16 +1233,15 @@ void triggerWifiScanIfDue() {
     return; // Belum waktunya scan
   }
 
-  // A.2: Tunda scan hanya ketika WiFi terhubung dan sisa waktu menuju POST berikutnya mepet
+  // A.2: Tunda scan hanya ketika WiFi terhubung dan sisa waktu menuju POST berikutnya sangat mepet (< 1200ms)
   uint32_t elapsed = millis() - lastPollMs;
   uint32_t remainingMs = (elapsed < pollIntervalMs) ? (pollIntervalMs - elapsed) : 0;
-  uint32_t safeThresholdMs = lastMeasuredScanDurationMs + 500UL;
-  if (WiFi.status() == WL_CONNECTED && remainingMs < safeThresholdMs) {
-    return; // Tunda ke siklus berikutnya agar transmisi HTTP POST tidak terganggu scan
+  if (WiFi.status() == WL_CONNECTED && remainingMs < 1200UL) {
+    return; // Beri ruang 1.2s agar transmisi HTTP POST tidak tertumpuk pemindaian radio
   }
 
-  // Mulai Pemindaian Latar Belakang Asinkron (180ms/ch saat offline untuk deteksi hotspot HP di area padat AP)
-  uint32_t dwellMs = (WiFi.status() != WL_CONNECTED) ? 180UL : 150UL;
+  // Mulai Pemindaian Latar Belakang Asinkron (180ms/ch saat offline, 120ms/ch saat online mencari yard)
+  uint32_t dwellMs = (WiFi.status() != WL_CONNECTED) ? 180UL : 120UL;
   WiFi.scanDelete();
   int16_t startStatus = WiFi.scanNetworks(true, false, false, dwellMs);
   if (startStatus == WIFI_SCAN_RUNNING || startStatus == 0) {
