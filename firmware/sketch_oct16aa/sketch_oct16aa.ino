@@ -1597,6 +1597,8 @@ void setup() {
     }
     uint32_t scanDur = millis() - tScan0;
     Serial.printf("[WIFI COLD BOOT] Scan selesai dalam %lu ms. Ditemukan %d Access Point:\n", (unsigned long)scanDur, nNetworks);
+    int16_t yardRssi = -127;
+    int16_t techRssi = -127;
     for (int i = 0; i < nNetworks; i++) {
       String s = WiFi.SSID(i);
       int32_t r = WiFi.RSSI(i);
