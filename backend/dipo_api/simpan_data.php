@@ -393,8 +393,13 @@ try {
     ");
 
     $newestValidZoneRec = null;
+    $prevContiguousUnit = null;
+    $prevContiguousBoot = null;
+    $prevContiguousSeq  = null;
+    $prevContiguousZone = null;
+    $totalNormalized = count($normalized);
 
-    foreach ($normalized as $rec) {
+    foreach ($normalized as $recIdx => $rec) {
         $primaryUnitId = $rec['unit_id'];
         $latestRecord = $rec;
 
@@ -444,21 +449,37 @@ try {
         if (in_array($z, $validZones, true)) {
             $newestValidZoneRec = $rec;
 
-            // 1. Evaluasi transisi $rec terhadap PREDECESSOR di telemetry_logs
-            $stmtPred->execute([
-                ':uid' => $rec['unit_id'],
-                ':b1'  => (int)$rec['boot'],
-                ':b2'  => (int)$rec['boot'],
-                ':s1'  => (int)$rec['seq'],
-                ':b3'  => (int)$rec['boot'],
-                ':s2'  => (int)$rec['seq'],
-                ':ts1' => (int)$rec['ts_epoch'],
-            ]);
-            $predRow = $stmtPred->fetch();
+            // 1. Evaluasi transisi $rec terhadap PREDECESSOR (hindari query berulang pada urutan sekuensial dalam batch)
+            if (
+                $prevContiguousZone !== null
+                && $prevContiguousUnit === $rec['unit_id']
+                && (int)$rec['boot'] === $prevContiguousBoot
+                && (int)$rec['seq'] === ($prevContiguousSeq + 1)
+            ) {
+                $fromZone = $prevContiguousZone;
+            } else {
+                $stmtPred->execute([
+                    ':uid' => $rec['unit_id'],
+                    ':b1'  => (int)$rec['boot'],
+                    ':b2'  => (int)$rec['boot'],
+                    ':s1'  => (int)$rec['seq'],
+                    ':b3'  => (int)$rec['boot'],
+                    ':s2'  => (int)$rec['seq'],
+                    ':ts1' => (int)$rec['ts_epoch'],
+                ]);
+                $predRow = $stmtPred->fetch();
+                $fromZone = ($predRow && in_array((string)$predRow['net_zone'], $validZones, true))
+                    ? (string)$predRow['net_zone']
+                    : null;
+            }
 
-            if ($predRow && in_array((string)$predRow['net_zone'], $validZones, true)) {
-                $fromZone = (string)$predRow['net_zone'];
-                $toZone   = $z;
+            $prevContiguousUnit = $rec['unit_id'];
+            $prevContiguousBoot = (int)$rec['boot'];
+            $prevContiguousSeq  = (int)$rec['seq'];
+            $prevContiguousZone = $z;
+
+            if ($fromZone !== null && $fromZone !== $z) {
+                $toZone = $z;
 
                 if ($fromZone === 'YARD' && ($toZone === 'TECH_HOTSPOT' || $toZone === 'OFFLINE')) {
                     $exitEpoch = ($rec['zone_exit_epoch'] > 0
@@ -510,17 +531,30 @@ try {
                 }
             }
 
-            // 2. Re-evaluasi SUCCESSOR di database jika record ini disisipkan sebelum record yang sudah ada
-            $stmtSucc->execute([
-                ':uid' => $rec['unit_id'],
-                ':b1'  => (int)$rec['boot'],
-                ':b2'  => (int)$rec['boot'],
-                ':s1'  => (int)$rec['seq'],
-                ':b3'  => (int)$rec['boot'],
-                ':s2'  => (int)$rec['seq'],
-                ':ts1' => (int)$rec['ts_epoch'],
-            ]);
-            $succRow = $stmtSucc->fetch();
+            // 2. Re-evaluasi SUCCESSOR hanya untuk sisipan historis di luar urutan sekuensial dalam batch
+            $isHistoricalInsert = ((int)$rec['boot'] < $curBoot)
+                || ((int)$rec['boot'] === $curBoot && (int)$rec['seq'] < $curSeq);
+            $nextRec = ($recIdx + 1 < $totalNormalized) ? $normalized[$recIdx + 1] : null;
+            $hasContiguousNextInBatch = $nextRec !== null
+                && $nextRec['unit_id'] === $rec['unit_id']
+                && (int)$nextRec['boot'] === (int)$rec['boot']
+                && (int)$nextRec['seq'] === ((int)$rec['seq'] + 1)
+                && in_array($nextRec['net_zone'], $validZones, true);
+
+            if ($isHistoricalInsert && !$hasContiguousNextInBatch) {
+                $stmtSucc->execute([
+                    ':uid' => $rec['unit_id'],
+                    ':b1'  => (int)$rec['boot'],
+                    ':b2'  => (int)$rec['boot'],
+                    ':s1'  => (int)$rec['seq'],
+                    ':b3'  => (int)$rec['boot'],
+                    ':s2'  => (int)$rec['seq'],
+                    ':ts1' => (int)$rec['ts_epoch'],
+                ]);
+                $succRow = $stmtSucc->fetch();
+            } else {
+                $succRow = false;
+            }
 
             if ($succRow && in_array((string)$succRow['net_zone'], $validZones, true)) {
                 $stmtPred->execute([

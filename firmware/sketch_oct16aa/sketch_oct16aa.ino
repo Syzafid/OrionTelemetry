@@ -77,7 +77,7 @@ enum OrionNetZone : uint8_t {
 #define TIER1_RTC_CAP     20                     // 20 Slot di RTC Slow SRAM
 #define TIER2_FILE_PATH   "/tier2_queue.bin"     // File biner permanen di LittleFS Flash
 #define TIER2_MAX_RECORDS 2000                   // 2.000 Slot x 88 Byte = 176 KB
-#define FLUSH_BATCH_SIZE  20                     // Maksimum pengiriman per HTTP Batch POST
+#define FLUSH_BATCH_SIZE  5                      // Maksimum 5 rekaman (~3.1 KB) per HTTP Batch POST agar aman dari batas TCP/TLS ESP32
 
 // Struktur Rekaman Telemetri Padat 88-Byte (Kelompok 32-bit -> 16-bit -> 8-bit)
 struct __attribute__((packed)) TelemetryItem {
@@ -825,7 +825,7 @@ void setZone(uint8_t newZone, const char* reason = nullptr) {
   }
 }
 
-// B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 6s)
+// B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 10s untuk DHCP Hotspot HP)
 enum WifiConnectTarget {
   CONN_IDLE = 0,
   CONN_CONNECTING_TECH,
@@ -834,17 +834,19 @@ enum WifiConnectTarget {
 
 static WifiConnectTarget wifiConnState          = CONN_IDLE;
 static uint32_t          wifiConnStartMs        = 0;
-static const uint32_t    WIFI_CONNECT_TIMEOUT_MS = 6000UL;
+static const uint32_t    WIFI_CONNECT_TIMEOUT_MS = 10000UL;
 
-void startWifiConnectNonBlocking(WifiConnectTarget target, const char* ssid, const char* pass) {
-  if (wifiConnState != CONN_IDLE && (millis() - wifiConnStartMs < WIFI_CONNECT_TIMEOUT_MS)) {
+void startWifiConnectNonBlocking(WifiConnectTarget target, const char* ssid, const char* pass, bool forceSwitch = false) {
+  if (!forceSwitch && wifiConnState != CONN_IDLE && (millis() - wifiConnStartMs < WIFI_CONNECT_TIMEOUT_MS)) {
     return; // Sedang ada proses penyambungan yang berjalan
   }
-  WiFi.disconnect(false, true);
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFi.disconnect(false, false);
+  }
   WiFi.begin(ssid, pass);
   wifiConnState   = target;
   wifiConnStartMs = millis();
-  Serial.printf("[WIFI ASYNC CONNECT] Memulai koneksi ke '%s' (non-blocking, timeout 6s)...\n", ssid);
+  Serial.printf("[WIFI ASYNC CONNECT] Memulai koneksi ke '%s' (non-blocking, timeout 10s)...\n", ssid);
 }
 
 void updateWifiAsyncConnect() {
@@ -1072,11 +1074,10 @@ void updateAsyncWifiScan() {
           }
           Serial.println("[GATE ANTI-FLAP] Pemulihan sinyal gudang stabil (>=2 scan). Reset miss counter.");
         }
-        rtcYardMissCount  = 0;
+        rtcYardMissCount      = 0;
         rtcFirstMissEpoch     = 0;
-      pendingFirstMissEpoch = 0;
-      yardRecoveryCount     = 0;
-        yardRecoveryCount = 0;
+        pendingFirstMissEpoch = 0;
+        yardRecoveryCount     = 0;
         if (WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE) {
           const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
           startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
@@ -1136,7 +1137,8 @@ void updateAsyncWifiScan() {
       Serial.printf("[ZONE HYSTERESIS] Yard SSID hit #%u/2 (RSSI: %d dBm >= -75)\n", rtcYardHitCount, yardRssi);
       if (rtcYardHitCount >= 2) {
         const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
-        startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
+        // forceSwitch = true memastikan perangkat langsung melepas Hotspot Teknisi (jika teknisi lupa mematikan hotspot)
+        startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str(), true);
         setZone(NET_ZONE_YARD, "Handover Confirmed to Yard (Hit >= 2)");
         rtcYardHitCount       = 0;
         rtcYardMissCount      = 0;
@@ -1184,15 +1186,22 @@ void triggerWifiScanIfDue() {
     }
   }
 
-  // 2. Evaluasi interval scan berdasarkan status koneksi & mesin
+  // 1b. Jangan memindai 14 channel saat jabat tangan DHCP/WiFi.begin sedang berlangsung
+  if (WiFi.status() != WL_CONNECTED && wifiConnState != CONN_IDLE) {
+    return;
+  }
+
+  // 2. Evaluasi interval scan berdasarkan status koneksi, zona, & mesin
   uint32_t evalIntervalMs = 180000UL;
   if (WiFi.status() != WL_CONNECTED) {
-    evalIntervalMs = 0UL;
+    evalIntervalMs = 3000UL; // Scan tiap 3 detik saat offline agar 3x verifikasi POCOF6 selesai rapi tanpa rebutan radio
+  } else if (rtcCurrentZone != NET_ZONE_YARD) {
+    // Saat terhubung ke Hotspot Teknisi (POCOF5), tetap pindai sinyal Gudang tiap 15 detik walaupun mesin mati
+    // sehingga jika mobil kembali ke gudang dan teknisi lupa mematikan hotspot, perangkat langsung balik ke POCOF6.
+    evalIntervalMs = 15000UL;
   } else if (prevEngineOnState == 1) {
     if ((millis() - engineStartTimeMs) <= 120000UL) {
       evalIntervalMs = 15000UL;
-    } else if (rtcCurrentZone != NET_ZONE_YARD) {
-      evalIntervalMs = 30000UL;
     } else {
       evalIntervalMs = 60000UL;
     }
@@ -1202,22 +1211,23 @@ void triggerWifiScanIfDue() {
     return; // Belum waktunya scan
   }
 
-  // A.2: Jangan memulai scan jika sisa waktu menuju POST berikutnya < durasi scan terukur + 500 ms
+  // A.2: Tunda scan hanya ketika WiFi terhubung dan sisa waktu menuju POST berikutnya mepet
   uint32_t elapsed = millis() - lastPollMs;
   uint32_t remainingMs = (elapsed < pollIntervalMs) ? (pollIntervalMs - elapsed) : 0;
   uint32_t safeThresholdMs = lastMeasuredScanDurationMs + 500UL;
-  if (remainingMs < safeThresholdMs) {
-    return; // Tunda ke siklus berikutnya karena sisa waktu tidak cukup aman
+  if (WiFi.status() == WL_CONNECTED && remainingMs < safeThresholdMs) {
+    return; // Tunda ke siklus berikutnya agar transmisi HTTP POST tidak terganggu scan
   }
 
-  // Mulai Pemindaian Latar Belakang Asinkron (120ms per channel, non-blocking)
+  // Mulai Pemindaian Latar Belakang Asinkron (180ms/ch saat offline untuk deteksi hotspot HP di area padat AP)
+  uint32_t dwellMs = (WiFi.status() != WL_CONNECTED) ? 180UL : 150UL;
   WiFi.scanDelete();
-  int16_t startStatus = WiFi.scanNetworks(true, false, false, 120);
+  int16_t startStatus = WiFi.scanNetworks(true, false, false, dwellMs);
   if (startStatus == WIFI_SCAN_RUNNING || startStatus == 0) {
     asyncScanRunning = true;
     asyncScanStartMs = millis();
-    Serial.printf("[WIFI SCAN ASYNC] Memulai scan background asinkron (120ms/ch, sisa window=%lums, batas aman=%lums)...\n",
-                  (unsigned long)remainingMs, (unsigned long)safeThresholdMs);
+    Serial.printf("[WIFI SCAN ASYNC] Memulai scan background asinkron (%lums/ch, sisa window=%lums)...\n",
+                  (unsigned long)dwellMs, (unsigned long)remainingMs);
   }
 }
 
@@ -1373,6 +1383,9 @@ String buildSingleRecordJson(const TelemetryItem &p, uint16_t totalBufRemaining)
   return String(buf);
 }
 
+static WiFiClientSecure sharedSecureClient;
+static bool             secureClientInitialized = false;
+
 bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
 #if ORION_DEBUG_SERIAL
   if (simZoneOverride == NET_ZONE_OFFLINE) return false;
@@ -1380,18 +1393,20 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
   if (simOfflineMode || WiFi.status() != WL_CONNECTED || count == 0) return false;
 
   HTTPClient http;
-  WiFiClientSecure secureClient;
-
   String urlStr = String(API_ENDPOINT);
   if (urlStr.startsWith("https://")) {
-    secureClient.setInsecure();
-    http.begin(secureClient, API_ENDPOINT);
+    if (!secureClientInitialized) {
+      sharedSecureClient.setInsecure();
+      sharedSecureClient.setTimeout(8);
+      secureClientInitialized = true;
+    }
+    http.begin(sharedSecureClient, API_ENDPOINT);
   } else {
     http.begin(API_ENDPOINT);
   }
 
   http.setReuse(true);
-  http.setTimeout(urlStr.startsWith("https://") ? 5000 : 2500);
+  http.setTimeout(urlStr.startsWith("https://") ? 8000 : 3500);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Orion-Node", UNIT_ID);
   if (isBurst) http.addHeader("X-Burst-Sync", "true");
@@ -1422,8 +1437,11 @@ bool postBatchRecords(const TelemetryItem *items, uint8_t count, bool isBurst) {
     http.end();
     return true;
   }
-  Serial.printf("[HTTP WARN] POST gagal (kode: %d)\n", httpCode);
+  Serial.printf("[HTTP WARN] POST gagal (kode: %d, len=%uB)\n", httpCode, (unsigned)payload.length());
   http.end();
+  if (httpCode <= 0) {
+    sharedSecureClient.stop();
+  }
   return false;
 }
 
@@ -1431,24 +1449,35 @@ void flushAllOfflineBuffers() {
   if (simOfflineMode || WiFi.status() != WL_CONNECTED) return;
 
   TelemetryItem batch[FLUSH_BATCH_SIZE];
-  while (tier2Count > 0) {
+  if (tier2Count > 0) {
     uint8_t n = readOldestBatchFromLittleFS(batch, FLUSH_BATCH_SIZE);
-    if (n == 0) break;
-    Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-2 LittleFS Flash (X-Sync-SSID: %s)...\n",
-                  n, sanitizeSsidHeader(WiFi.SSID()).c_str());
-    if (postBatchRecords(batch, n, true)) {
-      commitFlushedLittleFSBatch(n);
-    } else {
-      return;
+    if (n > 0) {
+      Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-2 LittleFS Flash (X-Sync-SSID: %s)...\n",
+                    n, sanitizeSsidHeader(WiFi.SSID()).c_str());
+      if (postBatchRecords(batch, n, true)) {
+        commitFlushedLittleFSBatch(n);
+        Serial.printf("[BURST SYNC OK] Batch Tier-2 (%u rekaman) terkirim! Sisa Tier-2: %u | Tier-1: %u\n",
+                      n, (unsigned)tier2Count, (unsigned)tier1Count);
+      }
     }
+    return; // Maksimal 1 batch TLS per siklus agar tidak menumpuk di radio Wi-Fi
   }
 
   if (tier1Count > 0) {
+    uint8_t n = (tier1Count > FLUSH_BATCH_SIZE) ? FLUSH_BATCH_SIZE : tier1Count;
     Serial.printf("[BURST SYNC] Mengirim %u rekaman dari Tier-1 RTC SRAM (X-Sync-SSID: %s)...\n",
-                  tier1Count, sanitizeSsidHeader(WiFi.SSID()).c_str());
-    if (postBatchRecords(tier1RtcBuf, tier1Count, true)) {
-      tier1Count = 0;
-      Serial.println("[BURST SYNC OK] Seluruh antrean Tier-1 & Tier-2 berhasil dikuras (0 tersisa)!");
+                  n, sanitizeSsidHeader(WiFi.SSID()).c_str());
+    if (postBatchRecords(tier1RtcBuf, n, true)) {
+      if (tier1Count > n) {
+        memmove(&tier1RtcBuf[0], &tier1RtcBuf[n], (size_t)(tier1Count - n) * sizeof(TelemetryItem));
+      }
+      tier1Count -= n;
+      if (tier1Count == 0) {
+        Serial.println("[BURST SYNC OK] Seluruh antrean Tier-1 & Tier-2 berhasil dikuras (0 tersisa)!");
+      } else {
+        Serial.printf("[BURST SYNC OK] Batch Tier-1 (%u rekaman) terkirim! Sisa antrean Tier-1: %u\n",
+                      n, (unsigned)tier1Count);
+      }
     }
   }
 }
@@ -1746,25 +1775,21 @@ void loop() {
   // B.2: Sinkronisasi waktu RTC DS3231 dengan NTP jika terhubung WiFi & ada selisih > 5 detik
   checkNtpRtcSync();
 
-  // B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 6s)
+  // B.1: State Machine Rekoneksi WiFi Asinkron (Non-Blocking, Timeout 10s)
   updateWifiAsyncConnect();
 
   // A.1: Pemeriksaan & pengelolaan pemindaian Wi-Fi background asinkron (non-blocking)
   updateAsyncWifiScan();
 
-  // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung
-  if (!simOfflineMode && WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
+  // Auto-Reconnect WiFi Periodik setiap 15 detik jika belum terhubung & tidak sedang scanning
+  if (!simOfflineMode && WiFi.status() != WL_CONNECTED && wifiConnState == CONN_IDLE && !asyncScanRunning && (millis() - lastWifiRetryMs >= WIFI_RETRY_MS)) {
     lastWifiRetryMs = millis();
     if (rtcCurrentZone == NET_ZONE_TECH) {
       Serial.println("[WIFI] Mencoba menyambung ulang ke Hotspot Teknisi...");
       const char* connectSsid = lastSeenTechSsid.length() > 0 ? lastSeenTechSsid.c_str() : wifiTechSsid.c_str();
       startWifiConnectNonBlocking(CONN_CONNECTING_TECH, connectSsid, wifiTechPass.c_str());
-    } else if (rtcCurrentZone == NET_ZONE_YARD && rtcYardMissCount == 0) {
-      Serial.println("[WIFI] Mencoba menyambung ulang ke SSID Gudang...");
-      const char* connectSsid = lastSeenYardSsid.length() > 0 ? lastSeenYardSsid.c_str() : wifiYardSsid.c_str();
-      startWifiConnectNonBlocking(CONN_CONNECTING_YARD, connectSsid, wifiYardPass.c_str());
     } else {
-      // NET_ZONE_OFFLINE atau UNKNOWN: Paksa scan jaringan alami pada live poll berikutnya
+      // YARD / OFFLINE / UNKNOWN: pindai AP terlebih dahulu agar prioritas POCOF6 terverifikasi 3x sebelum switch ke POCOF5
       lastZoneEvalMs = 0;
     }
   }
@@ -1791,12 +1816,12 @@ void loop() {
 #endif
                          (getRecordNetZone(pkt) == NET_ZONE_OFFLINE);
 
-    if (!isOfflineMode && WiFi.status() == WL_CONNECTED && (tier1Count > 0 || tier2Count > 0)) {
-      flushAllOfflineBuffers();
-    }
-
     if (!isOfflineMode && WiFi.status() == WL_CONNECTED) {
-      if (postBatchRecords(&pkt, 1, false)) {
+      if (tier1Count > 0 || tier2Count > 0) {
+        // Gabungkan sampel terbaru ke ujung antrean FIFO agar hanya 1 HTTP POST per siklus 5 detik
+        enqueueOfflineRecord(pkt);
+        flushAllOfflineBuffers();
+      } else if (postBatchRecords(&pkt, 1, false)) {
         Serial.printf("[ORION LIVE] boot=%lu | seq=%lu | V=%.2fV (%umV) | Zone=%s | RTC=%.2fC | CAN=%s | Buf=%u\n",
                       (unsigned long)pkt.boot, (unsigned long)pkt.seq,
                       pkt.v_bat, pkt.adc_raw_mv, netZoneToString(getRecordNetZone(pkt)),
