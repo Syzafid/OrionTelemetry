@@ -108,6 +108,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             unit={selected}
             activeNode={activeTopologyNode}
             onSelectNode={setActiveTopologyNode}
+            config={configs[selected.unit_id]}
             className="mt-2.5"
           />
         </div>

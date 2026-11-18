@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import type { VehicleUnit } from "@/data/mockTelemetry";
+import { useMemo, useState } from "react";
+import type { VehicleUnit, PiggybackConfig } from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 import type { TopologyNodeId } from "./VehicleTopologyMap";
@@ -8,6 +8,7 @@ interface ComponentNodeInspectorProps {
   unit: VehicleUnit;
   activeNode: TopologyNodeId;
   onSelectNode?: (node: TopologyNodeId) => void;
+  config?: PiggybackConfig;
   className?: string;
 }
 
@@ -197,6 +198,7 @@ interface HarnessSpec {
   pinout: string;
   spec: string;
   diagProcedure: string;
+  sopSteps: string[];
 }
 
 const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
@@ -205,14 +207,24 @@ const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
     wireColor: "Kombinasi Standar OEM Mitsubishi Harness",
     pinout: "6 Titik Sadap Transduser (Engine Bay + Cabin + DLC)",
     spec: "Arsitektur 12V DC Negatif Ground, J1962 High-Speed CAN 500 kbps",
-    diagProcedure: "Pilih salah satu probe di atas untuk menampilkan detail pinout & prosedur uji.",
+    diagProcedure: "Pilih salah satu probe di atas untuk menampilkan detail pinout dan prosedur uji.",
+    sopSteps: [
+      "1. Pastikan baterai berada pada kondisi terisi (> 12.4V) sebelum melakukan inspeksi.",
+      "2. Verifikasi resistansi terminasi bus CAN sebesar 60 Ohm pada port OBD-II pin 6 dan 14 saat kunci kontak OFF.",
+      "3. Cek tidak ada kebocoran arus tidur melebihi 50 uA pada resistor shunt saat unit masuk deep sleep.",
+    ],
   },
   battery: {
     nodeName: "PROBE 01: AKI 12V 70Ah & RESISTOR SHUNT",
     wireColor: "Merah 16mm² (Terminal B+), Hitam 16mm² (Ground Shunt Return)",
     pinout: "Terminal M8 B+ -> Pembagi Tegangan 10k/1k -> GPIO34 ADC ESP32",
-    spec: "Aki 12V 70Ah Calcium-Silver. Shunt 10Ω R-Sense arus parasitik.",
-    diagProcedure: "Periksa tegangan terminal (>12.4V nominal) dan arus sleep deep-sleep (<50 µA).",
+    spec: "Aki 12V 70Ah Calcium-Silver. Shunt 10 Ohm R-Sense arus parasitik.",
+    diagProcedure: "Periksa tegangan terminal (>12.4V nominal) dan arus sleep deep-sleep (<50 uA).",
+    sopSteps: [
+      "SOP B.1: Ukur tegangan kutub baterai menggunakan multimeter digital terkalibrasi (DMM).",
+      "SOP B.2: Catat tegangan mentah mV pada ESP32 Node M (GPIO34) untuk verifikasi koefisien OLS.",
+      "SOP B.3: Matikan kunci kontak, tunggu 120 detik hingga ECU tidur, pastikan shunt membaca < 50 uA.",
+    ],
   },
   alternator: {
     nodeName: "PROBE 02: ALTERNATOR 130A & REGULATOR",
@@ -220,6 +232,11 @@ const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
     pinout: "Terminal B+ (Output Cas), Terminal L (Indikator Speedometer), Terminal S (Sense)",
     spec: "Denso 12V 130A Internal IC Regulator, Cut-in Speed 650 RPM",
     diagProcedure: "Ukur tegangan saat mesin menyala (13.8V s/d 14.4V). Ripple AC maksimal < 250 mV RMS.",
+    sopSteps: [
+      "SOP A.1: Hidupkan mesin pada putaran idle 750 RPM, periksa lampu peringatan aki padam.",
+      "SOP A.2: Nyalakan beban listrik penuh (lampu utama, AC blower maks), tegangan harus bertahan >= 13.5V.",
+      "SOP A.3: Hubungkan osiloskop ke terminal B+, pastikan pola riak penyearah 3-fase simetris.",
+    ],
   },
   powertrain: {
     nodeName: "PROBE 03: TRANSDUSER MESIN (CKP RELUCTANCE & ECT)",
@@ -227,13 +244,23 @@ const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
     pinout: "Sensor CKP 2-pin ke ECU Mesin Pin 12/24; ECT Sensor 2-pin ke ECU Pin 42",
     spec: "Crankshaft Reluctance Wheel 60-2 gigi. Thermistor NTC 82°C-95°C operasional.",
     diagProcedure: "Verifikasi kestabilan RPM idle (750 ± 50 RPM). Cek sinyal analog ECT saat suhu naik.",
+    sopSteps: [
+      "SOP P.1: Periksa celah udara sensor poros engkol (air gap CKP: 0.5 mm - 1.2 mm).",
+      "SOP P.2: Verifikasi kenaikan temperatur bertahap dari kondisi dingin hingga termostat membuka (82°C).",
+      "SOP P.3: Pastikan putaran mesin stabil tanpa lonjakan sinyal liar pada osiloskop gigi reluktansi.",
+    ],
   },
   can_obd: {
     nodeName: "PROBE 04: PORT OBD-II J1962 & CAN BUS TWAI",
     wireColor: "Kuning (CAN-H), Hijau (CAN-L), Merah (Pin 16 +12V Fused 7.5A)",
     pinout: "Pin 16 = B+, Pin 4 = Chassis GND, Pin 5 = Signal GND, Pin 6 = CAN-H, Pin 14 = CAN-L",
-    spec: "ISO 11898-2 High-Speed 500 kbps, Resistansi Terminasi 120Ω antar CAN-H/L",
-    diagProcedure: "Ukur resistansi bus saat kontak OFF (harus 60Ω). Verifikasi 0 DTC pada sistem TWAI.",
+    spec: "ISO 11898-2 High-Speed 500 kbps, Resistansi Terminasi 120 Ohm antar CAN-H/L",
+    diagProcedure: "Ukur resistansi bus saat kontak OFF (harus 60 Ohm). Verifikasi 0 DTC pada sistem TWAI.",
+    sopSteps: [
+      "SOP C.1: Lepas terminal negatif aki, ukur resistansi pin 6 dan pin 14 OBD-II (toleransi: 54 - 66 Ohm).",
+      "SOP C.2: Sambungkan scanner MUT-III, baca freeze frame data jika terdapat kode DTC aktif.",
+      "SOP C.3: Periksa tegangan common-mode: CAN-H sekitar 2.5V - 3.5V, CAN-L sekitar 1.5V - 2.5V.",
+    ],
   },
   esp32_core: {
     nodeName: "PROBE 05: ORION IOT GATEWAY v1.0 & RTC DS3231",
@@ -241,21 +268,34 @@ const HARNESS_SPECS: Record<TopologyNodeId, HarnessSpec> = {
     pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
     spec: "ESP32 Dual-Core 240MHz, Flash LittleFS 1.5MB (Tier-2 Buffer 20 record)",
     diagProcedure: "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi aktif 80mA.",
+    sopSteps: [
+      "SOP E.1: Periksa tegangan rel 3.3V keluaran regulator buck TPS54302 (toleransi: 3.28V - 3.34V).",
+      "SOP E.2: Verifikasi jam RTC DS3231 tersinkronisasi dengan NTP saat gateway terhubung ke jaringan gudang.",
+      "SOP E.3: Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi LittleFS.",
+    ],
   },
   rf_network: {
     nodeName: "PROBE 06: ANTENA RF DUAL-BAND & GEOFENCE",
-    wireColor: "Koaksial Mikro U.FL 50Ω ke Antena PCB 2.4 GHz",
+    wireColor: "Koaksial Mikro U.FL 50 Ohm ke Antena PCB 2.4 GHz",
     pinout: "Transceiver RF 2.4 GHz 802.11 b/g/n, Tx Power +19.5 dBm",
     spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Teknisi Fallback, Offline Buffer",
     diagProcedure: "Ambang batas koneksi real-time: RSSI >= -85 dBm. Buffer ke LittleFS jika di luar jangkauan.",
+    sopSteps: [
+      "SOP R.1: Periksa konektor U.FL antena RF terpasang kencang tanpa hambatan sinyal fisik.",
+      "SOP R.2: Ukur kekuatan sinyal RSSI di titik terjauh area gudang (minimal -85 dBm).",
+      "SOP R.3: Lakukan uji handover: putus koneksi AP gudang dan pastikan gateway beralih ke hotspot teknisi.",
+    ],
   },
 };
 
 export function ComponentNodeInspector({
   unit,
   activeNode,
+  config,
   className,
 }: ComponentNodeInspectorProps) {
+  const [activeTab, setActiveTab] = useState<"matrix" | "transducer" | "sop">("matrix");
+
   const t = unit.telemetry;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
   const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
@@ -265,6 +305,13 @@ export function ComponentNodeInspector({
     unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
 
   const activeSpec = HARNESS_SPECS[activeNode] ?? HARNESS_SPECS.all;
+
+  // OLS Calibration Math (Hardware Blueprint v3.3 / SOP C.1)
+  const calSlope = config?.cal_slope ?? 0.005412;
+  const calOffset = config?.cal_offset ?? 0.069;
+  const vCalculated = (t.adc_raw_mv * calSlope) + calOffset;
+  const vDelta = Math.abs(t.v_bat - vCalculated);
+  const isCalibrated = vDelta < 0.08;
 
   const rows: ChannelRow[] = useMemo(() => {
     return [
@@ -284,7 +331,7 @@ export function ComponentNodeInspector({
         nodeKey: "battery",
         parameter: "SHUNT_SLEEP (Arus Parasitik Tidur)",
         readout: `${t.shunt_sleep_ua} µA`,
-        subReadout: "Shunt 10Ω R-Sense",
+        subReadout: "Shunt 10 Ohm R-Sense",
         range: "< 50.0 µA (Deep Sleep)",
         status: t.shunt_sleep_ua <= 50 ? "PASS" : "EXCESS_DRAIN",
         tone: t.shunt_sleep_ua <= 50 ? "emerald" : "amber",
@@ -385,196 +432,308 @@ export function ComponentNodeInspector({
         className,
       )}
     >
-      {/* Interactive Harness Wiring & Pinout Specification Card (C-2 & C-5) */}
-      <div className="mb-3 rounded-[2px] border border-border/80 bg-background/80 p-3 num text-[11px]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-foreground text-[11px] tracking-wide uppercase">
-              {activeSpec.nodeName}
-            </span>
-            <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[9.5px] font-semibold text-muted-foreground uppercase">
-              OEM SPESIFIKASI PAJERO SPORT
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Standar Uji: Mitsubishi MUT-III / SAE J1979
-          </span>
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-[10.5px]">
-          <div>
-            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">KODE WARNA HARNESS</div>
-            <div className="mt-0.5 font-medium text-foreground">{activeSpec.wireColor}</div>
-          </div>
-          <div>
-            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">PINOUT TERMINAL</div>
-            <div className="mt-0.5 font-medium text-foreground">{activeSpec.pinout}</div>
-          </div>
-          <div>
-            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">SPESIFIKASI KOMPONEN</div>
-            <div className="mt-0.5 font-medium text-foreground">{activeSpec.spec}</div>
-          </div>
-          <div>
-            <div className="text-[9.5px] font-medium text-muted-foreground uppercase">PROSEDUR DIAGNOSTIK</div>
-            <div className="mt-0.5 text-muted-foreground">{activeSpec.diagProcedure}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Header Controls */}
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2">
+      {/* Inspector Navigation Tabs */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2.5">
         <div className="flex items-center gap-2">
-          <span className="label-hmi text-foreground font-semibold text-[10.5px]">
-            MATRIKS DATA STREAM TELEMETRI (SAE J1979 / OEM MUT-III FORMAT)
+          <span className="font-semibold text-foreground text-[11px] uppercase tracking-wide">
+            {activeSpec.nodeName}
           </span>
           <span className="num text-[10px] text-muted-foreground">
-            [{filteredRows.length} Saluran Aktif]
+            [{filteredRows.length} Saluran Terhubung]
           </span>
         </div>
-        <div className="num text-[10px] text-muted-foreground">
-          Siklus Sampling: 5.0 detik | Resolusi ADC: 12-bit
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-1 rounded-[1px] border border-border bg-background p-0.5 num text-[10.5px]">
+          <button
+            type="button"
+            onClick={() => setActiveTab("matrix")}
+            className={cn(
+              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              activeTab === "matrix"
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Matriks Data Stream
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("transducer")}
+            className={cn(
+              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              activeTab === "transducer"
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Transduser & OLS
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("sop")}
+            className={cn(
+              "px-2.5 py-1 uppercase font-semibold transition-colors rounded-[1px] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              activeTab === "sop"
+                ? "bg-foreground/15 text-foreground font-bold border border-foreground/30"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Manual Servis (SOP)
+          </button>
         </div>
       </div>
 
-      {/* Responsive Diagnostic Feed (Mobile View: Cards) */}
-      <div className="flex flex-col gap-2 md:hidden">
-        {filteredRows.map((r) => (
-          <div
-            key={r.channelId}
-            className="rounded-[2px] border border-border/70 bg-background/60 p-2.5 num"
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[9.5px] font-semibold text-foreground">
-                  {r.channelId}
-                </span>
-                <span className="text-[10px] font-medium text-foreground truncate max-w-[180px]">
-                  {r.parameter}
-                </span>
-              </div>
-              <span
-                className={cn(
-                  "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-                  r.tone === "crimson"
-                    ? "bg-crimson/15 text-crimson border border-crimson/30"
-                    : r.tone === "amber"
-                      ? "bg-amber/15 text-amber border border-amber/30"
-                      : r.tone === "emerald"
-                        ? "bg-emerald/15 text-emerald border border-emerald/30"
-                        : "bg-secondary text-muted-foreground border border-border",
-                )}
-              >
-                {r.status}
-              </span>
-            </div>
-
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold text-foreground">{r.readout}</div>
-                {r.subReadout && (
-                  <div className="text-[9.5px] text-muted-foreground">{r.subReadout}</div>
-                )}
-              </div>
-              <div className="flex flex-col items-end">
-                <MiniWaveform
-                  type={r.waveformType}
-                  tone={r.tone}
-                  active={t.engine_on || isCharging}
-                  vBat={t.v_bat}
-                  adcRawMv={t.adc_raw_mv}
-                  engineOn={t.engine_on}
-                  rpm={t.rpm}
-                  tempC={t.temp_c}
-                  canOk={t.can_ok !== false}
-                  dtcCnt={t.dtc_cnt}
-                  seq={t.seq}
-                  shuntUa={t.shunt_sleep_ua}
-                />
-                <span className="mt-0.5 text-[8.5px] text-muted-foreground">
-                  Ambang: {r.range}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Desktop Diagnostic Matrix Table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full border-collapse num text-[11px]">
-          <thead>
-            <tr className="border-b border-border/70 text-left label-hmi text-[9.5px] text-muted-foreground">
-              <th className="py-1.5 pr-2 font-medium">CH / PID</th>
-              <th className="py-1.5 px-2 font-medium">PARAMETER SENSOR</th>
-              <th className="py-1.5 px-2 font-medium">NILAI REAL-TIME</th>
-              <th className="py-1.5 px-2 font-medium">RENTANG / AMBANG</th>
-              <th className="py-1.5 px-2 font-medium">LIVE WAVEFORM</th>
-              <th className="py-1.5 pl-2 font-medium text-right">STATUS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
+      {/* Tab 1: Matriks Data Stream (SAE J1979 / MUT-III Format) */}
+      {activeTab === "matrix" && (
+        <div>
+          {/* Responsive Diagnostic Feed (Mobile View: Cards) */}
+          <div className="flex flex-col gap-2 md:hidden">
             {filteredRows.map((r) => (
-              <tr
+              <div
                 key={r.channelId}
-                className="hover:bg-foreground/[0.02] transition-colors"
+                className="rounded-[2px] border border-border/70 bg-background/60 p-2.5 num"
               >
-                <td className="py-2 pr-2 font-semibold text-foreground/90 whitespace-nowrap">
+                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Led tone={r.tone} pulse={r.tone === "crimson"} />
-                    <span>{r.channelId}</span>
+                    <span className="rounded bg-secondary/80 px-1.5 py-0.5 text-[9.5px] font-semibold text-foreground">
+                      {r.channelId}
+                    </span>
+                    <span className="text-[10px] font-medium text-foreground truncate max-w-[180px]">
+                      {r.parameter}
+                    </span>
                   </div>
-                </td>
-                <td className="py-2 px-2 text-foreground/90">
-                  <div className="font-medium">{r.parameter}</div>
-                  {r.subReadout && (
-                    <div className="text-[10px] text-muted-foreground">
-                      {r.subReadout}
-                    </div>
-                  )}
-                </td>
-                <td className="py-2 px-2 font-bold text-foreground whitespace-nowrap">
-                  {r.readout}
-                </td>
-                <td className="py-2 px-2 text-muted-foreground whitespace-nowrap text-[10.5px]">
-                  {r.range}
-                </td>
-                <td className="py-2 px-2">
-                  <MiniWaveform
-                    type={r.waveformType}
-                    tone={r.tone}
-                    active={t.engine_on || isCharging}
-                    vBat={t.v_bat}
-                    adcRawMv={t.adc_raw_mv}
-                    engineOn={t.engine_on}
-                    rpm={t.rpm}
-                    tempC={t.temp_c}
-                    canOk={t.can_ok !== false}
-                    dtcCnt={t.dtc_cnt}
-                    seq={t.seq}
-                    shuntUa={t.shunt_sleep_ua}
-                  />
-                </td>
-                <td className="py-2 pl-2 text-right whitespace-nowrap">
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-[1px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                      "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
                       r.tone === "crimson"
-                        ? "border-crimson/50 bg-crimson/15 text-crimson"
+                        ? "bg-crimson/15 text-crimson border border-crimson/30"
                         : r.tone === "amber"
-                          ? "border-amber/50 bg-amber/15 text-amber"
+                          ? "bg-amber/15 text-amber border border-amber/30"
                           : r.tone === "emerald"
-                            ? "border-emerald/50 bg-emerald/15 text-emerald"
-                            : "border-border bg-secondary/70 text-muted-foreground",
+                            ? "bg-emerald/15 text-emerald border border-emerald/30"
+                            : "bg-secondary text-muted-foreground border border-border",
                     )}
                   >
                     {r.status}
                   </span>
-                </td>
-              </tr>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-foreground">{r.readout}</div>
+                    {r.subReadout && (
+                      <div className="text-[9.5px] text-muted-foreground">{r.subReadout}</div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <MiniWaveform
+                      type={r.waveformType}
+                      tone={r.tone}
+                      active={t.engine_on || isCharging}
+                      vBat={t.v_bat}
+                      adcRawMv={t.adc_raw_mv}
+                      engineOn={t.engine_on}
+                      rpm={t.rpm}
+                      tempC={t.temp_c}
+                      canOk={t.can_ok !== false}
+                      dtcCnt={t.dtc_cnt}
+                      seq={t.seq ?? 0}
+                      shuntUa={t.shunt_sleep_ua}
+                    />
+                    <span className="mt-0.5 text-[8.5px] text-muted-foreground">
+                      Ambang: {r.range}
+                    </span>
+                  </div>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          {/* Desktop Diagnostic Matrix Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full border-collapse num text-[11px]">
+              <thead>
+                <tr className="border-b border-border/70 text-left label-hmi text-[9.5px] text-muted-foreground">
+                  <th className="py-1.5 pr-2 font-medium">CH / PID</th>
+                  <th className="py-1.5 px-2 font-medium">PARAMETER SENSOR</th>
+                  <th className="py-1.5 px-2 font-medium">NILAI REAL-TIME</th>
+                  <th className="py-1.5 px-2 font-medium">RENTANG / AMBANG</th>
+                  <th className="py-1.5 px-2 font-medium">LIVE WAVEFORM</th>
+                  <th className="py-1.5 pl-2 font-medium text-right">STATUS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {filteredRows.map((r) => (
+                  <tr
+                    key={r.channelId}
+                    className="hover:bg-foreground/[0.02] transition-colors"
+                  >
+                    <td className="py-2 pr-2 font-semibold text-foreground/90 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <Led tone={r.tone} pulse={r.tone === "crimson"} />
+                        <span>{r.channelId}</span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-foreground/90">
+                      <div className="font-medium">{r.parameter}</div>
+                      {r.subReadout && (
+                        <div className="text-[10px] text-muted-foreground">
+                          {r.subReadout}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 font-bold text-foreground whitespace-nowrap">
+                      {r.readout}
+                    </td>
+                    <td className="py-2 px-2 text-muted-foreground whitespace-nowrap text-[10.5px]">
+                      {r.range}
+                    </td>
+                    <td className="py-2 px-2">
+                      <MiniWaveform
+                        type={r.waveformType}
+                        tone={r.tone}
+                        active={t.engine_on || isCharging}
+                        vBat={t.v_bat}
+                        adcRawMv={t.adc_raw_mv}
+                        engineOn={t.engine_on}
+                        rpm={t.rpm}
+                        tempC={t.temp_c}
+                        canOk={t.can_ok !== false}
+                        dtcCnt={t.dtc_cnt}
+                        seq={t.seq ?? 0}
+                        shuntUa={t.shunt_sleep_ua}
+                      />
+                    </td>
+                    <td className="py-2 pl-2 text-right whitespace-nowrap">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-[1px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                          r.tone === "crimson"
+                            ? "border-crimson/50 bg-crimson/15 text-crimson"
+                            : r.tone === "amber"
+                              ? "border-amber/50 bg-amber/15 text-amber"
+                              : r.tone === "emerald"
+                                ? "border-emerald/50 bg-emerald/15 text-emerald"
+                                : "border-border bg-secondary/70 text-muted-foreground",
+                        )}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Transduser & Kalibrasi OLS (Deep Engineering Workbench) */}
+      {activeTab === "transducer" && (
+        <div className="space-y-3 num text-[11px]">
+          {/* OLS Linear Regression Mathematical Calibration Card */}
+          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground uppercase tracking-wider">
+                  KALIBRASI OLS ADC (GPIO34 NODE M)
+                </span>
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                    isCalibrated ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-amber/15 text-amber border border-amber/30",
+                  )}
+                >
+                  {isCalibrated ? "IN CALIBRATION (OLS PASS)" : "CALIBRATION DRIFT DETECTED"}
+                </span>
+              </div>
+              <span className="text-[10px] text-muted-foreground">
+                Formula: V_bat = (ADC_raw * m) + c
+              </span>
+            </div>
+
+            <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded border border-border/50 bg-card/60 p-2">
+                <div className="text-[10px] text-muted-foreground uppercase">ADC RAW PIN 34</div>
+                <div className="text-sm font-bold text-foreground mt-0.5">{t.adc_raw_mv} mV</div>
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">R-Divider 300k/68k</div>
+              </div>
+              <div className="rounded border border-border/50 bg-card/60 p-2">
+                <div className="text-[10px] text-muted-foreground uppercase">SLOPE (m) / OFFSET (c)</div>
+                <div className="text-sm font-bold text-foreground mt-0.5">
+                  m: {calSlope.toFixed(6)}
+                </div>
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">c: {calOffset.toFixed(3)} V</div>
+              </div>
+              <div className="rounded border border-border/50 bg-card/60 p-2">
+                <div className="text-[10px] text-muted-foreground uppercase">HASIL KALKULASI OLS</div>
+                <div className="text-sm font-bold text-emerald mt-0.5">{vCalculated.toFixed(2)} V</div>
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">Terkalibrasi OLS</div>
+              </div>
+              <div className="rounded border border-border/50 bg-card/60 p-2">
+                <div className="text-[10px] text-muted-foreground uppercase">DELTA DRIFT HARDWARE</div>
+                <div className={cn("text-sm font-bold mt-0.5", isCalibrated ? "text-foreground" : "text-amber")}>
+                  {vDelta.toFixed(3)} V
+                </div>
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi maks 0.080V</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Physical Harness Pinout & Wiring Specifications */}
+          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+            <div className="font-semibold text-foreground border-b border-border/60 pb-1.5 uppercase tracking-wider">
+              SPESIFIKASI WIRING HARNESS & TERMINAL
+            </div>
+            <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <div>
+                <span className="text-[10px] text-muted-foreground uppercase block">KODE WARNA KABEL</span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.wireColor}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-muted-foreground uppercase block">PINOUT TERMINAL</span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.pinout}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-muted-foreground uppercase block">SPESIFIKASI OEM</span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.spec}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Prosedur Manual Servis OEM (SOP Standar Mitsubishi) */}
+      {activeTab === "sop" && (
+        <div className="space-y-2.5 num text-[11px]">
+          <div className="rounded-[2px] border border-border/80 bg-background/80 p-3">
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <span className="font-semibold text-foreground uppercase tracking-wider">
+                STANDAR OPERASIONAL PROSEDUR DIAGNOSTIK (MITSUBISHI WORKSHOP MANUAL)
+              </span>
+              <span className="text-[10px] text-muted-foreground">Revisi Standar SOP C.1</span>
+            </div>
+            <div className="mt-2 text-muted-foreground">
+              {activeSpec.diagProcedure}
+            </div>
+
+            <div className="mt-3 space-y-1.5">
+              {activeSpec.sopSteps.map((step, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2 rounded border border-border/40 bg-card/50 p-2"
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[9.5px] font-bold text-foreground">
+                    {idx + 1}
+                  </span>
+                  <span className="text-foreground/90 font-medium">{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
