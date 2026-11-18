@@ -212,12 +212,82 @@ try {
         $unitIdForFile = 'FILTERED_' . count($selectedIds) . 'UNITS';
     }
 
-    $rawLimit = isset($_GET['limit']) ? (int)$_GET['limit'] : 250;
-    $limit = max(1, min(2000, $rawLimit));
+    // Period & Resolution parameters (Asia/Jakarta WIB set in db.php)
+    $rawPeriod = strtoupper(trim((string)($_GET['period'] ?? 'ALL_TIME')));
+    $allowedPeriods = ['DAILY', '7_DAYS', 'MONTHLY', 'YEARLY', 'CUSTOM', 'ALL_TIME'];
+    $period = in_array($rawPeriod, $allowedPeriods, true) ? $rawPeriod : 'ALL_TIME';
+
+    $rawResolution = strtoupper(trim((string)($_GET['resolution'] ?? 'RAW')));
+    $allowedRes = ['RAW', 'HOURLY', 'DAILY_SUMMARY'];
+    $resolution = in_array($rawResolution, $allowedRes, true) ? $rawResolution : 'RAW';
+
+    $resolutionLabels = [
+        'RAW'           => 'DATA MENTAH (RAW)',
+        'HOURLY'        => 'RINGKASAN PER JAM',
+        'DAILY_SUMMARY' => 'RINGKASAN PER HARI',
+    ];
+    $resolutionLabel = $resolutionLabels[$resolution];
+
+    $startDt = null;
+    $endDt = null;
+    $periodLabel = 'SELURUH RIWAYAT';
+    $fileSlug = 'ALL_TIME';
+
+    if ($period === 'DAILY') {
+        $rawDate = trim((string)($_GET['date'] ?? ''));
+        $d = preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate) ? $rawDate : date('Y-m-d');
+        $startDt = "{$d} 00:00:00";
+        $endDt = "{$d} 23:59:59";
+        $periodLabel = "HARIAN ({$d})";
+        $fileSlug = "HARIAN_{$d}";
+    } elseif ($period === '7_DAYS') {
+        $startD = date('Y-m-d', strtotime('-6 days'));
+        $endD = date('Y-m-d');
+        $startDt = "{$startD} 00:00:00";
+        $endDt = "{$endD} 23:59:59";
+        $periodLabel = "7 HARI TERAKHIR ({$startD} s/d {$endD})";
+        $fileSlug = "7HARI_{$endD}";
+    } elseif ($period === 'MONTHLY') {
+        $rawMonth = trim((string)($_GET['month'] ?? ''));
+        $ym = preg_match('/^\d{4}-\d{2}$/', $rawMonth) ? $rawMonth : date('Y-m');
+        $lastDay = date('Y-m-t', strtotime("{$ym}-01"));
+        $startDt = "{$ym}-01 00:00:00";
+        $endDt = "{$lastDay} 23:59:59";
+        $periodLabel = "BULANAN ({$ym})";
+        $fileSlug = "BULANAN_{$ym}";
+    } elseif ($period === 'YEARLY') {
+        $rawYear = trim((string)($_GET['year'] ?? ''));
+        $y = preg_match('/^\d{4}$/', $rawYear) ? $rawYear : date('Y');
+        $startDt = "{$y}-01-01 00:00:00";
+        $endDt = "{$y}-12-31 23:59:59";
+        $periodLabel = "TAHUNAN ({$y})";
+        $fileSlug = "TAHUNAN_{$y}";
+    } elseif ($period === 'CUSTOM') {
+        $rawStart = trim((string)($_GET['start_date'] ?? ''));
+        $rawEnd = trim((string)($_GET['end_date'] ?? ''));
+        $s = preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawStart) ? $rawStart : date('Y-m-d');
+        $e = preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawEnd) ? $rawEnd : $s;
+        if ($e < $s) {
+            $tmp = $s;
+            $s = $e;
+            $e = $tmp;
+        }
+        $startDt = "{$s} 00:00:00";
+        $endDt = "{$e} 23:59:59";
+        $periodLabel = "RENTANG ({$s} s/d {$e})";
+        $fileSlug = "RENTANG_{$s}_{$e}";
+    }
+
+    $rawLimit = isset($_GET['limit']) ? (int)$_GET['limit'] : 0;
+    if ($rawLimit <= 0) {
+        $limit = ($period !== 'ALL_TIME') ? 10000 : 2500;
+    } else {
+        $limit = max(1, min(10000, $rawLimit));
+    }
 
     $dateFile = date('Ymd_His');
     $dateHuman = date('Y-m-d H:i:s');
-    $filename = "ORION_TELEMETRY_REPORT_{$unitIdForFile}_{$dateFile}.xls";
+    $filename = "ORION_TELEMETRY_REPORT_{$unitIdForFile}_{$fileSlug}_{$dateFile}.xls";
 
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"{$filename}\"");
@@ -364,48 +434,119 @@ try {
         ];
     }
 
-    // 4. Fetch chronological telemetry logs for Sheet 2
-    if ($isAll) {
-        $stmtLogs = $pdo->prepare("
-            SELECT l.*, COALESCE(l.`buffer_used`, v.`buffer_used`, 0) AS `resolved_buffer_used`
-            FROM `telemetry_logs` l
-            LEFT JOIN `vehicles` v ON v.`unit_id` = l.`unit_id`
-            ORDER BY l.`id` DESC
-            LIMIT ?
-        ");
-        $stmtLogs->bindValue(1, $limit, PDO::PARAM_INT);
-    } else {
+    // 4. Fetch chronological telemetry logs for Sheet 2 (supports period BETWEEN & RAW / HOURLY / DAILY_SUMMARY)
+    $logWhere = [];
+    $logParams = [];
+    if (!$isAll) {
         $placeholders = implode(', ', array_fill(0, count($selectedIds), '?'));
-        $stmtLogs = $pdo->prepare("
+        $logWhere[] = "l.`unit_id` IN ({$placeholders})";
+        foreach ($selectedIds as $uid) {
+            $logParams[] = [$uid, PDO::PARAM_STR];
+        }
+    }
+    if ($startDt !== null && $endDt !== null) {
+        $logWhere[] = "l.`created_at` BETWEEN ? AND ?";
+        $logParams[] = [$startDt, PDO::PARAM_STR];
+        $logParams[] = [$endDt, PDO::PARAM_STR];
+    }
+    $logWhereSql = empty($logWhere) ? '' : ('WHERE ' . implode(' AND ', $logWhere));
+
+    if ($resolution === 'HOURLY' || $resolution === 'DAILY_SUMMARY') {
+        $bucketExpr = $resolution === 'HOURLY'
+            ? "DATE_FORMAT(l.`created_at`, '%Y-%m-%d %H:00:00')"
+            : "DATE_FORMAT(l.`created_at`, '%Y-%m-%d')";
+
+        $logSql = "
+            SELECT
+                l.`unit_id`,
+                {$bucketExpr} AS `created_at`,
+                MAX(l.`ts_epoch`) AS `ts_epoch`,
+                MAX(l.`seq`) AS `seq`,
+                MAX(l.`boot`) AS `boot`,
+                ROUND(AVG(l.`v_bat`), 2) AS `v_bat`,
+                ROUND(AVG(l.`adc_raw_mv`)) AS `adc_raw_mv`,
+                ROUND(AVG(l.`rtc_temp_c`), 1) AS `rtc_temp_c`,
+                ROUND(AVG(l.`shunt_sleep_ua`)) AS `shunt_sleep_ua`,
+                MAX(l.`engine_on`) AS `engine_on`,
+                MAX(l.`crit_alert`) AS `crit_alert`,
+                ROUND(AVG(CASE WHEN l.`rpm` >= 0 THEN l.`rpm` ELSE 0 END)) AS `rpm`,
+                ROUND(AVG(CASE WHEN l.`temp_c` > -40 THEN l.`temp_c` ELSE 0 END)) AS `temp_c`,
+                MAX(l.`dtc_cnt`) AS `dtc_cnt`,
+                COALESCE(NULLIF(MAX(NULLIF(l.`dtc`, 'NONE')), ''), 'NONE') AS `dtc`,
+                ROUND(AVG(l.`rssi`)) AS `rssi`,
+                MAX(l.`sleep_cfg`) AS `sleep_cfg`,
+                MAX(COALESCE(l.`buffer_used`, v.`buffer_used`, 0)) AS `resolved_buffer_used`,
+                MIN(COALESCE(l.`can_ok`, 1)) AS `can_ok`,
+                MAX(COALESCE(l.`net_zone`, 'YARD')) AS `net_zone`,
+                MAX(COALESCE(l.`sync_ssid`, '')) AS `sync_ssid`,
+                ROUND(AVG(l.`active_ms`)) AS `active_ms`,
+                ROUND(MAX(l.`daily_mah`), 2) AS `daily_mah`,
+                MAX(COALESCE(l.`speed_kmh`, 0)) AS `speed_kmh`,
+                ROUND(AVG(COALESCE(l.`iat_c`, 0))) AS `iat_c`,
+                ROUND(AVG(COALESCE(l.`map_kpa`, 0))) AS `map_kpa`,
+                ROUND(AVG(COALESCE(l.`load_pct`, 0)), 1) AS `load_pct`,
+                ROUND(AVG(COALESCE(l.`tps_pct`, 0)), 1) AS `tps_pct`,
+                ROUND(AVG(COALESCE(l.`ign_deg`, 0)), 1) AS `ign_deg`,
+                ROUND(AVG(COALESCE(l.`maf_gs`, 0)), 2) AS `maf_gs`,
+                MAX(COALESCE(l.`run_time_s`, 0)) AS `run_time_s`,
+                ROUND(AVG(COALESCE(l.`fuel_pct`, 0)), 1) AS `fuel_pct`,
+                ROUND(AVG(COALESCE(l.`fuel_rate_lh`, 0)), 2) AS `fuel_rate_lh`,
+                ROUND(AVG(COALESCE(l.`o2_v`, 0)), 2) AS `o2_v`,
+                ROUND(AVG(COALESCE(l.`stft_pct`, 0)), 1) AS `stft_pct`,
+                MAX(COALESCE(l.`mil_on`, 0)) AS `mil_on`,
+                ROUND(AVG(COALESCE(l.`ecu_v`, 0)), 2) AS `ecu_v`,
+                MAX(COALESCE(l.`dist_clr_km`, 0)) AS `dist_clr_km`
+            FROM `telemetry_logs` l
+            LEFT JOIN `vehicles` v ON v.`unit_id` = l.`unit_id`
+            {$logWhereSql}
+            GROUP BY l.`unit_id`, {$bucketExpr}
+            ORDER BY MAX(l.`id`) DESC
+            LIMIT ?
+        ";
+    } else {
+        $logSql = "
             SELECT l.*, COALESCE(l.`buffer_used`, v.`buffer_used`, 0) AS `resolved_buffer_used`
             FROM `telemetry_logs` l
             LEFT JOIN `vehicles` v ON v.`unit_id` = l.`unit_id`
-            WHERE l.`unit_id` IN ({$placeholders})
+            {$logWhereSql}
             ORDER BY l.`id` DESC
             LIMIT ?
-        ");
-        $pos = 1;
-        foreach ($selectedIds as $uid) {
-            $stmtLogs->bindValue($pos++, $uid, PDO::PARAM_STR);
-        }
-        $stmtLogs->bindValue($pos, $limit, PDO::PARAM_INT);
+        ";
     }
+
+    $stmtLogs = $pdo->prepare($logSql);
+    $pos = 1;
+    foreach ($logParams as $p) {
+        $stmtLogs->bindValue($pos++, $p[0], $p[1]);
+    }
+    $stmtLogs->bindValue($pos, $limit, PDO::PARAM_INT);
     $stmtLogs->execute();
     $logRows = $stmtLogs->fetchAll();
 
-    // 5. Fetch maintenance_tickets & system_events for Sheet 3
+    // 5. Fetch maintenance_tickets & system_events for Sheet 3 (respects unit & time window filter)
     $ticketRows = [];
     try {
-        if ($isAll) {
-            $stmtTk = $pdo->query("SELECT * FROM `maintenance_tickets` ORDER BY `id` DESC LIMIT 200");
-        } else {
+        $tkWhere = [];
+        $tkParams = [];
+        if (!$isAll) {
             $placeholders = implode(', ', array_fill(0, count($selectedIds), '?'));
-            $stmtTk = $pdo->prepare("SELECT * FROM `maintenance_tickets` WHERE `unit_id` IN ({$placeholders}) ORDER BY `id` DESC LIMIT 200");
-            foreach ($selectedIds as $idx => $uid) {
-                $stmtTk->bindValue($idx + 1, $uid, PDO::PARAM_STR);
+            $tkWhere[] = "`unit_id` IN ({$placeholders})";
+            foreach ($selectedIds as $uid) {
+                $tkParams[] = [$uid, PDO::PARAM_STR];
             }
-            $stmtTk->execute();
         }
+        if ($startDt !== null && $endDt !== null) {
+            $tkWhere[] = "`updated_at` BETWEEN ? AND ?";
+            $tkParams[] = [$startDt, PDO::PARAM_STR];
+            $tkParams[] = [$endDt, PDO::PARAM_STR];
+        }
+        $tkWhereSql = empty($tkWhere) ? '' : ('WHERE ' . implode(' AND ', $tkWhere));
+        $stmtTk = $pdo->prepare("SELECT * FROM `maintenance_tickets` {$tkWhereSql} ORDER BY `id` DESC LIMIT 500");
+        $pos = 1;
+        foreach ($tkParams as $p) {
+            $stmtTk->bindValue($pos++, $p[0], $p[1]);
+        }
+        $stmtTk->execute();
         $ticketRows = $stmtTk->fetchAll();
     } catch (Exception $ignored) {
         $ticketRows = [];
@@ -413,16 +554,27 @@ try {
 
     $auditRows = [];
     try {
-        if ($isAll) {
-            $stmtAud = $pdo->query("SELECT * FROM `system_events` ORDER BY `id` DESC LIMIT 200");
-        } else {
+        $audWhere = [];
+        $audParams = [];
+        if (!$isAll) {
             $placeholders = implode(', ', array_fill(0, count($selectedIds), '?'));
-            $stmtAud = $pdo->prepare("SELECT * FROM `system_events` WHERE `unit_id` IN ({$placeholders}) ORDER BY `id` DESC LIMIT 200");
-            foreach ($selectedIds as $idx => $uid) {
-                $stmtAud->bindValue($idx + 1, $uid, PDO::PARAM_STR);
+            $audWhere[] = "`unit_id` IN ({$placeholders})";
+            foreach ($selectedIds as $uid) {
+                $audParams[] = [$uid, PDO::PARAM_STR];
             }
-            $stmtAud->execute();
         }
+        if ($startDt !== null && $endDt !== null) {
+            $audWhere[] = "`created_at` BETWEEN ? AND ?";
+            $audParams[] = [$startDt, PDO::PARAM_STR];
+            $audParams[] = [$endDt, PDO::PARAM_STR];
+        }
+        $audWhereSql = empty($audWhere) ? '' : ('WHERE ' . implode(' AND ', $audWhere));
+        $stmtAud = $pdo->prepare("SELECT * FROM `system_events` {$audWhereSql} ORDER BY `id` DESC LIMIT 500");
+        $pos = 1;
+        foreach ($audParams as $p) {
+            $stmtAud->bindValue($pos++, $p[0], $p[1]);
+        }
+        $stmtAud->execute();
         $auditRows = $stmtAud->fetchAll();
     } catch (Exception $ignored) {
         $auditRows = [];
@@ -533,7 +685,7 @@ try {
     }
     echo '   <Row ss:Height="26"><Cell ss:MergeAcross="15" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD - LAPORAN EKSEKUTIF PDI &amp; KESEHATAN BATERAI</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="15" ss:StyleID="BannerMeta"><Data ss:Type="String">'
-        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Total Unit: " . count($summaryRows) . " | Standar: SOP C.1 OLS & Mode 01/03 Read-Only")
+        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Periode: {$periodLabel} | Resolusi: {$resolutionLabel} | Total Unit: " . count($summaryRows))
         . '</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="15" ss:StyleID="SectionHdr"><Data ss:Type="String">1. Ringkasan Eksekutif Kesehatan Baterai, Kompensasi Termal 25C, &amp; Kesiapan PDI Armada</Data></Cell></Row>' . "\n";
 
@@ -608,7 +760,7 @@ try {
     }
     echo '   <Row ss:Height="26"><Cell ss:MergeAcross="40" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI - LOG KRONOLOGIS WAKE-CYCLE &amp; 15 PARAMETER OBD-II (READ-ONLY MODE 01/03)</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="40" ss:StyleID="BannerMeta"><Data ss:Type="String">'
-        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Jumlah Baris Log: " . count($logRows) . " | Maks Limit: {$limit}")
+        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Periode: {$periodLabel} | Resolusi: {$resolutionLabel} | Jumlah Baris Log: " . count($logRows))
         . '</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="40" ss:StyleID="SectionHdr"><Data ss:Type="String">2. Log Kronologis Siklus Bangun Telemetri &amp; Parameter ECU OBD-II Mode 01/03</Data></Cell></Row>' . "\n";
 
@@ -715,7 +867,7 @@ try {
     }
     echo '   <Row ss:Height="26"><Cell ss:MergeAcross="8" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI - REKAMAN TIKET PEMELIHARAAN &amp; JEJAK AUDIT OPERASIONAL</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="8" ss:StyleID="BannerMeta"><Data ss:Type="String">'
-        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Total Rekaman: " . count($sheet3Records) . " | Sumber: maintenance_tickets & system_events")
+        . escXml("Waktu Ekspor (WIB): {$dateHuman} | Cakupan Filter: {$unitFilterLabel} | Periode: {$periodLabel} | Resolusi: {$resolutionLabel} | Total Rekaman: " . count($sheet3Records))
         . '</Data></Cell></Row>' . "\n";
     echo '   <Row ss:Height="20"><Cell ss:MergeAcross="8" ss:StyleID="SectionHdr"><Data ss:Type="String">3. Rekaman Tiket Pemeliharaan (Shift Handover) &amp; Log Audit Operasional</Data></Cell></Row>' . "\n";
 

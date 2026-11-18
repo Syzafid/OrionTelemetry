@@ -236,4 +236,52 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     // Simulator INITIAL_TICKETS are cleared by backend tickets: []
     expect(within(liveCard).queryByText("TKT-0404")).not.toBeInTheDocument();
   }, 15000);
+
+  it("opens ExportConfigModal allowing unit scope, DAILY/MONTHLY/YEARLY period, resolution selection, and export confirmation", async () => {
+    renderFleet();
+
+    fireEvent.click(screen.getByRole("button", { name: /Ekspor Excel \(12 Unit\)/i }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/Konfigurasi Ekspor Laporan Telemetri/i)).toBeInTheDocument();
+
+    // Switch to Per Bulan -> automatically switches resolution to HOURLY & filename slug to BULANAN_
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Per Bulan$/i }));
+    const resSelect = within(dialog).getByLabelText(
+      /4\. Resolusi Data \(Granularitas\)/i,
+    ) as HTMLSelectElement;
+    expect(resSelect.value).toBe("HOURLY");
+    expect(within(dialog).getByText(/BULANAN_/i)).toBeInTheDocument();
+
+    // Switch to Per Tahun -> automatically switches resolution to DAILY_SUMMARY & filename slug to TAHUNAN_
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Per Tahun$/i }));
+    expect(resSelect.value).toBe("DAILY_SUMMARY");
+    expect(within(dialog).getByText(/TAHUNAN_/i)).toBeInTheDocument();
+
+    // Switch to Pilih Unit Spesifik -> Kosongkan shows validation & disables submit button
+    fireEvent.click(within(dialog).getByRole("button", { name: /Pilih Unit Spesifik/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Kosongkan/i }));
+    expect(
+      within(dialog).getByText(/Pilih minimal 1 unit kendaraan untuk melanjutkan ekspor/i),
+    ).toBeInTheDocument();
+    const submitBtn = within(dialog).getByRole("button", { name: /Unduh Laporan Excel/i });
+    expect(submitBtn).toBeDisabled();
+
+    // Re-select Seluruh Armada -> submit button enabled & triggers clean close + real filename
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    try {
+      fireEvent.click(within(dialog).getByRole("button", { name: /Seluruh Armada/i }));
+      expect(submitBtn).not.toBeDisabled();
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClickSpy.mockRestore();
+    }
+  }, 15000);
 });

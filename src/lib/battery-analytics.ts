@@ -302,7 +302,279 @@ export function formatWibTimestamp(tsEpoch: number): string {
   return new Date((tsEpoch + 7 * 3600) * 1000).toISOString().replace("T", " ").slice(0, 19);
 }
 
-export interface TelemetryCsvOptions {
+export type ExportPeriodMode = "DAILY" | "7_DAYS" | "MONTHLY" | "YEARLY" | "CUSTOM" | "ALL_TIME";
+
+export type ExportResolutionMode = "RAW" | "HOURLY" | "DAILY_SUMMARY";
+
+export interface ExportFilterConfig {
+  period?: ExportPeriodMode;
+  date?: string;
+  month?: string;
+  year?: string;
+  startDate?: string;
+  endDate?: string;
+  resolution?: ExportResolutionMode;
+  limit?: number;
+}
+
+export interface ResolvedExportTimeWindow {
+  period: ExportPeriodMode;
+  resolution: ExportResolutionMode;
+  startEpoch: number | null;
+  endEpoch: number | null;
+  startWib: string | null;
+  endWib: string | null;
+  periodLabel: string;
+  resolutionLabel: string;
+  fileSlug: string;
+  limit: number;
+}
+
+export interface NormalizedExportPoint extends BatteryHistoryPoint {
+  ts: number;
+  sampleCount: number;
+}
+
+function wibDateTimeToEpoch(ymd: string, hms: string): number | null {
+  const ms = Date.parse(`${ymd}T${hms}+07:00`);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+function lastDayOfMonth(ym: string): string {
+  const parts = ym.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return "28";
+  }
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return String(days).padStart(2, "0");
+}
+
+const RESOLUTION_LABELS: Record<ExportResolutionMode, string> = {
+  RAW: "DATA MENTAH (RAW)",
+  HOURLY: "RINGKASAN PER JAM",
+  DAILY_SUMMARY: "RINGKASAN PER HARI",
+};
+
+export function resolveExportTimeWindow(
+  cfg?: ExportFilterConfig,
+  nowSec?: number,
+): ResolvedExportTimeWindow {
+  const safeNow =
+    typeof nowSec === "number" && Number.isFinite(nowSec)
+      ? Math.floor(nowSec)
+      : Math.floor(Date.now() / 1000);
+  const wibNow = formatWibTimestamp(safeNow);
+  const todayWib = wibNow.slice(0, 10);
+  const currentMonthWib = wibNow.slice(0, 7);
+  const currentYearWib = wibNow.slice(0, 4);
+
+  const period: ExportPeriodMode = cfg?.period ?? "ALL_TIME";
+  const resolution: ExportResolutionMode = cfg?.resolution ?? "RAW";
+  const limit =
+    typeof cfg?.limit === "number" && Number.isFinite(cfg.limit) && cfg.limit > 0
+      ? Math.floor(cfg.limit)
+      : 0;
+
+  let startWib: string | null = null;
+  let endWib: string | null = null;
+  let startEpoch: number | null = null;
+  let endEpoch: number | null = null;
+  let periodLabel = "SELURUH RIWAYAT";
+  let fileSlug = "ALL_TIME";
+
+  if (period === "DAILY") {
+    const d = cfg?.date && /^\d{4}-\d{2}-\d{2}$/.test(cfg.date) ? cfg.date : todayWib;
+    startWib = `${d} 00:00:00`;
+    endWib = `${d} 23:59:59`;
+    startEpoch = wibDateTimeToEpoch(d, "00:00:00");
+    endEpoch = wibDateTimeToEpoch(d, "23:59:59");
+    periodLabel = `HARIAN (${d})`;
+    fileSlug = `HARIAN_${d}`;
+  } else if (period === "7_DAYS") {
+    const startD = formatWibTimestamp(safeNow - 6 * 86400).slice(0, 10);
+    startWib = `${startD} 00:00:00`;
+    endWib = `${todayWib} 23:59:59`;
+    startEpoch = wibDateTimeToEpoch(startD, "00:00:00");
+    endEpoch = wibDateTimeToEpoch(todayWib, "23:59:59");
+    periodLabel = `7 HARI TERAKHIR (${startD} s/d ${todayWib})`;
+    fileSlug = `7HARI_${todayWib}`;
+  } else if (period === "MONTHLY") {
+    const ym = cfg?.month && /^\d{4}-\d{2}$/.test(cfg.month) ? cfg.month : currentMonthWib;
+    const lastDay = lastDayOfMonth(ym);
+    startWib = `${ym}-01 00:00:00`;
+    endWib = `${ym}-${lastDay} 23:59:59`;
+    startEpoch = wibDateTimeToEpoch(`${ym}-01`, "00:00:00");
+    endEpoch = wibDateTimeToEpoch(`${ym}-${lastDay}`, "23:59:59");
+    periodLabel = `BULANAN (${ym})`;
+    fileSlug = `BULANAN_${ym}`;
+  } else if (period === "YEARLY") {
+    const yr = cfg?.year && /^\d{4}$/.test(cfg.year) ? cfg.year : currentYearWib;
+    startWib = `${yr}-01-01 00:00:00`;
+    endWib = `${yr}-12-31 23:59:59`;
+    startEpoch = wibDateTimeToEpoch(`${yr}-01-01`, "00:00:00");
+    endEpoch = wibDateTimeToEpoch(`${yr}-12-31`, "23:59:59");
+    periodLabel = `TAHUNAN (${yr})`;
+    fileSlug = `TAHUNAN_${yr}`;
+  } else if (period === "CUSTOM") {
+    let s = cfg?.startDate && /^\d{4}-\d{2}-\d{2}$/.test(cfg.startDate) ? cfg.startDate : todayWib;
+    let e = cfg?.endDate && /^\d{4}-\d{2}-\d{2}$/.test(cfg.endDate) ? cfg.endDate : s;
+    if (e < s) {
+      const tmp = s;
+      s = e;
+      e = tmp;
+    }
+    startWib = `${s} 00:00:00`;
+    endWib = `${e} 23:59:59`;
+    startEpoch = wibDateTimeToEpoch(s, "00:00:00");
+    endEpoch = wibDateTimeToEpoch(e, "23:59:59");
+    periodLabel = `RENTANG (${s} s/d ${e})`;
+    fileSlug = `RENTANG_${s}_${e}`;
+  }
+
+  return {
+    period,
+    resolution,
+    startEpoch,
+    endEpoch,
+    startWib,
+    endWib,
+    periodLabel,
+    resolutionLabel: RESOLUTION_LABELS[resolution],
+    fileSlug,
+    limit,
+  };
+}
+
+export function applyExportResolutionAndWindow(
+  chronologicalPoints: Array<BatteryHistoryPoint>,
+  windowInfo: ResolvedExportTimeWindow,
+  fallbackBaseEpoch: number,
+): Array<NormalizedExportPoint> {
+  const total = chronologicalPoints.length;
+  const withTs: NormalizedExportPoint[] = chronologicalPoints.map((pt, idx) => {
+    const ts =
+      typeof pt.ts === "number" && pt.ts > 0
+        ? Math.floor(pt.ts)
+        : Math.max(0, fallbackBaseEpoch - (total - 1 - idx) * 3600);
+    return {
+      t: pt.t,
+      v: pt.v,
+      ts,
+      sampleCount: 1,
+    };
+  });
+
+  const filtered =
+    windowInfo.startEpoch !== null && windowInfo.endEpoch !== null
+      ? withTs.filter(
+          (pt) =>
+            pt.ts >= (windowInfo.startEpoch as number) && pt.ts <= (windowInfo.endEpoch as number),
+        )
+      : withTs;
+
+  let aggregated: NormalizedExportPoint[];
+  if (windowInfo.resolution === "RAW") {
+    aggregated = filtered;
+  } else {
+    const bucketMap = new Map<string, { sumV: number; count: number; latestTs: number }>();
+    for (const pt of filtered) {
+      const wib = formatWibTimestamp(pt.ts);
+      const key = windowInfo.resolution === "HOURLY" ? wib.slice(0, 13) : wib.slice(0, 10);
+      const existing = bucketMap.get(key);
+      if (existing) {
+        existing.sumV += pt.v;
+        existing.count += 1;
+        if (pt.ts > existing.latestTs) existing.latestTs = pt.ts;
+      } else {
+        bucketMap.set(key, { sumV: pt.v, count: 1, latestTs: pt.ts });
+      }
+    }
+    aggregated = Array.from(bucketMap.entries()).map(([key, bucket]) => ({
+      t: windowInfo.resolution === "HOURLY" ? `${key.slice(11, 13)}:00` : key,
+      v: Number((bucket.sumV / bucket.count).toFixed(2)),
+      ts: bucket.latestTs,
+      sampleCount: bucket.count,
+    }));
+  }
+
+  const desc = aggregated.slice().sort((a, b) => b.ts - a.ts);
+  return windowInfo.limit > 0 ? desc.slice(0, windowInfo.limit) : desc;
+}
+
+export function buildExportFilename(
+  basePrefix: "ORION_TELEMETRY" | "ORION_TELEMETRY_REPORT",
+  targetUnitId: string,
+  windowInfo: ResolvedExportTimeWindow,
+  ext: "csv" | "xls",
+  stamp?: string,
+): string {
+  const selectedIds = targetUnitId
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.toUpperCase() !== "ALL");
+  const safeId =
+    selectedIds.length === 0
+      ? "ALL_FLEET"
+      : selectedIds.length === 1
+        ? selectedIds[0]!.replace(/[^A-Za-z0-9_-]/g, "_")
+        : `FILTERED_${selectedIds.length}UNITS`;
+  const timeStamp = stamp ?? new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
+  return `${basePrefix}_${safeId}_${windowInfo.fileSlug}_${timeStamp}.${ext}`;
+}
+
+export function resolveExportEndpointUrl(
+  apiUrl: string,
+  scriptName: "export_csv.php" | "export_excel.php",
+  unitId: string,
+  filterConfig?: ExportFilterConfig,
+): string {
+  let base = apiUrl;
+  if (/get_(?:data|live_status)\.php/i.test(apiUrl)) {
+    base = apiUrl.replace(/get_(?:data|live_status)\.php(\?.*)?$/i, scriptName);
+  } else {
+    try {
+      const u = new URL(apiUrl);
+      u.pathname = u.pathname.replace(/\/[^/]*$/, `/${scriptName}`);
+      u.search = "";
+      base = u.toString();
+    } catch {
+      base = apiUrl.replace(/\/[^/]*$/, `/${scriptName}`);
+    }
+  }
+
+  const period = filterConfig?.period ?? "ALL_TIME";
+  const resolution = filterConfig?.resolution ?? "RAW";
+  const limit =
+    typeof filterConfig?.limit === "number" &&
+    Number.isFinite(filterConfig.limit) &&
+    filterConfig.limit >= 0
+      ? Math.floor(filterConfig.limit)
+      : 0;
+
+  const params = new URLSearchParams();
+  params.set("unit_id", unitId || "ALL");
+  params.set("period", period);
+  params.set("resolution", resolution);
+  params.set("limit", String(limit));
+
+  if (period === "DAILY" && filterConfig?.date) {
+    params.set("date", filterConfig.date);
+  } else if (period === "MONTHLY" && filterConfig?.month) {
+    params.set("month", filterConfig.month);
+  } else if (period === "YEARLY" && filterConfig?.year) {
+    params.set("year", filterConfig.year);
+  } else if (period === "CUSTOM") {
+    if (filterConfig?.startDate) params.set("start_date", filterConfig.startDate);
+    if (filterConfig?.endDate) params.set("end_date", filterConfig.endDate);
+  }
+
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${params.toString()}`;
+}
+
+export interface TelemetryCsvOptions extends ExportFilterConfig {
   isLiveApi?: boolean;
 }
 
@@ -326,27 +598,38 @@ export function buildTelemetryCsv(
 ): string {
   const isLiveApi = Boolean(options?.isLiveApi);
   const { filteredUnits } = parseExportTargetUnits(units, targetUnitId);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const windowInfo = resolveExportTimeWindow(options, nowSec);
 
   const lines: string[] = [CSV_COLUMNS.join(",")];
-  const nowSec = Math.floor(Date.now() / 1000);
   let rowId = 1;
 
   for (const u of filteredUnits) {
     const t = u.telemetry;
-    const hist = resolveExportHistoryPoints(u, historyMap, isLiveApi, nowSec);
-    const points = hist.slice().reverse();
     const baseEpoch = resolveUnitLastSeenEpoch(u, nowSec);
+    const hist = resolveExportHistoryPoints(u, historyMap, isLiveApi, nowSec);
+    const points = applyExportResolutionAndWindow(hist, windowInfo, baseEpoch);
+    const latestEpochInHist =
+      hist.length > 0 && typeof hist[hist.length - 1]!.ts === "number"
+        ? (hist[hist.length - 1]!.ts as number)
+        : baseEpoch;
 
     points.forEach((pt, idx) => {
-      const tsEpoch =
-        typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : Math.max(0, baseEpoch - idx * 3600);
+      const tsEpoch = pt.ts;
+      const isLatestSnapshot = idx === 0 && Math.abs(tsEpoch - latestEpochInHist) <= 3600;
       const wibCreated =
-        idx === 0 && isLiveApi && u.last_seen ? u.last_seen : formatWibTimestamp(tsEpoch);
+        isLatestSnapshot && isLiveApi && u.last_seen && windowInfo.resolution === "RAW"
+          ? u.last_seen
+          : formatWibTimestamp(tsEpoch);
       const baseSeq = typeof t.seq === "number" && t.seq > 0 ? t.seq : t.boot;
       const seq = Math.max(1, baseSeq - idx);
-      const vBat = idx === 0 ? t.v_bat : pt.v;
+      const vBat = isLatestSnapshot && windowInfo.resolution === "RAW" ? t.v_bat : pt.v;
       const adcMv: number | string =
-        idx === 0 ? t.adc_raw_mv : isLiveApi ? "" : Math.round((vBat - 0.069) / 0.005412);
+        isLatestSnapshot && windowInfo.resolution === "RAW"
+          ? t.adc_raw_mv
+          : isLiveApi
+            ? ""
+            : Math.round((vBat - 0.069) / 0.005412);
       const netZone = (t.net_zone || u.net_zone || (u.in_yard ? "YARD" : "OFFLINE")).trim();
       const syncSsid = (t.sync_ssid || u.sync_ssid || "").trim();
 
@@ -361,10 +644,10 @@ export function buildTelemetryCsv(
         adcMv,
         t.rtc_temp_c.toFixed(1),
         t.shunt_sleep_ua,
-        t.engine_on && idx === 0 ? 1 : 0,
-        vBat < 11.8 || (idx === 0 && t.crit_alert) ? 1 : 0,
-        t.engine_on && idx === 0 ? t.rpm : 0,
-        t.engine_on && idx === 0 ? t.temp_c : 0,
+        t.engine_on && isLatestSnapshot ? 1 : 0,
+        vBat < 11.8 || (isLatestSnapshot && t.crit_alert) ? 1 : 0,
+        t.engine_on && isLatestSnapshot ? t.rpm : 0,
+        t.engine_on && isLatestSnapshot ? t.temp_c : 0,
         t.dtc_cnt,
         t.dtc,
         t.rssi,

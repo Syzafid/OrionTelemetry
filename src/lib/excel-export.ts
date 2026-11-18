@@ -6,18 +6,37 @@ import type {
 } from "@/data/mockTelemetry";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
 import {
+  applyExportResolutionAndWindow,
   computeBatteryPrediction,
   formatWibTimestamp,
   parseExportTargetUnits,
   resolveExportHistoryPoints,
+  resolveExportTimeWindow,
   resolveUnitLastSeenEpoch,
   type BatteryHistoryPoint,
+  type ExportFilterConfig,
+  type ResolvedExportTimeWindow,
 } from "@/lib/battery-analytics";
 
-export interface ExcelExportOptions {
+export interface ExcelExportOptions extends ExportFilterConfig {
   isLiveApi?: boolean;
   tickets?: MaintenanceTicket[];
   auditLogs?: AuditLogEntry[];
+}
+
+function isWithinTimeWindow(rawTs: string, windowInfo: ResolvedExportTimeWindow): boolean {
+  if (!windowInfo.startWib || !windowInfo.endWib) return true;
+  const trimmed = rawTs.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const normalized = trimmed.length === 10 ? `${trimmed} 12:00:00` : trimmed.slice(0, 19);
+    return normalized >= windowInfo.startWib && normalized <= windowInfo.endWib;
+  }
+  const parsedMs = Date.parse(trimmed);
+  if (Number.isFinite(parsedMs) && windowInfo.startEpoch !== null && windowInfo.endEpoch !== null) {
+    const epochSec = Math.floor(parsedMs / 1000);
+    return epochSec >= windowInfo.startEpoch && epochSec <= windowInfo.endEpoch;
+  }
+  return true;
 }
 
 function escXml(val: string | number | boolean | null | undefined): string {
@@ -68,6 +87,7 @@ export function buildFormattedExcelPrettier(
   const targetIdSet = new Set(filteredUnits.map((u) => u.unit_id));
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const windowInfo = resolveExportTimeWindow(options, nowSec);
   const exportedAt = formatWibTimestamp(nowSec);
   const createdIso = `${new Date(nowSec * 1000).toISOString().slice(0, 19)}Z`;
 
@@ -145,24 +165,30 @@ export function buildFormattedExcelPrettier(
    </Row>`,
     );
 
-    const reversed = hist.slice().reverse();
     const baseEpoch = resolveUnitLastSeenEpoch(u, nowSec);
+    const reversed = applyExportResolutionAndWindow(hist, windowInfo, baseEpoch);
+    const latestEpochInHist =
+      hist.length > 0 && typeof hist[hist.length - 1]!.ts === "number"
+        ? (hist[hist.length - 1]!.ts as number)
+        : baseEpoch;
     const baseSeq = typeof t.seq === "number" && t.seq > 0 ? t.seq : t.boot;
 
     reversed.forEach((pt, idx) => {
-      const tsEpoch =
-        typeof pt.ts === "number" && pt.ts > 0 ? pt.ts : Math.max(0, baseEpoch - idx * 3600);
+      const tsEpoch = pt.ts;
+      const isLatestSnapshot = idx === 0 && Math.abs(tsEpoch - latestEpochInHist) <= 3600;
       const timeStr =
-        idx === 0 && isLiveApi && u.last_seen ? u.last_seen : formatWibTimestamp(tsEpoch);
+        isLatestSnapshot && isLiveApi && u.last_seen && windowInfo.resolution === "RAW"
+          ? u.last_seen
+          : formatWibTimestamp(tsEpoch);
       const seq = Math.max(1, baseSeq - idx);
-      const vBat = idx === 0 ? t.v_bat : pt.v;
-      const isCrit = vBat < critV || (idx === 0 && t.crit_alert);
-      const isEngineOn = Boolean(t.engine_on && idx === 0);
+      const vBat = isLatestSnapshot && windowInfo.resolution === "RAW" ? t.v_bat : pt.v;
+      const isCrit = vBat < critV || (isLatestSnapshot && t.crit_alert);
+      const isEngineOn = Boolean(t.engine_on && isLatestSnapshot);
       const engStatus = isEngineOn ? "RUNNING (WARM-UP)" : "STANDBY (SLEEP)";
-      const milOn = Boolean(t.mil_on && idx === 0);
+      const milOn = Boolean(t.mil_on && isLatestSnapshot);
 
       const adcCell =
-        idx === 0
+        isLatestSnapshot && windowInfo.resolution === "RAW"
           ? xmlCellNumber(t.adc_raw_mv, "DataNum", 0)
           : isLiveApi
             ? xmlCellString("-", "DataCenter")
@@ -222,6 +248,7 @@ export function buildFormattedExcelPrettier(
 
   for (const tk of rawTickets) {
     if (!isAll && !targetIdSet.has(tk.unit_id)) continue;
+    if (!isWithinTimeWindow(tk.updated_at, windowInfo)) continue;
     const prio = tk.status === "OPEN" ? "HIGH" : tk.status === "IN_PROGRESS" ? "MEDIUM" : "NORMAL";
     const toneStyle =
       tk.status === "OPEN"
@@ -250,6 +277,7 @@ export function buildFormattedExcelPrettier(
 
   for (const ev of rawAudit) {
     if (!isAll && !targetIdSet.has(ev.unit_id)) continue;
+    if (!isWithinTimeWindow(ev.created_at, windowInfo)) continue;
     const toneStyle =
       ev.severity === "CRITICAL"
         ? "StatusCrit"
@@ -416,7 +444,7 @@ export function buildFormattedExcelPrettier(
   <Table ss:ExpandedColumnCount="16" ss:ExpandedRowCount="${s1RowCount}" x:FullColumns="1" x:FullRows="1">
 ${s1Widths.map((w) => `   <Column ss:AutoFitWidth="0" ss:Width="${w}"/>`).join("\n")}
    <Row ss:Height="26"><Cell ss:MergeAcross="15" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD - LAPORAN EKSEKUTIF PDI &amp; KESEHATAN BATERAI</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:MergeAcross="15" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Total Unit: ${filteredUnits.length} | Standar: SOP C.1 OLS & Mode 01/03 Read-Only`)}</Data></Cell></Row>
+   <Row ss:Height="20"><Cell ss:MergeAcross="15" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Periode: ${windowInfo.periodLabel} | Resolusi: ${windowInfo.resolutionLabel} | Total Unit: ${filteredUnits.length}`)}</Data></Cell></Row>
    <Row ss:Height="20"><Cell ss:MergeAcross="15" ss:StyleID="SectionHdr"><Data ss:Type="String">1. Ringkasan Eksekutif Kesehatan Baterai, Kompensasi Termal 25C, &amp; Kesiapan PDI Armada</Data></Cell></Row>
    <Row ss:Height="26">
 ${s1Cols.map((hdr) => `    ${xmlCellString(hdr, "TblHdr")}`).join("\n")}
@@ -432,7 +460,7 @@ ${s1Body}
   <Table ss:ExpandedColumnCount="41" ss:ExpandedRowCount="${s2RowCount}" x:FullColumns="1" x:FullRows="1">
 ${s2Cols.map((_, idx) => `   <Column ss:AutoFitWidth="0" ss:Width="${idx === 1 || idx === 3 ? 132 : idx === 12 || idx === 23 ? 116 : 82}"/>`).join("\n")}
    <Row ss:Height="26"><Cell ss:MergeAcross="40" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI - LOG KRONOLOGIS WAKE-CYCLE &amp; 15 PARAMETER OBD-II (READ-ONLY MODE 01/03)</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:MergeAcross="40" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Jumlah Baris Log: ${s2Rows.length} | Sumber: Telemetry Local/Snapshot`)}</Data></Cell></Row>
+   <Row ss:Height="20"><Cell ss:MergeAcross="40" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Periode: ${windowInfo.periodLabel} | Resolusi: ${windowInfo.resolutionLabel} | Jumlah Baris Log: ${s2Rows.length}`)}</Data></Cell></Row>
    <Row ss:Height="20"><Cell ss:MergeAcross="40" ss:StyleID="SectionHdr"><Data ss:Type="String">2. Log Kronologis Siklus Bangun Telemetri &amp; Parameter ECU OBD-II Mode 01/03</Data></Cell></Row>
    <Row ss:Height="26">
 ${s2Cols.map((hdr) => `    ${xmlCellString(hdr, "TblHdr")}`).join("\n")}
@@ -448,7 +476,7 @@ ${s2Body}
   <Table ss:ExpandedColumnCount="9" ss:ExpandedRowCount="${s3RowCount}" x:FullColumns="1" x:FullRows="1">
 ${s3Widths.map((w) => `   <Column ss:AutoFitWidth="0" ss:Width="${w}"/>`).join("\n")}
    <Row ss:Height="26"><Cell ss:MergeAcross="8" ss:StyleID="BannerTitle"><Data ss:Type="String">ORION TELEMETRI - REKAMAN TIKET PEMELIHARAAN &amp; JEJAK AUDIT OPERASIONAL</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:MergeAcross="8" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Total Rekaman: ${s3Rows.length} | Sumber: maintenance_tickets & auditLogs`)}</Data></Cell></Row>
+   <Row ss:Height="20"><Cell ss:MergeAcross="8" ss:StyleID="BannerMeta"><Data ss:Type="String">${escXml(`Waktu Ekspor (WIB): ${exportedAt} | Cakupan Filter: ${filterLabel} | Periode: ${windowInfo.periodLabel} | Resolusi: ${windowInfo.resolutionLabel} | Total Rekaman: ${s3Rows.length}`)}</Data></Cell></Row>
    <Row ss:Height="20"><Cell ss:MergeAcross="8" ss:StyleID="SectionHdr"><Data ss:Type="String">3. Rekaman Tiket Pemeliharaan (Shift Handover) &amp; Log Audit Operasional</Data></Cell></Row>
    <Row ss:Height="26">
 ${s3Cols.map((hdr) => `    ${xmlCellString(hdr, "TblHdr")}`).join("\n")}

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowUpDown,
   BadgeCheck,
+  Calendar,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -38,8 +39,15 @@ import { OrionLogo } from "./OrionLogo";
 import { UnitQrCode, buildUnitDeepLinkUrl } from "./UnitQrCode";
 import { Led, Stat, unitTone, fmtV } from "./primitives";
 import {
+  buildExportFilename,
   buildTelemetryCsv,
   computeBatteryPrediction,
+  formatWibTimestamp,
+  resolveExportEndpointUrl,
+  resolveExportTimeWindow,
+  type ExportFilterConfig,
+  type ExportPeriodMode,
+  type ExportResolutionMode,
   type PredictionTone,
 } from "@/lib/battery-analytics";
 import { buildFormattedExcelPrettier } from "@/lib/excel-export";
@@ -78,28 +86,39 @@ function formatMmSs(totalSec: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function resolveExportEndpointUrl(
-  apiUrl: string,
-  scriptName: "export_csv.php" | "export_excel.php",
-  unitId: string,
-  limit = 500,
-): string {
-  let base = apiUrl;
-  if (/get_(?:data|live_status)\.php/i.test(apiUrl)) {
-    base = apiUrl.replace(/get_(?:data|live_status)\.php(\?.*)?$/i, scriptName);
-  } else {
-    try {
-      const u = new URL(apiUrl);
-      u.pathname = u.pathname.replace(/\/[^/]*$/, `/${scriptName}`);
-      u.search = "";
-      base = u.toString();
-    } catch {
-      base = apiUrl.replace(/\/[^/]*$/, `/${scriptName}`);
-    }
-  }
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}unit_id=${encodeURIComponent(unitId)}&limit=${limit}`;
-}
+const MONTH_OPTIONS = [
+  { value: "01", label: "Januari" },
+  { value: "02", label: "Februari" },
+  { value: "03", label: "Maret" },
+  { value: "04", label: "April" },
+  { value: "05", label: "Mei" },
+  { value: "06", label: "Juni" },
+  { value: "07", label: "Juli" },
+  { value: "08", label: "Agustus" },
+  { value: "09", label: "September" },
+  { value: "10", label: "Oktober" },
+  { value: "11", label: "November" },
+  { value: "12", label: "Desember" },
+] as const;
+
+const EXPORT_PERIOD_OPTIONS: ReadonlyArray<{ id: ExportPeriodMode; label: string }> = [
+  { id: "DAILY", label: "Per Hari" },
+  { id: "7_DAYS", label: "7 Hari Terakhir" },
+  { id: "MONTHLY", label: "Per Bulan" },
+  { id: "YEARLY", label: "Per Tahun" },
+  { id: "CUSTOM", label: "Rentang Tanggal" },
+  { id: "ALL_TIME", label: "Semua Riwayat" },
+];
+
+const EXPORT_RESOLUTION_OPTIONS: ReadonlyArray<{
+  id: ExportResolutionMode;
+  label: string;
+  hint: string;
+}> = [
+  { id: "RAW", label: "Data Mentah / Setiap Siklus", hint: "Ideal untuk audit harian" },
+  { id: "HOURLY", label: "Ringkasan Per Jam", hint: "Rekomendasi laporan bulanan" },
+  { id: "DAILY_SUMMARY", label: "Ringkasan Per Hari", hint: "Rekomendasi rekap tahunan" },
+];
 
 async function copyTextSafe(text: string): Promise<boolean> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -172,6 +191,20 @@ export function FleetModule() {
   const [deckPage, setDeckPage] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
 
+  const initialWibDate = formatWibTimestamp(Math.floor(Date.now() / 1000));
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"EXCEL" | "CSV">("EXCEL");
+  const [exportUnitScope, setExportUnitScope] = useState<"ALL" | "FILTERED" | "CUSTOM">("ALL");
+  const [exportCustomUnits, setExportCustomUnits] = useState<string[]>([]);
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriodMode>("DAILY");
+  const [exportDate, setExportDate] = useState(initialWibDate.slice(0, 10));
+  const [exportMonth, setExportMonth] = useState(initialWibDate.slice(0, 7));
+  const [exportYear, setExportYear] = useState(initialWibDate.slice(0, 4));
+  const [exportStartDate, setExportStartDate] = useState(initialWibDate.slice(0, 10));
+  const [exportEndDate, setExportEndDate] = useState(initialWibDate.slice(0, 10));
+  const [exportResolution, setExportResolution] = useState<ExportResolutionMode>("RAW");
+  const [exportLimit, setExportLimit] = useState<number>(0);
+
   const [warmupStartTimes, setWarmupStartTimes] = useState<Record<string, number>>({});
   const [, setTick] = useState(0);
   const [pdiUnitId, setPdiUnitId] = useState<string | null>(null);
@@ -235,9 +268,9 @@ export function FleetModule() {
   }, [pdiUnitId]);
 
   const handleExportCsv = useCallback(
-    (targetUnitId: string) => {
+    (targetUnitId: string, filterConfig?: ExportFilterConfig) => {
       if (dataSource === "LIVE_API" && apiStatus === "CONNECTED") {
-        const url = resolveExportEndpointUrl(apiUrl, "export_csv.php", targetUnitId, 500);
+        const url = resolveExportEndpointUrl(apiUrl, "export_csv.php", targetUnitId, filterConfig);
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
@@ -250,21 +283,15 @@ export function FleetModule() {
 
       const csvContent = buildTelemetryCsv(units, history, targetUnitId, {
         isLiveApi: dataSource === "LIVE_API",
+        ...filterConfig,
       });
+      if (typeof URL.createObjectURL !== "function") return;
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const blobUrl = URL.createObjectURL(blob);
-      const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
-      const selectedIds = targetUnitId
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const safeId =
-        selectedIds.length > 1
-          ? `FILTERED_${selectedIds.length}UNITS`
-          : targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
+      const windowInfo = resolveExportTimeWindow(filterConfig);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `ORION_TELEMETRY_${safeId}_${stamp}.csv`;
+      a.download = buildExportFilename("ORION_TELEMETRY", targetUnitId, windowInfo, "csv");
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -274,9 +301,14 @@ export function FleetModule() {
   );
 
   const handleExportExcel = useCallback(
-    (targetUnitId: string) => {
+    (targetUnitId: string, filterConfig?: ExportFilterConfig) => {
       if (dataSource === "LIVE_API" && apiStatus === "CONNECTED") {
-        const url = resolveExportEndpointUrl(apiUrl, "export_excel.php", targetUnitId, 250);
+        const url = resolveExportEndpointUrl(
+          apiUrl,
+          "export_excel.php",
+          targetUnitId,
+          filterConfig,
+        );
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
@@ -291,21 +323,15 @@ export function FleetModule() {
         isLiveApi: dataSource === "LIVE_API",
         tickets,
         auditLogs,
+        ...filterConfig,
       });
+      if (typeof URL.createObjectURL !== "function") return;
       const blob = new Blob([excelXml], { type: "application/vnd.ms-excel;charset=utf-8;" });
       const blobUrl = URL.createObjectURL(blob);
-      const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
-      const selectedIds = targetUnitId
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const safeId =
-        selectedIds.length > 1
-          ? `FILTERED_${selectedIds.length}UNITS`
-          : targetUnitId.replace(/[^A-Za-z0-9_-]/g, "_");
+      const windowInfo = resolveExportTimeWindow(filterConfig);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `ORION_TELEMETRY_REPORT_${safeId}_${stamp}.xls`;
+      a.download = buildExportFilename("ORION_TELEMETRY_REPORT", targetUnitId, windowInfo, "xls");
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -358,6 +384,87 @@ export function FleetModule() {
   }, [filteredUnits, units.length]);
 
   const exportUnitCount = filteredUnits.length > 0 ? filteredUnits.length : units.length;
+
+  const openExportModal = useCallback(
+    (format: "EXCEL" | "CSV", initialTargetUnitId: string) => {
+      setExportFormat(format);
+      if (initialTargetUnitId === "ALL") {
+        setExportUnitScope("ALL");
+        setExportCustomUnits(units.map((u) => u.unit_id));
+      } else if (filteredUnits.length > 1 && initialTargetUnitId === activeExportTarget) {
+        setExportUnitScope("FILTERED");
+        setExportCustomUnits(filteredUnits.map((u) => u.unit_id));
+      } else {
+        setExportUnitScope("CUSTOM");
+        setExportCustomUnits(
+          initialTargetUnitId
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        );
+      }
+      setExportModalOpen(true);
+    },
+    [units, filteredUnits, activeExportTarget],
+  );
+
+  const handleExportPeriodChange = useCallback((nextPeriod: ExportPeriodMode) => {
+    setExportPeriod(nextPeriod);
+    if (nextPeriod === "MONTHLY") {
+      setExportResolution("HOURLY");
+    } else if (nextPeriod === "YEARLY") {
+      setExportResolution("DAILY_SUMMARY");
+    } else if (nextPeriod === "DAILY" || nextPeriod === "7_DAYS") {
+      setExportResolution("RAW");
+    }
+  }, []);
+
+  const configuredTargetUnitId = useMemo(() => {
+    if (exportUnitScope === "ALL") return "ALL";
+    if (exportUnitScope === "FILTERED") return activeExportTarget;
+    return exportCustomUnits.join(",");
+  }, [exportUnitScope, activeExportTarget, exportCustomUnits]);
+
+  const configuredExportFilter = useMemo<ExportFilterConfig>(
+    () => ({
+      period: exportPeriod,
+      date: exportDate,
+      month: exportMonth,
+      year: exportYear,
+      startDate: exportStartDate,
+      endDate: exportEndDate,
+      resolution: exportResolution,
+      limit: exportLimit,
+    }),
+    [
+      exportPeriod,
+      exportDate,
+      exportMonth,
+      exportYear,
+      exportStartDate,
+      exportEndDate,
+      exportResolution,
+      exportLimit,
+    ],
+  );
+
+  const executeConfiguredExport = useCallback(() => {
+    if (exportUnitScope === "CUSTOM" && exportCustomUnits.length === 0) return;
+    if (exportFormat === "CSV") {
+      handleExportCsv(configuredTargetUnitId, configuredExportFilter);
+    } else {
+      handleExportExcel(configuredTargetUnitId, configuredExportFilter);
+    }
+    setExportModalOpen(false);
+  }, [
+    exportUnitScope,
+    exportCustomUnits.length,
+    exportFormat,
+    configuredTargetUnitId,
+    configuredExportFilter,
+    handleExportCsv,
+    handleExportExcel,
+  ]);
 
   // Motion: edge-triggered alarm flash (unit newly critical) and intro-only chart animation.
   const criticalMap = useMemo(() => {
@@ -578,9 +685,9 @@ export function FleetModule() {
 
             <button
               type="button"
-              onClick={() => handleExportExcel(activeExportTarget)}
+              onClick={() => openExportModal("EXCEL", activeExportTarget)}
               className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title={`Ekspor Workbook Excel 3-Sheet dengan AutoFilter (${exportUnitCount} unit sesuai filter aktif)`}
+              title={`Konfigurasi & Ekspor Workbook Excel 3-Sheet ber-AutoFilter (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <FileSpreadsheet size={13} strokeWidth={1.75} aria-hidden="true" />
               <span className="hidden sm:inline">Ekspor Excel ({exportUnitCount} Unit)</span>
@@ -589,9 +696,9 @@ export function FleetModule() {
 
             <button
               type="button"
-              onClick={() => handleExportCsv(activeExportTarget)}
+              onClick={() => openExportModal("CSV", activeExportTarget)}
               className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title={`Ekspor data mentah CSV 39 kolom (${exportUnitCount} unit sesuai filter aktif)`}
+              title={`Konfigurasi & Unduh Data Mentah CSV 39 Kolom (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <Download size={12} strokeWidth={1.75} aria-hidden="true" />
               <span>Unduh CSV ({exportUnitCount})</span>
@@ -1211,10 +1318,10 @@ export function FleetModule() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExportExcel(u.unit_id);
+                        openExportModal("EXCEL", u.unit_id);
                       }}
                       className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      title="Unduh Laporan Excel Terformat (.xls)"
+                      title="Konfigurasi & Unduh Laporan Excel (.xls)"
                     >
                       <FileSpreadsheet
                         size={13}
@@ -1228,10 +1335,10 @@ export function FleetModule() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExportCsv(u.unit_id);
+                        openExportModal("CSV", u.unit_id);
                       }}
                       className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      title="Unduh Log Mentah CSV"
+                      title="Konfigurasi & Unduh Log CSV"
                     >
                       <Download
                         size={13}
@@ -1301,8 +1408,49 @@ export function FleetModule() {
             historyData={resolveUnitHistory(pdiUnit, dataSource, history)}
             inspectedAt={pdiTimestamp}
             onClose={() => setPdiUnitId(null)}
-            onExportExcel={() => handleExportExcel(pdiUnit.unit_id)}
-            onExportCsv={() => handleExportCsv(pdiUnit.unit_id)}
+            onExportExcel={() => {
+              const uid = pdiUnit.unit_id;
+              setPdiUnitId(null);
+              openExportModal("EXCEL", uid);
+            }}
+            onExportCsv={() => {
+              const uid = pdiUnit.unit_id;
+              setPdiUnitId(null);
+              openExportModal("CSV", uid);
+            }}
+          />
+        )}
+        {exportModalOpen && (
+          <ExportConfigModal
+            units={units}
+            filteredCount={filteredUnits.length}
+            isLiveConnected={dataSource === "LIVE_API" && apiStatus === "CONNECTED"}
+            format={exportFormat}
+            setFormat={setExportFormat}
+            unitScope={exportUnitScope}
+            setUnitScope={setExportUnitScope}
+            customUnits={exportCustomUnits}
+            setCustomUnits={setExportCustomUnits}
+            period={exportPeriod}
+            onChangePeriod={handleExportPeriodChange}
+            date={exportDate}
+            setDate={setExportDate}
+            month={exportMonth}
+            setMonth={setExportMonth}
+            year={exportYear}
+            setYear={setExportYear}
+            startDate={exportStartDate}
+            setStartDate={setExportStartDate}
+            endDate={exportEndDate}
+            setEndDate={setExportEndDate}
+            resolution={exportResolution}
+            setResolution={setExportResolution}
+            limit={exportLimit}
+            setLimit={setExportLimit}
+            targetUnitId={configuredTargetUnitId}
+            filterConfig={configuredExportFilter}
+            onConfirm={executeConfiguredExport}
+            onClose={() => setExportModalOpen(false)}
           />
         )}
         {resolvingTicketUnitId && (
@@ -1815,6 +1963,517 @@ function TicketResolutionModal({
           >
             <ClipboardCheck size={14} />
             <span>Sahkan &amp; Tutup Tiket</span>
+          </button>
+        </div>
+      </m.div>
+    </m.div>
+  );
+}
+
+interface ExportConfigModalProps {
+  units: VehicleUnit[];
+  filteredCount: number;
+  isLiveConnected: boolean;
+  format: "EXCEL" | "CSV";
+  setFormat: (f: "EXCEL" | "CSV") => void;
+  unitScope: "ALL" | "FILTERED" | "CUSTOM";
+  setUnitScope: (s: "ALL" | "FILTERED" | "CUSTOM") => void;
+  customUnits: string[];
+  setCustomUnits: (ids: string[]) => void;
+  period: ExportPeriodMode;
+  onChangePeriod: (p: ExportPeriodMode) => void;
+  date: string;
+  setDate: (d: string) => void;
+  month: string;
+  setMonth: (m: string) => void;
+  year: string;
+  setYear: (y: string) => void;
+  startDate: string;
+  setStartDate: (d: string) => void;
+  endDate: string;
+  setEndDate: (d: string) => void;
+  resolution: ExportResolutionMode;
+  setResolution: (r: ExportResolutionMode) => void;
+  limit: number;
+  setLimit: (n: number) => void;
+  targetUnitId: string;
+  filterConfig: ExportFilterConfig;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+function ExportConfigModal({
+  units,
+  filteredCount,
+  isLiveConnected,
+  format,
+  setFormat,
+  unitScope,
+  setUnitScope,
+  customUnits,
+  setCustomUnits,
+  period,
+  onChangePeriod,
+  date,
+  setDate,
+  month,
+  setMonth,
+  year,
+  setYear,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
+  resolution,
+  setResolution,
+  limit,
+  setLimit,
+  targetUnitId,
+  filterConfig,
+  onConfirm,
+  onClose,
+}: ExportConfigModalProps) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const monthParts = month.split("-");
+  const selectedMonthYear = monthParts[0] || year;
+  const selectedMonthNum = monthParts[1] || "01";
+  const currentYearNum = Number(year) || 2026;
+  const yearOptions = Array.from(
+    new Set([currentYearNum - 2, currentYearNum - 1, currentYearNum, currentYearNum + 1]),
+  ).map((y) => String(y));
+
+  const windowPreview = resolveExportTimeWindow(filterConfig);
+  const filenamePreview = buildExportFilename(
+    format === "EXCEL" ? "ORION_TELEMETRY_REPORT" : "ORION_TELEMETRY",
+    targetUnitId || "ALL",
+    windowPreview,
+    format === "EXCEL" ? "xls" : "csv",
+    "WIB",
+  );
+  const isCustomInvalid = unitScope === "CUSTOM" && customUnits.length === 0;
+
+  const toggleUnitSelection = (uid: string) => {
+    if (customUnits.includes(uid)) {
+      setCustomUnits(customUnits.filter((id) => id !== uid));
+    } else {
+      setCustomUnits([...customUnits, uid]);
+    }
+  };
+
+  return (
+    <m.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-config-title"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
+      exit={{ opacity: 0, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <m.div
+        className="panel card-scroll relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto border border-border bg-card p-4 sm:p-6 shadow-2xl"
+        initial={{ opacity: 0, scale: 0.98, y: -8 }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          transition: { duration: DURATION.quick, ease: EASE_STANDARD },
+        }}
+        exit={{
+          opacity: 0,
+          scale: 0.98,
+          y: -4,
+          transition: { duration: DURATION.instant, ease: EASE_EXIT },
+        }}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <Calendar size={18} strokeWidth={1.75} className="text-foreground shrink-0" />
+            <div>
+              <h2
+                id="export-config-title"
+                className="font-display text-sm sm:text-base font-semibold uppercase tracking-wider text-foreground"
+              >
+                Konfigurasi Ekspor Laporan Telemetri
+              </h2>
+              <p className="num text-[10.5px] text-muted-foreground mt-0.5">
+                Pilih format berkas, unit target, periode waktu (harian/bulanan/tahunan), dan
+                resolusi data.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Tutup konfigurasi ekspor"
+            className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-[2px] border border-border text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          >
+            <X size={17} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4 num text-xs">
+          {/* 1. Format File */}
+          <div>
+            <div className="label-hmi text-[10px] mb-1.5">1. Format Dokumen</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setFormat("EXCEL")}
+                className={cn(
+                  "flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[2px] border px-3 py-2 text-left transition-colors",
+                  format === "EXCEL"
+                    ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                    : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                <FileSpreadsheet size={15} className="shrink-0" aria-hidden="true" />
+                <div>
+                  <div className="text-[11px]">Workbook Excel (.xls)</div>
+                  <div className="text-[9.5px] text-muted-foreground font-normal">
+                    3 Sheet, AutoFilter &amp; Header Terkunci
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormat("CSV")}
+                className={cn(
+                  "flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[2px] border px-3 py-2 text-left transition-colors",
+                  format === "CSV"
+                    ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                    : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Download size={15} className="shrink-0" aria-hidden="true" />
+                <div>
+                  <div className="text-[11px]">Data Tabel CSV (.csv)</div>
+                  <div className="text-[9.5px] text-muted-foreground font-normal">
+                    39 Kolom Penuh Standar RFC 4180
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Cakupan Unit */}
+          <div>
+            <div className="label-hmi text-[10px] mb-1.5">2. Cakupan Kendaraan (Unit Target)</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => setUnitScope("ALL")}
+                className={cn(
+                  "min-h-[44px] cursor-pointer rounded-[2px] border px-3 py-2 text-[11px] transition-colors",
+                  unitScope === "ALL"
+                    ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                    : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                Seluruh Armada ({units.length})
+              </button>
+              <button
+                type="button"
+                disabled={filteredCount === 0}
+                onClick={() => setUnitScope("FILTERED")}
+                className={cn(
+                  "min-h-[44px] cursor-pointer rounded-[2px] border px-3 py-2 text-[11px] transition-colors disabled:opacity-45 disabled:cursor-not-allowed",
+                  unitScope === "FILTERED"
+                    ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                    : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                Filter Layar ({filteredCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnitScope("CUSTOM")}
+                className={cn(
+                  "min-h-[44px] cursor-pointer rounded-[2px] border px-3 py-2 text-[11px] transition-colors",
+                  unitScope === "CUSTOM"
+                    ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                    : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                Pilih Unit Spesifik ({customUnits.length})
+              </button>
+            </div>
+
+            {unitScope === "CUSTOM" && (
+              <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60 text-[10px]">
+                  <span className="text-muted-foreground">
+                    Centang unit yang ingin dimasukkan ke laporan:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCustomUnits(units.map((u) => u.unit_id))}
+                      className="cursor-pointer underline text-foreground hover:text-emerald"
+                    >
+                      Pilih Semua
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomUnits([])}
+                      className="cursor-pointer underline text-muted-foreground hover:text-foreground"
+                    >
+                      Kosongkan
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 grid max-h-36 grid-cols-1 gap-1.5 overflow-y-auto card-scroll sm:grid-cols-2">
+                  {units.map((u) => {
+                    const checked = customUnits.includes(u.unit_id);
+                    return (
+                      <label
+                        key={u.unit_id}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-[2px] border px-2.5 py-1.5 text-[10.5px]",
+                          checked
+                            ? "border-foreground/50 bg-secondary/70 text-foreground"
+                            : "border-border/60 bg-background/40 text-muted-foreground",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleUnitSelection(u.unit_id)}
+                          className="accent-foreground"
+                        />
+                        <span className="font-semibold">BAY {u.bay}</span>
+                        <span className="truncate">{u.unit_id}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {isCustomInvalid && (
+                  <div className="mt-1.5 text-[10px] text-crimson">
+                    Pilih minimal 1 unit kendaraan untuk melanjutkan ekspor.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Periode Waktu Data */}
+          <div>
+            <div className="label-hmi text-[10px] mb-1.5">3. Periode Waktu Data (WIB)</div>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {EXPORT_PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onChangePeriod(opt.id)}
+                  className={cn(
+                    "min-h-[40px] cursor-pointer rounded-[2px] border px-2.5 py-1.5 text-[10.5px] transition-colors",
+                    period === opt.id
+                      ? "border-foreground/70 bg-secondary text-foreground font-semibold"
+                      : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {period === "DAILY" && (
+              <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-3">
+                <label className="text-[10.5px] text-muted-foreground" htmlFor="export-date-input">
+                  Pilih Tanggal Harian:
+                </label>
+                <input
+                  id="export-date-input"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="min-h-[38px] rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                />
+              </div>
+            )}
+
+            {period === "MONTHLY" && (
+              <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-2.5">
+                <label
+                  className="text-[10.5px] text-muted-foreground"
+                  htmlFor="export-month-select"
+                >
+                  Pilih Bulan &amp; Tahun:
+                </label>
+                <select
+                  id="export-month-select"
+                  aria-label="Pilih bulan laporan"
+                  value={selectedMonthNum}
+                  onChange={(e) => setMonth(`${selectedMonthYear}-${e.target.value}`)}
+                  className="min-h-[38px] rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                >
+                  {MONTH_OPTIONS.map((mOpt) => (
+                    <option key={mOpt.value} value={mOpt.value}>
+                      {mOpt.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Pilih tahun untuk laporan bulanan"
+                  value={selectedMonthYear}
+                  onChange={(e) => setMonth(`${e.target.value}-${selectedMonthNum}`)}
+                  className="min-h-[38px] rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                >
+                  {yearOptions.map((yOpt) => (
+                    <option key={yOpt} value={yOpt}>
+                      {yOpt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {period === "YEARLY" && (
+              <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-3">
+                <label className="text-[10.5px] text-muted-foreground" htmlFor="export-year-select">
+                  Pilih Tahun Laporan:
+                </label>
+                <select
+                  id="export-year-select"
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="min-h-[38px] rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                >
+                  {yearOptions.map((yOpt) => (
+                    <option key={yOpt} value={yOpt}>
+                      {yOpt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {period === "CUSTOM" && (
+              <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label
+                    className="block text-[10px] text-muted-foreground mb-1"
+                    htmlFor="export-start-date"
+                  >
+                    Dari Tanggal
+                  </label>
+                  <input
+                    id="export-start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="min-h-[38px] w-full rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block text-[10px] text-muted-foreground mb-1"
+                    htmlFor="export-end-date"
+                  >
+                    Sampai Tanggal
+                  </label>
+                  <input
+                    id="export-end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="min-h-[38px] w-full rounded-[2px] border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Resolusi & Batas Baris */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                className="label-hmi block text-[10px] mb-1.5"
+                htmlFor="export-resolution-select"
+              >
+                4. Resolusi Data (Granularitas)
+              </label>
+              <select
+                id="export-resolution-select"
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value as ExportResolutionMode)}
+                className="min-h-[42px] w-full rounded-[2px] border border-border bg-background px-2.5 py-1.5 text-xs text-foreground"
+              >
+                {EXPORT_RESOLUTION_OPTIONS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label} ({r.hint})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label-hmi block text-[10px] mb-1.5" htmlFor="export-limit-select">
+                Batas Maksimum Baris Log
+              </label>
+              <select
+                id="export-limit-select"
+                value={String(limit)}
+                onChange={(e) => setLimit(Number(e.target.value))}
+                className="min-h-[42px] w-full rounded-[2px] border border-border bg-background px-2.5 py-1.5 text-xs text-foreground"
+              >
+                <option value="0">Semua Data dalam Periode (Otomatis Aman)</option>
+                <option value="500">Maksimum 500 Baris Terbaru</option>
+                <option value="2500">Maksimum 2.500 Baris Terbaru</option>
+                <option value="10000">Maksimum 10.000 Baris Terbaru</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 5. Ringkasan Output & Nama Berkas */}
+          <div className="rounded-[2px] border border-border/80 bg-background/50 p-3 text-[10.5px] space-y-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted-foreground">Periode Terpilih:</span>
+              <span className="font-semibold text-foreground">
+                {windowPreview.periodLabel} · {windowPreview.resolutionLabel}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted-foreground">Sumber Data:</span>
+              <span className={isLiveConnected ? "text-emerald font-semibold" : "text-foreground"}>
+                {isLiveConnected ? "Database Live Server (MySQL)" : "Snapshot Lokal / Simulator"}
+              </span>
+            </div>
+            <div className="pt-1 border-t border-border/60 text-muted-foreground break-all">
+              Berkas: <span className="text-foreground">{filenamePreview}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2.5 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[2px] border border-border bg-secondary/50 px-4 py-2 num text-xs font-medium text-foreground hover:bg-secondary"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={isCustomInvalid}
+            onClick={onConfirm}
+            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-foreground/60 bg-secondary px-4 py-2 num text-xs font-semibold text-foreground hover:border-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {format === "EXCEL" ? (
+              <FileSpreadsheet size={14} aria-hidden="true" />
+            ) : (
+              <Download size={14} aria-hidden="true" />
+            )}
+            <span>{format === "EXCEL" ? "Unduh Laporan Excel" : "Unduh Data CSV"}</span>
           </button>
         </div>
       </m.div>
