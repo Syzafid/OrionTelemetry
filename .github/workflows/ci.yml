@@ -1,0 +1,76 @@
+name: ORION CI Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-menu01-and-build:
+    name: Typecheck, Lint, Anti-Slop Guard, Tests & SSR Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: ESLint check (Menu 01 modules and tests)
+        run: >-
+          npx eslint --max-warnings 0
+          src/lib/vehicle-topology.ts
+          src/components/hmi/ShowroomModule.tsx
+          src/components/hmi/VehicleTopologyMap.tsx
+          src/components/hmi/ComponentNodeInspector.tsx
+          src/test/menu01-topology.test.tsx
+
+      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01)
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const files = [
+              "src/lib/vehicle-topology.ts",
+              "src/components/hmi/ShowroomModule.tsx",
+              "src/components/hmi/VehicleTopologyMap.tsx",
+              "src/components/hmi/ComponentNodeInspector.tsx",
+              "src/test/menu01-topology.test.tsx",
+              "src/styles.css"
+            ];
+            for (const f of files) {
+              const text = fs.readFileSync(f, "utf8");
+              if (text.includes("\u2014")) {
+                console.error("Em dash found in " + f);
+                process.exit(1);
+              }
+              if (f.startsWith("src/components/hmi/") && /\bMath\.sin\s*\(/.test(text)) {
+                console.error("Synthetic Math.sin() found in " + f);
+                process.exit(1);
+              }
+            }
+            console.log("Anti-slop check passed on " + files.length + " files.");
+          '
+
+      - name: Run Vitest unit & component tests
+        run: npm test
+
+      - name: Build production bundle & Heroku SSR pre-render
+        run: npm run build
+
+      - name: Verify pre-rendered routes & PHP API bundle
+        run: |
+          test -s .output/public/index.html
+          test -s .output/public/dashboard/index.html
+          test -f .output/public/dipo_api/get_data.php
+          echo "Verified .output/public pre-rendered HTML and dipo_api endpoints."

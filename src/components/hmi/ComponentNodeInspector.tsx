@@ -14,7 +14,7 @@ import {
   getVehicleElectricalProfile,
   type TopologyNodeId,
   type VehicleElectricalProfile,
-} from "./VehicleTopologyMap";
+} from "@/lib/vehicle-topology";
 
 interface ComponentNodeInspectorProps {
   unit: VehicleUnit;
@@ -56,7 +56,7 @@ interface ChannelTelemetryVisualProps {
 
 /**
  * Honest Telemetry Sparkline & Proportional Channel Meter.
- * Renders real MySQL/simulator voltage history for V_BAT without synthetic Math.sin waves,
+ * Renders real MySQL/simulator voltage history for V_BAT without synthetic sine waves,
  * and proportional measured bars for digital/scalar hardware channels.
  */
 function ChannelTelemetryVisual({
@@ -127,7 +127,11 @@ function ChannelTelemetryVisual({
   if (type === "battery" && batterySpark) {
     return (
       <div className="flex flex-col items-end gap-0.5">
-        <svg viewBox="0 0 150 24" className="h-5 w-24 sm:h-6 sm:w-28 shrink-0 select-none" aria-hidden="true">
+        <svg
+          viewBox="0 0 150 24"
+          className="h-5 w-24 sm:h-6 sm:w-28 shrink-0 select-none"
+          aria-hidden="true"
+        >
           <polyline
             fill="none"
             stroke={strokeColor}
@@ -138,7 +142,8 @@ function ChannelTelemetryVisual({
           />
         </svg>
         <span className="text-[8.5px] text-muted-foreground num">
-          {batterySpark.count} sampel ({batterySpark.minV.toFixed(2)}V..{batterySpark.maxV.toFixed(2)}V)
+          {batterySpark.count} sampel ({batterySpark.minV.toFixed(2)}V..
+          {batterySpark.maxV.toFixed(2)}V)
         </span>
       </div>
     );
@@ -219,7 +224,8 @@ function buildHarnessSpecs(
       sopSteps: [
         {
           code: "STEP 01",
-          instruction: "Pastikan baterai berada pada kondisi terisi (>= 12.40V) sebelum melakukan inspeksi.",
+          instruction:
+            "Pastikan baterai berada pada kondisi terisi (>= 12.40V) sebelum melakukan inspeksi.",
         },
         {
           code: "STEP 02",
@@ -243,11 +249,13 @@ function buildHarnessSpecs(
       sopSteps: [
         {
           code: "SOP B.1",
-          instruction: "Ukur tegangan kutub baterai menggunakan multimeter digital terkalibrasi (DMM).",
+          instruction:
+            "Ukur tegangan kutub baterai menggunakan multimeter digital terkalibrasi (DMM).",
         },
         {
           code: "SOP B.2",
-          instruction: "Catat tegangan mentah mV pada ESP32 Node M (GPIO34) untuk verifikasi koefisien OLS.",
+          instruction:
+            "Catat tegangan mentah mV pada ESP32 Node M (GPIO34) untuk verifikasi koefisien OLS.",
         },
         {
           code: "SOP B.3",
@@ -261,7 +269,8 @@ function buildHarnessSpecs(
       wireColor: "Merah Tebal (Terminal B+ Output), Putih/Biru (Terminal L Lampu)",
       pinout: "Terminal B+ (Output Cas), Terminal L (Indikator Speedometer), Terminal S (Sense)",
       spec: `${profile.alternatorSpec} Internal IC Regulator, Cut-in Speed ${profile.cutInRpm}`,
-      diagProcedure: "Ukur tegangan saat mesin menyala (13.20V s/d 14.60V). Ripple AC maksimal < 250 mV RMS.",
+      diagProcedure:
+        "Ukur tegangan saat mesin menyala (13.20V s/d 14.60V). Ripple AC maksimal < 250 mV RMS.",
       sopSteps: [
         {
           code: "SOP A.1",
@@ -307,7 +316,8 @@ function buildHarnessSpecs(
       wireColor: "Kuning (CAN-H), Hijau (CAN-L), Merah (Pin 16 +12V Fused 7.5A)",
       pinout: "Pin 16 = B+, Pin 4 = Chassis GND, Pin 5 = Signal GND, Pin 6 = CAN-H, Pin 14 = CAN-L",
       spec: "ISO 11898-2 High-Speed 500 kbps, Resistansi Terminasi 120 Ohm antar CAN-H/L",
-      diagProcedure: "Ukur resistansi bus saat kontak OFF (harus 60 Ohm). Verifikasi 0 DTC pada sistem TWAI.",
+      diagProcedure:
+        "Ukur resistansi bus saat kontak OFF (harus 60 Ohm). Verifikasi 0 DTC pada sistem TWAI.",
       sopSteps: [
         {
           code: "SOP C.1",
@@ -316,7 +326,8 @@ function buildHarnessSpecs(
         },
         {
           code: "SOP C.2",
-          instruction: "Sambungkan scanner MUT-III, baca freeze frame data jika terdapat kode DTC aktif.",
+          instruction:
+            "Sambungkan scanner MUT-III, baca freeze frame data jika terdapat kode DTC aktif.",
         },
         {
           code: "SOP C.3",
@@ -330,7 +341,8 @@ function buildHarnessSpecs(
       wireColor: "Kabel Pita Internal PCB v1.0 (Regulasi DC-DC TPS54302 3.3V)",
       pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
       spec: "ESP32 Dual-Core 240MHz, Tier-1 20 RTC SRAM + Tier-2 2.000 LittleFS (176 KB)",
-      diagProcedure: "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi harian daya.",
+      diagProcedure:
+        "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi harian daya.",
       sopSteps: [
         {
           code: "SOP E.1",
@@ -344,7 +356,8 @@ function buildHarnessSpecs(
         },
         {
           code: "SOP E.3",
-          instruction: "Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi Two-Tier RTC/LittleFS.",
+          instruction:
+            "Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi Two-Tier RTC/LittleFS.",
         },
       ],
     },
@@ -358,7 +371,8 @@ function buildHarnessSpecs(
       sopSteps: [
         {
           code: "SOP R.1",
-          instruction: "Periksa konektor U.FL antena RF terpasang kencang tanpa hambatan sinyal fisik.",
+          instruction:
+            "Periksa konektor U.FL antena RF terpasang kencang tanpa hambatan sinyal fisik.",
         },
         {
           code: "SOP R.2",
@@ -389,7 +403,7 @@ export function ComponentNodeInspector({
   const profile = getVehicleElectricalProfile(unit.model);
   const harnessSpecs = useMemo(() => buildHarnessSpecs(unit.model, profile), [unit.model, profile]);
 
-  const critV = config?.crit_v ?? 11.80;
+  const critV = config?.crit_v ?? 11.8;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
   const isBatteryCrit = t.crit_alert || t.v_bat < critV;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
@@ -406,10 +420,12 @@ export function ComponentNodeInspector({
   // OLS Calibration Math (Hardware Blueprint v3.3 / SOP C.1)
   const calSlope = config?.cal_slope ?? 0.005412;
   const calOffset = config?.cal_offset ?? 0.069;
-  const vCalculated = (t.adc_raw_mv * calSlope) + calOffset;
+  const vCalculated = t.adc_raw_mv * calSlope + calOffset;
   const vDelta = Math.abs(t.v_bat - vCalculated);
   const isCalibrated = vDelta < 0.08;
-  const pendingAck = Boolean((config as (PiggybackConfig & { pending_ack?: boolean }) | undefined)?.pending_ack);
+  const pendingAck = Boolean(
+    (config as (PiggybackConfig & { pending_ack?: boolean }) | undefined)?.pending_ack,
+  );
 
   const effectiveHistory = useMemo<VoltagePoint[]>(() => {
     if (historyPoints && historyPoints.length > 0) return historyPoints;
@@ -792,9 +808,7 @@ export function ComponentNodeInspector({
                     <td className="py-2 px-2 text-foreground/90">
                       <div className="font-medium">{r.parameter}</div>
                       {r.subReadout && (
-                        <div className="text-[10px] text-muted-foreground">
-                          {r.subReadout}
-                        </div>
+                        <div className="text-[10px] text-muted-foreground">{r.subReadout}</div>
                       )}
                     </td>
                     <td className="py-2 px-2 font-bold text-foreground whitespace-nowrap">
@@ -863,7 +877,9 @@ export function ComponentNodeInspector({
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                      isCalibrated ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-amber/15 text-amber border border-amber/30",
+                      isCalibrated
+                        ? "bg-emerald/15 text-emerald border border-emerald/30"
+                        : "bg-amber/15 text-amber border border-amber/30",
                     )}
                   >
                     {isCalibrated ? "IN CALIBRATION (OLS PASS)" : "CALIBRATION DRIFT DETECTED"}
@@ -877,7 +893,12 @@ export function ComponentNodeInspector({
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
                   <div className="text-[10px] text-muted-foreground uppercase">ADC RAW PIN 34</div>
-                  <div className={cn("text-sm font-bold mt-0.5", isBatteryCrit ? "text-crimson" : "text-foreground")}>
+                  <div
+                    className={cn(
+                      "text-sm font-bold mt-0.5",
+                      isBatteryCrit ? "text-crimson" : "text-foreground",
+                    )}
+                  >
                     {t.adc_raw_mv} mV
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
@@ -885,28 +906,47 @@ export function ComponentNodeInspector({
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KONSTANTA OLS (m &amp; c)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KONSTANTA OLS (m &amp; c)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     m: {calSlope.toFixed(6)}
                   </div>
-                  <div className={cn("text-[9.5px] mt-0.5", pendingAck ? "text-amber" : "text-muted-foreground")}>
+                  <div
+                    className={cn(
+                      "text-[9.5px] mt-0.5",
+                      pendingAck ? "text-amber" : "text-muted-foreground",
+                    )}
+                  >
                     c: {calOffset.toFixed(3)}V · {pendingAck ? "PENDING ACK" : "ACK SYNC"}
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KALKULASI OLS vs AKTUAL</div>
-                  <div className="text-sm font-bold text-emerald mt-0.5">{vCalculated.toFixed(2)} V</div>
-                  <div className={cn("text-[9.5px] mt-0.5", isCalibrated ? "text-muted-foreground" : "text-amber")}>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KALKULASI OLS vs AKTUAL
+                  </div>
+                  <div className="text-sm font-bold text-emerald mt-0.5">
+                    {vCalculated.toFixed(2)} V
+                  </div>
+                  <div
+                    className={cn(
+                      "text-[9.5px] mt-0.5",
+                      isCalibrated ? "text-muted-foreground" : "text-amber",
+                    )}
+                  >
                     Delta Drift: {vDelta.toFixed(3)}V (Maks 0.080V)
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">ARUS TIDUR &amp; LOG MYSQL</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    ARUS TIDUR &amp; LOG MYSQL
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {t.engine_on ? "BYPASSED (RUN)" : `${t.shunt_sleep_ua} µA`}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    {effectiveHistory.length} sampel ({minHistV.toFixed(2)}V - {maxHistV.toFixed(2)}V)
+                    {effectiveHistory.length} sampel ({minHistV.toFixed(2)}V - {maxHistV.toFixed(2)}
+                    V)
                   </div>
                 </div>
               </div>
@@ -924,43 +964,66 @@ export function ComponentNodeInspector({
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                      isCharging ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-secondary text-muted-foreground border border-border",
+                      isCharging
+                        ? "bg-emerald/15 text-emerald border border-emerald/30"
+                        : "bg-secondary text-muted-foreground border border-border",
                     )}
                   >
                     {isCharging ? "PENGISIAN AKTIF" : "STANDBY (OFF)"}
                   </span>
                 </div>
-                <span className="text-[10px] text-muted-foreground">
-                  {profile.alternatorSpec}
-                </span>
+                <span className="text-[10px] text-muted-foreground">{profile.alternatorSpec}</span>
               </div>
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN STUD B+ (GPIO34)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    TEGANGAN STUD B+ (GPIO34)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">{fmtV(t.v_bat)} V</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Ambang Cas: &gt;= 13.20V</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Ambang Cas: &gt;= 13.20V
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN MODUL ECU (PID 0x42)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    TEGANGAN MODUL ECU (PID 0x42)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
-                    {t.engine_on && t.ecu_v && t.ecu_v > 0 ? `${fmtV(t.ecu_v)} V` : "0.00 V (ECU Standby)"}
+                    {t.engine_on && t.ecu_v && t.ecu_v > 0
+                      ? `${fmtV(t.ecu_v)} V`
+                      : "0.00 V (ECU Standby)"}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x42</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">DROP TEGANGAN HARNESS (B+ KE ECU)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">
-                    {t.engine_on && t.ecu_v && t.ecu_v > 0 ? `${Math.abs(t.v_bat - t.ecu_v).toFixed(2)} V` : "-- (Mesin Mati)"}
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    DROP TEGANGAN HARNESS (B+ KE ECU)
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Batas Toleransi Drop: &lt;= 0.25V</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {t.engine_on && t.ecu_v && t.ecu_v > 0
+                      ? `${Math.abs(t.v_bat - t.ecu_v).toFixed(2)} V`
+                      : "-- (Mesin Mati)"}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Batas Toleransi Drop: &lt;= 0.25V
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">WAKTU JALAN MESIN (PID 0x1F)</div>
-                  <div className={cn("text-sm font-bold mt-0.5", isCharging ? "text-emerald" : "text-muted-foreground")}>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    WAKTU JALAN MESIN (PID 0x1F)
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm font-bold mt-0.5",
+                      isCharging ? "text-emerald" : "text-muted-foreground",
+                    )}
+                  >
                     {t.engine_on ? `${t.run_time_s ?? 0} detik` : "0 detik (Mesin Mati)"}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Cut-in Spec: {profile.cutInRpm}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Cut-in Spec: {profile.cutInRpm}
+                  </div>
                 </div>
               </div>
             </div>
@@ -977,7 +1040,9 @@ export function ComponentNodeInspector({
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                      t.engine_on ? "bg-emerald/15 text-emerald border border-emerald/30" : "bg-secondary text-muted-foreground border border-border",
+                      t.engine_on
+                        ? "bg-emerald/15 text-emerald border border-emerald/30"
+                        : "bg-secondary text-muted-foreground border border-border",
                     )}
                   >
                     {t.engine_on ? "MESIN MENYALA" : "KONTAK MATI"}
@@ -990,14 +1055,20 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">PUTARAN MESIN CKP (PID 0x0C)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    PUTARAN MESIN CKP (PID 0x0C)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {!t.engine_on || t.rpm <= 0 ? "0 RPM (Mati)" : `${t.rpm} RPM`}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Target: {profile.idleRpmRange}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Target: {profile.idleRpmRange}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SUHU COOLANT &amp; IAT (0x05 / 0x0F)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    SUHU COOLANT &amp; IAT (0x05 / 0x0F)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {!t.engine_on || t.temp_c <= 0 ? "-- °C" : `${t.temp_c} °C`}
                   </div>
@@ -1006,7 +1077,9 @@ export function ComponentNodeInspector({
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">BEBAN MESIN &amp; THROTTLE (0x04 / 0x11)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    BEBAN MESIN &amp; THROTTLE (0x04 / 0x11)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {!t.engine_on ? "0.0%" : `${(t.load_pct ?? 0).toFixed(1)}%`}
                   </div>
@@ -1015,12 +1088,17 @@ export function ComponentNodeInspector({
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">MAP / MAF / LAJU BBM (0x0B / 0x10 / 0x5E)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    MAP / MAF / LAJU BBM (0x0B / 0x10 / 0x5E)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
-                    {!t.engine_on ? "0 kPa · 0.00 L/h" : `${t.map_kpa ?? 0} kPa · ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
+                    {!t.engine_on
+                      ? "0 kPa · 0.00 L/h"
+                      : `${t.map_kpa ?? 0} kPa · ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    MAF: {!t.engine_on ? "0.00" : (t.maf_gs ?? 0).toFixed(2)} g/s · Ign: {!t.engine_on ? "0.0" : (t.ign_deg ?? 0).toFixed(1)}°
+                    MAF: {!t.engine_on ? "0.00" : (t.maf_gs ?? 0).toFixed(2)} g/s · Ign:{" "}
+                    {!t.engine_on ? "0.0" : (t.ign_deg ?? 0).toFixed(1)}°
                   </div>
                 </div>
               </div>
@@ -1038,7 +1116,9 @@ export function ComponentNodeInspector({
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                      isCanFault ? "bg-crimson/15 text-crimson border border-crimson/30" : "bg-emerald/15 text-emerald border border-emerald/30",
+                      isCanFault
+                        ? "bg-crimson/15 text-crimson border border-crimson/30"
+                        : "bg-emerald/15 text-emerald border border-emerald/30",
                     )}
                   >
                     {isCanFault ? "CAN BUS FAULT" : "CAN HIGH-SPEED OK"}
@@ -1051,36 +1131,63 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">TRANSCEIVER WCMCU-230 (CAN_OK)</div>
-                  <div className={cn("text-sm font-bold mt-0.5", t.can_ok === false ? "text-crimson" : "text-emerald")}>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    TRANSCEIVER WCMCU-230 (CAN_OK)
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm font-bold mt-0.5",
+                      t.can_ok === false ? "text-crimson" : "text-emerald",
+                    )}
+                  >
                     {t.can_ok === false ? "BUS / LOOPBACK FAULT" : "LOOPBACK / BUS OK"}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">ISO 11898-2 · 500 kbps</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    ISO 11898-2 · 500 kbps
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KODE KERUSAKAN DTC (MODE 03)</div>
-                  <div className={cn("text-sm font-bold mt-0.5", isCanFault ? "text-crimson" : "text-emerald")}>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KODE KERUSAKAN DTC (MODE 03)
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm font-bold mt-0.5",
+                      isCanFault ? "text-crimson" : "text-emerald",
+                    )}
+                  >
                     {t.dtc} ({t.dtc_cnt} Kode)
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    Status MIL PID 0x01: {t.mil_on || t.dtc_cnt > 0 ? "MENYALA (ON)" : "PADAM (OFF)"}
+                    Status MIL PID 0x01:{" "}
+                    {t.mil_on || t.dtc_cnt > 0 ? "MENYALA (ON)" : "PADAM (OFF)"}
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SENSOR O2 &amp; FUEL TRIM (0x14 / 0x06)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    SENSOR O2 &amp; FUEL TRIM (0x14 / 0x06)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
-                    {!t.engine_on ? "-- V · --%" : `${(t.o2_v ?? 0).toFixed(2)} V · ${(t.stft_pct ?? 0).toFixed(1)}%`}
+                    {!t.engine_on
+                      ? "-- V · --%"
+                      : `${(t.o2_v ?? 0).toFixed(2)} V · ${(t.stft_pct ?? 0).toFixed(1)}%`}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
                     Tegangan ECU 0x42: {!t.engine_on || !t.ecu_v ? "--" : `${fmtV(t.ecu_v)}V`}
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">LAJU &amp; JARAK SEJAK CLEAR (0x0D / 0x31)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">
-                    {!t.engine_on ? "0 km/h (CAN Standby)" : `${t.speed_kmh ?? 0} km/h · ${(t.dist_clr_km ?? 0).toLocaleString("id-ID")} km`}
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    LAJU &amp; JARAK SEJAK CLEAR (0x0D / 0x31)
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode: 100% Read-Only ECU</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on
+                      ? "0 km/h (CAN Standby)"
+                      : `${t.speed_kmh ?? 0} km/h · ${(t.dist_clr_km ?? 0).toLocaleString("id-ID")} km`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Mode: 100% Read-Only ECU
+                  </div>
                 </div>
               </div>
             </div>
@@ -1112,28 +1219,48 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SUHU DIE RTC DS3231SN</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{t.rtc_temp_c.toFixed(2)} °C</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">I2C 0x68 · Bangun via GPIO32 SQW</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    SUHU DIE RTC DS3231SN
+                  </div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {t.rtc_temp_c.toFixed(2)} °C
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    I2C 0x68 · Bangun via GPIO32 SQW
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">COUNTER BOOT &amp; SEQUENCE NVS</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    COUNTER BOOT &amp; SEQUENCE NVS
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     Boot #{t.boot} · Seq #{t.seq ?? t.boot}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Durasi Wake Aktif: {t.active_ms} ms</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Durasi Wake Aktif: {t.active_ms} ms
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KONFIGURASI SLEEP &amp; ANGGARAN DAYA</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KONFIGURASI SLEEP &amp; ANGGARAN DAYA
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
                     {formatSleepInterval(t.sleep_cfg)} ({t.sleep_cfg}s)
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Konsumsi Harian: {t.daily_mah.toFixed(2)} mAh</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Konsumsi Harian: {t.daily_mah.toFixed(2)} mAh
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KAPASITAS TWO-TIER BUFFER</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.buffer_used} Rekaman Aktif</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Tier-1: 20 RTC SRAM + Tier-2: 2.000 LittleFS (176 KB)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KAPASITAS TWO-TIER BUFFER
+                  </div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {unit.buffer_used} Rekaman Aktif
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Tier-1: 20 RTC SRAM + Tier-2: 2.000 LittleFS (176 KB)
+                  </div>
                 </div>
               </div>
             </div>
@@ -1167,34 +1294,61 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KEKUATAN SINYAL (RSSI)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    KEKUATAN SINYAL (RSSI)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5">{t.rssi} dBm</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Status Koneksi: {conn.badgeText}</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Status Koneksi: {conn.badgeText}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SSID JARINGAN TERHUBUNG</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    SSID JARINGAN TERHUBUNG
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5 truncate">
-                    {resolvedSsid || (unit.net_zone === "TECH_HOTSPOT" ? "Hotspot Teknisi" : unit.in_yard ? "AP Gudang" : "Offline")}
+                    {resolvedSsid ||
+                      (unit.net_zone === "TECH_HOTSPOT"
+                        ? "Hotspot Teknisi"
+                        : unit.in_yard
+                          ? "AP Gudang"
+                          : "Offline")}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
                     Header X-Sync-SSID · Zona: {unit.net_zone ?? "YARD"}
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">WAKTU TERAKHIR TERLIHAT (LAST SEEN)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    WAKTU TERAKHIR TERLIHAT (LAST SEEN)
+                  </div>
                   <div className="text-sm font-bold text-foreground mt-0.5 truncate">
                     {unit.last_seen ?? (conn.isOnline ? "Live Stream Aktif" : "Mode Simulator")}
                   </div>
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    Umur Paket: {conn.lastSeenSec !== null ? formatDurationCompact(conn.lastSeenSec) : "Real-time"}
+                    Umur Paket:{" "}
+                    {conn.lastSeenSec !== null
+                      ? formatDurationCompact(conn.lastSeenSec)
+                      : "Real-time"}
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">ANTREAN BURST SYNC</div>
-                  <div className={cn("text-sm font-bold mt-0.5", unit.buffer_used > 0 ? "text-amber" : "text-emerald")}>
-                    {unit.buffer_used === 0 ? "BERSIH (0 Antrean)" : `${unit.buffer_used} Rekaman Tertunda`}
+                  <div className="text-[10px] text-muted-foreground uppercase">
+                    ANTREAN BURST SYNC
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Maksimal 20 rekaman per HTTP Batch POST</div>
+                  <div
+                    className={cn(
+                      "text-sm font-bold mt-0.5",
+                      unit.buffer_used > 0 ? "text-amber" : "text-emerald",
+                    )}
+                  >
+                    {unit.buffer_used === 0
+                      ? "BERSIH (0 Antrean)"
+                      : `${unit.buffer_used} Rekaman Tertunda`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Maksimal 20 rekaman per HTTP Batch POST
+                  </div>
                 </div>
               </div>
             </div>
@@ -1212,16 +1366,28 @@ export function ComponentNodeInspector({
             </div>
             <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <div>
-                <span className="text-[10px] text-muted-foreground uppercase block">KODE WARNA KABEL</span>
-                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.wireColor}</span>
+                <span className="text-[10px] text-muted-foreground uppercase block">
+                  KODE WARNA KABEL
+                </span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">
+                  {activeSpec.wireColor}
+                </span>
               </div>
               <div>
-                <span className="text-[10px] text-muted-foreground uppercase block">PINOUT TERMINAL</span>
-                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.pinout}</span>
+                <span className="text-[10px] text-muted-foreground uppercase block">
+                  PINOUT TERMINAL
+                </span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">
+                  {activeSpec.pinout}
+                </span>
               </div>
               <div>
-                <span className="text-[10px] text-muted-foreground uppercase block">SPESIFIKASI OEM</span>
-                <span className="font-medium text-foreground text-[11px] mt-0.5 block">{activeSpec.spec}</span>
+                <span className="text-[10px] text-muted-foreground uppercase block">
+                  SPESIFIKASI OEM
+                </span>
+                <span className="font-medium text-foreground text-[11px] mt-0.5 block">
+                  {activeSpec.spec}
+                </span>
               </div>
             </div>
           </div>
@@ -1243,9 +1409,7 @@ export function ComponentNodeInspector({
               </span>
               <span className="text-[10px] text-muted-foreground">Revisi Standar SOP C.1</span>
             </div>
-            <div className="mt-2 text-muted-foreground">
-              {activeSpec.diagProcedure}
-            </div>
+            <div className="mt-2 text-muted-foreground">{activeSpec.diagProcedure}</div>
 
             <div className="mt-3 space-y-1.5">
               {activeSpec.sopSteps.map((step) => (
@@ -1256,7 +1420,9 @@ export function ComponentNodeInspector({
                   <span className="shrink-0 rounded-[1px] border border-border/70 bg-background px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-foreground">
                     {step.code}
                   </span>
-                  <span className="text-foreground/90 font-medium leading-relaxed">{step.instruction}</span>
+                  <span className="text-foreground/90 font-medium leading-relaxed">
+                    {step.instruction}
+                  </span>
                 </div>
               ))}
             </div>

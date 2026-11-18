@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 import {
   formatDurationCompact,
   formatSleepInterval,
-  VehicleTopologyMap,
   type TopologyNodeId,
-} from "./VehicleTopologyMap";
+} from "@/lib/vehicle-topology";
+import { VehicleTopologyMap } from "./VehicleTopologyMap";
 import { ComponentNodeInspector } from "./ComponentNodeInspector";
 
 export function ShowroomModule({ active: _active }: { active: boolean }) {
@@ -33,7 +33,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
   const t = selected.telemetry;
   const resolvedSsid = (t.sync_ssid || selected.sync_ssid || "").trim();
   const selectedConfig = configs[selected.unit_id];
-  const tone = unitTone(selected, selectedConfig?.crit_v ?? 11.80);
+  const tone = unitTone(selected, selectedConfig?.crit_v ?? 11.8);
   const conn = getUnitConnectionState(selected, dataSource === "LIVE_API");
 
   const filteredSidebarUnits = useMemo(
@@ -44,7 +44,11 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
   // Auto-scroll the active unit card into view inside the horizontal mobile strip
   useEffect(() => {
     if (activeUnitRef.current && typeof activeUnitRef.current.scrollIntoView === "function") {
-      activeUnitRef.current.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      activeUnitRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
     }
   }, [selected.unit_id]);
 
@@ -59,7 +63,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             <span className="label-hmi mr-0.5 shrink-0 text-[10px]">UNIT:</span>
             {units.map((u) => {
               const on = u.unit_id === selected.unit_id;
-              const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.80);
+              const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.8);
               return (
                 <button
                   key={u.unit_id}
@@ -125,7 +129,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               <div className="flex items-center gap-1.5">
                 <Led tone={tone} pulse={tone === "crimson" || tone === "amber"} />
-                <span className="num text-xs font-medium text-foreground">{selected.status_label}</span>
+                <span className="num text-xs font-medium text-foreground">
+                  {selected.status_label}
+                </span>
               </div>
               <span
                 className={cn(
@@ -220,14 +226,16 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   "font-medium",
                   selected.in_yard
                     ? "text-emerald"
-                    : (selected.telemetry?.net_zone === "TECH_HOTSPOT" || selected.net_zone === "TECH_HOTSPOT")
+                    : selected.telemetry?.net_zone === "TECH_HOTSPOT" ||
+                        selected.net_zone === "TECH_HOTSPOT"
                       ? "text-emerald"
                       : "text-amber",
                 )}
               >
                 {selected.in_yard
                   ? `In Yard (Bay ${selected.bay}${resolvedSsid ? ` · SSID: ${resolvedSsid}` : ""})`
-                  : (selected.telemetry?.net_zone === "TECH_HOTSPOT" || selected.net_zone === "TECH_HOTSPOT")
+                  : selected.telemetry?.net_zone === "TECH_HOTSPOT" ||
+                      selected.net_zone === "TECH_HOTSPOT"
                     ? `Hotspot: ${resolvedSsid || "Teknisi"}`
                     : "Luar Geofence (Offline)"}
               </span>
@@ -254,9 +262,15 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           </div>
 
           <div className="flex items-center gap-3 text-muted-foreground">
-            <span>Protokol: <strong className="text-foreground">ORION v1.6.0</strong></span>
-            <span className="border-l border-border pl-3">Sinyal: <strong className="text-foreground">{t.rssi} dBm</strong></span>
-            <span className="border-l border-border pl-3">Boot #{t.boot} · Seq: <strong className="text-foreground">#{t.seq ?? t.boot}</strong></span>
+            <span>
+              Protokol: <strong className="text-foreground">ORION v1.6.0</strong>
+            </span>
+            <span className="border-l border-border pl-3">
+              Sinyal: <strong className="text-foreground">{t.rssi} dBm</strong>
+            </span>
+            <span className="border-l border-border pl-3">
+              Boot #{t.boot} · Seq: <strong className="text-foreground">#{t.seq ?? t.boot}</strong>
+            </span>
           </div>
         </div>
       </section>
@@ -305,10 +319,13 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             )}
           </header>
 
-          <div className="unit-list card-scroll flex flex-1 min-h-0 flex-col overflow-y-auto gap-2.5 p-3 pb-3" tabIndex={0}>
+          <div
+            className="unit-list card-scroll flex flex-1 min-h-0 flex-col overflow-y-auto gap-2.5 p-3 pb-3"
+            tabIndex={0}
+          >
             {filteredSidebarUnits.map((u) => {
               const on = u.unit_id === selected.unit_id;
-              const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.80);
+              const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.8);
               const uConn = getUnitConnectionState(u, dataSource === "LIVE_API");
               return (
                 <button
@@ -318,7 +335,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   type="button"
                   className={cn(
                     "shrink-0 rounded-[2px] border border-border bg-card/85 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full",
-                    on ? "border-foreground/70 bg-foreground/[0.06]" : "hover:border-muted-foreground/60",
+                    on
+                      ? "border-foreground/70 bg-foreground/[0.06]"
+                      : "hover:border-muted-foreground/60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -335,13 +354,19 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                       {uConn.isOnline ? "LIVE / ONLINE" : "OFFLINE / SLEEP"}
                     </span>
                   </div>
-                  <div className="mt-1 font-display text-sm font-semibold uppercase tracking-widest">{u.model}</div>
+                  <div className="mt-1 font-display text-sm font-semibold uppercase tracking-widest">
+                    {u.model}
+                  </div>
                   <div className="label-hmi text-[10px]">{u.trim}</div>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className={cn("num text-[10px] truncate", `text-${tn}`)}>{u.status_label}</span>
+                    <span className={cn("num text-[10px] truncate", `text-${tn}`)}>
+                      {u.status_label}
+                    </span>
                     <span className="num shrink-0 text-xs">
                       {fmtV(u.telemetry.v_bat)} V{" "}
-                      <span className="text-[10px] text-muted-foreground">({u.telemetry.adc_raw_mv}mV)</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ({u.telemetry.adc_raw_mv}mV)
+                      </span>
                     </span>
                   </div>
                 </button>
@@ -354,8 +379,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   <span className="text-emerald">Poll 3s</span>
                 </div>
                 <p className="leading-relaxed">
-                  Terhubung ke node tunggal <strong className="text-foreground">{selected.unit_id}</strong>.{" "}
-                  Sinkronisasi terakhir: {selected.last_seen ?? (lastSyncTime || "--")}.
+                  Terhubung ke node tunggal{" "}
+                  <strong className="text-foreground">{selected.unit_id}</strong>. Sinkronisasi
+                  terakhir: {selected.last_seen ?? (lastSyncTime || "--")}.
                 </p>
               </div>
             )}
@@ -408,10 +434,16 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           </div>
           <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5 num text-[10px] text-muted-foreground">
             <span className="truncate">
-              Siklus: <strong className="text-foreground">{formatSleepInterval(selectedConfig?.sleep_cfg ?? t.sleep_cfg)}</strong>
+              Siklus:{" "}
+              <strong className="text-foreground">
+                {formatSleepInterval(selectedConfig?.sleep_cfg ?? t.sleep_cfg)}
+              </strong>
             </span>
             <span className="truncate text-right">
-              Jaringan: <strong className="text-foreground">{resolvedSsid || selected.net_zone || "YARD"}</strong>
+              Jaringan:{" "}
+              <strong className="text-foreground">
+                {resolvedSsid || selected.net_zone || "YARD"}
+              </strong>
             </span>
           </div>
         </Panel>

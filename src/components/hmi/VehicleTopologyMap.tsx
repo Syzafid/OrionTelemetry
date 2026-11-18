@@ -1,84 +1,20 @@
 import { useState } from "react";
-import { getUnitConnectionState, type VehicleUnit, type PiggybackConfig } from "@/data/mockTelemetry";
+import {
+  getUnitConnectionState,
+  type VehicleUnit,
+  type PiggybackConfig,
+} from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
+import {
+  formatDurationCompact,
+  formatSleepInterval,
+  getVehicleElectricalProfile,
+  type TopologyNodeId,
+  type VehicleElectricalProfile,
+} from "@/lib/vehicle-topology";
 
-export type TopologyNodeId =
-  | "all"
-  | "battery"
-  | "alternator"
-  | "powertrain"
-  | "can_obd"
-  | "esp32_core"
-  | "rf_network";
-
-export interface VehicleElectricalProfile {
-  engineCode: string;
-  batterySpec: string;
-  alternatorSpec: string;
-  alternatorAmps: string;
-  batteryAh: string;
-  idleRpmRange: string;
-  cutInRpm: string;
-  chassisLabel: string;
-}
-
-export function getVehicleElectricalProfile(model: string): VehicleElectricalProfile {
-  const upper = model.toUpperCase();
-  if (upper.includes("XFORCE") || upper.includes("XPANDER")) {
-    return {
-      engineCode: "1.5L 4A91 MIVEC DOHC",
-      batterySpec: "Aki 12V 55Ah (55B24L)",
-      alternatorSpec: "Alternator 12V 90A",
-      alternatorAmps: "90A",
-      batteryAh: "55Ah",
-      idleRpmRange: "650 - 750 RPM (Idle)",
-      cutInRpm: "600 RPM",
-      chassisLabel: "MPV / Compact SUV Unibody",
-    };
-  }
-  if (upper.includes("L300")) {
-    return {
-      engineCode: "2.2L 4N14 Euro-4 Turbo Diesel",
-      batterySpec: "Aki 12V 65Ah (75D26R)",
-      alternatorSpec: "Alternator Denso 12V 110A",
-      alternatorAmps: "110A",
-      batteryAh: "65Ah",
-      idleRpmRange: "700 - 800 RPM (Idle)",
-      cutInRpm: "650 RPM",
-      chassisLabel: "Cab-Over Ladder Frame",
-    };
-  }
-  return {
-    engineCode: "2.4L 4N15 MIVEC / 2.5L 4D56 Diesel",
-    batterySpec: "Aki 12V 70Ah (80D26L)",
-    alternatorSpec: "Alternator Denso 12V 130A",
-    alternatorAmps: "130A",
-    batteryAh: "70Ah",
-    idleRpmRange: "700 - 800 RPM (Idle)",
-    cutInRpm: "650 RPM",
-    chassisLabel: "Ladder Frame Chassis",
-  };
-}
-
-export function formatDurationCompact(sec: number | null | undefined): string {
-  if (sec === null || sec === undefined || !Number.isFinite(sec)) return "";
-  if (sec < 60) return `${sec}d lalu`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}d lalu`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}j ${Math.floor((sec % 3600) / 60)}m lalu`;
-  return `${Math.floor(sec / 86400)}h ${Math.floor((sec % 86400) / 3600)}j lalu`;
-}
-
-export function formatSleepInterval(sec: number): string {
-  if (!Number.isFinite(sec) || sec <= 0) return "300 Detik";
-  if (sec >= 3600 && sec % 3600 === 0) {
-    return `${Math.round(sec / 3600)} Jam`;
-  }
-  if (sec >= 60 && sec % 60 === 0) {
-    return `${Math.round(sec / 60)} Menit`;
-  }
-  return `${Math.round(sec)} Detik`;
-}
+export type { TopologyNodeId, VehicleElectricalProfile };
 
 const NODE_SEQUENCE: TopologyNodeId[] = [
   "all",
@@ -111,7 +47,7 @@ export function VehicleTopologyMap({
 
   const t = unit.telemetry;
   const profile = getVehicleElectricalProfile(unit.model);
-  const critV = config?.crit_v ?? 11.80;
+  const critV = config?.crit_v ?? 11.8;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
   const isBatteryCrit = t.crit_alert || t.v_bat < critV;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
@@ -125,13 +61,17 @@ export function VehicleTopologyMap({
   // OLS Calibration status check (Finding #3)
   const calSlope = config?.cal_slope ?? 0.005412;
   const calOffset = config?.cal_offset ?? 0.069;
-  const vCalculated = (t.adc_raw_mv * calSlope) + calOffset;
+  const vCalculated = t.adc_raw_mv * calSlope + calOffset;
   const vDelta = Math.abs(t.v_bat - vCalculated);
   const isCalibrated = vDelta < 0.08;
 
   const altVoltage = t.ecu_v && t.ecu_v > 0 ? t.ecu_v : t.v_bat;
 
-  const batteryTone: Tone = isBatteryCrit ? "crimson" : isBatteryLow || !isCalibrated ? "amber" : "emerald";
+  const batteryTone: Tone = isBatteryCrit
+    ? "crimson"
+    : isBatteryLow || !isCalibrated
+      ? "amber"
+      : "emerald";
   const alternatorTone: Tone = isCharging ? "emerald" : t.engine_on ? "amber" : "dim";
   const powertrainTone: Tone = t.engine_on ? (t.temp_c > 105 ? "crimson" : "emerald") : "dim";
   const canTone: Tone = isCanFault ? "crimson" : "emerald";
@@ -239,7 +179,9 @@ export function VehicleTopologyMap({
 
         {/* Quick Filter Pill Controls */}
         <div className="card-scroll flex items-center gap-1 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible sm:pb-0 num text-[10px]">
-          <span className="mr-0.5 shrink-0 text-muted-foreground text-[9.5px] hidden sm:inline">PROBE:</span>
+          <span className="mr-0.5 shrink-0 text-muted-foreground text-[9.5px] hidden sm:inline">
+            PROBE:
+          </span>
           {[
             { id: "all", label: "SEMUA" },
             { id: "battery", label: "AKI 12V", tone: batteryTone },
@@ -300,7 +242,12 @@ export function VehicleTopologyMap({
           </text>
 
           {/* ================= CHASSIS SILHOUETTE (PAJERO SPORT TOP-DOWN) ================= */}
-          <g className="chassis-geometry" stroke="oklch(0.45 0.015 265)" fill="none" strokeWidth="1.5">
+          <g
+            className="chassis-geometry"
+            stroke="oklch(0.45 0.015 265)"
+            fill="none"
+            strokeWidth="1.5"
+          >
             {/* Outer Vehicle Body Shell */}
             <path
               d="
@@ -330,8 +277,22 @@ export function VehicleTopologyMap({
             />
 
             {/* Hood / Engine Bay Divider (Bulkhead Firewall) */}
-            <line x1="280" y1="82" x2="280" y2="318" stroke="oklch(0.42 0.015 265)" strokeWidth="1.5" />
-            <text x="200" y="98" fill="oklch(0.72 0.01 260)" fontSize="9" fontFamily="monospace" fontWeight="500">
+            <line
+              x1="280"
+              y1="82"
+              x2="280"
+              y2="318"
+              stroke="oklch(0.42 0.015 265)"
+              strokeWidth="1.5"
+            />
+            <text
+              x="200"
+              y="98"
+              fill="oklch(0.72 0.01 260)"
+              fontSize="9"
+              fontFamily="monospace"
+              fontWeight="500"
+            >
               FRONT ENGINE BAY (RUANG MESIN)
             </text>
 
@@ -353,22 +314,82 @@ export function VehicleTopologyMap({
               stroke="oklch(0.35 0.015 265)"
               strokeWidth="1"
             />
-            <text x="440" y="125" fill="oklch(0.72 0.01 260)" fontSize="9" fontFamily="monospace" fontWeight="500">
+            <text
+              x="440"
+              y="125"
+              fill="oklch(0.72 0.01 260)"
+              fontSize="9"
+              fontFamily="monospace"
+              fontWeight="500"
+            >
               PASSENGER CABIN & CARGO (KABIN)
             </text>
 
             {/* Tailgate / Rear Bumper Contour */}
-            <line x1="720" y1="85" x2="720" y2="315" stroke="oklch(0.38 0.015 265)" strokeWidth="1.2" />
+            <line
+              x1="720"
+              y1="85"
+              x2="720"
+              y2="315"
+              stroke="oklch(0.38 0.015 265)"
+              strokeWidth="1.2"
+            />
 
             {/* 4 Wheels (Orthographic Tires & Rims) */}
-            <rect x="200" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            <rect x="200" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            <rect x="640" y="48" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
-            <rect x="640" y="324" width="80" height="28" rx="2" fill="oklch(0.20 0.01 265)" stroke="oklch(0.48 0.015 265)" />
+            <rect
+              x="200"
+              y="48"
+              width="80"
+              height="28"
+              rx="2"
+              fill="oklch(0.20 0.01 265)"
+              stroke="oklch(0.48 0.015 265)"
+            />
+            <rect
+              x="200"
+              y="324"
+              width="80"
+              height="28"
+              rx="2"
+              fill="oklch(0.20 0.01 265)"
+              stroke="oklch(0.48 0.015 265)"
+            />
+            <rect
+              x="640"
+              y="48"
+              width="80"
+              height="28"
+              rx="2"
+              fill="oklch(0.20 0.01 265)"
+              stroke="oklch(0.48 0.015 265)"
+            />
+            <rect
+              x="640"
+              y="324"
+              width="80"
+              height="28"
+              rx="2"
+              fill="oklch(0.20 0.01 265)"
+              stroke="oklch(0.48 0.015 265)"
+            />
 
             {/* Axle Lines */}
-            <line x1="240" y1="76" x2="240" y2="324" stroke="oklch(0.35 0.015 265)" strokeDasharray="3 3" />
-            <line x1="680" y1="76" x2="680" y2="324" stroke="oklch(0.35 0.015 265)" strokeDasharray="3 3" />
+            <line
+              x1="240"
+              y1="76"
+              x2="240"
+              y2="324"
+              stroke="oklch(0.35 0.015 265)"
+              strokeDasharray="3 3"
+            />
+            <line
+              x1="680"
+              y1="76"
+              x2="680"
+              y2="324"
+              stroke="oklch(0.35 0.015 265)"
+              strokeDasharray="3 3"
+            />
           </g>
 
           {/* ================= ELECTRICAL HARNESS WIRING ================= */}
@@ -462,13 +483,27 @@ export function VehicleTopologyMap({
             {/* Battery Terminals */}
             <rect x="206" y="110" width="8" height="5" fill="#F45B60" />
             <rect x="236" y="110" width="8" height="5" fill="#64748B" />
-            <text x="210" y="138" fill="#F2EFE9" fontSize="9" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="210"
+              y="138"
+              fill="#F2EFE9"
+              fontSize="9"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               12V
             </text>
 
             {/* Probe Number Badge (Always Visible on Mobile & Desktop) */}
             <circle cx="200" cy="115" r="9" fill="#10B981" />
-            <text x="196" y="118.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="196"
+              y="118.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               01
             </text>
 
@@ -484,14 +519,43 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "battery" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "battery" ? "1.5" : "1"}
               />
-              <line x1="85" y1="32" x2="85" y2="92" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="85"
+                y1="32"
+                x2="85"
+                y2="92"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 01: AKI 12V {profile.batteryAh}
               </text>
-              <text x="8" y="26" fill={isBatteryCrit ? "#F45B60" : isBatteryLow || !isCalibrated ? "#F59E0B" : "#10B981"} fontSize="11" fontWeight="bold" fontFamily="monospace">
-                {fmtV(t.v_bat)} V <tspan fill="oklch(0.72 0.01 260)" fontSize="9">({t.adc_raw_mv} mV)</tspan>
+              <text
+                x="8"
+                y="26"
+                fill={
+                  isBatteryCrit ? "#F45B60" : isBatteryLow || !isCalibrated ? "#F59E0B" : "#10B981"
+                }
+                fontSize="11"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
+                {fmtV(t.v_bat)} V{" "}
+                <tspan fill="oklch(0.72 0.01 260)" fontSize="9">
+                  ({t.adc_raw_mv} mV)
+                </tspan>
                 {!isCalibrated && (
-                  <tspan fill="#F59E0B" fontSize="8.5" fontWeight="bold"> [DRIFT]</tspan>
+                  <tspan fill="#F59E0B" fontSize="8.5" fontWeight="bold">
+                    {" "}
+                    [DRIFT]
+                  </tspan>
                 )}
               </text>
             </g>
@@ -532,17 +596,43 @@ export function VehicleTopologyMap({
               cy="200"
               r="22"
               fill={activeNode === "alternator" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
-              stroke={activeNode === "alternator" ? "#F2EFE9" : isCharging ? "#10B981" : "oklch(0.35 0.015 265)"}
+              stroke={
+                activeNode === "alternator"
+                  ? "#F2EFE9"
+                  : isCharging
+                    ? "#10B981"
+                    : "oklch(0.35 0.015 265)"
+              }
               strokeWidth={activeNode === "alternator" ? "2" : "1.5"}
             />
-            <circle cx="160" cy="200" r="10" fill="oklch(0.12 0.01 265)" stroke="oklch(0.40 0.015 265)" />
-            <text x="146" y="203" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <circle
+              cx="160"
+              cy="200"
+              r="10"
+              fill="oklch(0.12 0.01 265)"
+              stroke="oklch(0.40 0.015 265)"
+            />
+            <text
+              x="146"
+              y="203"
+              fill="#F2EFE9"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               ALT
             </text>
 
             {/* Probe Number Badge */}
             <circle cx="140" cy="185" r="9" fill={isCharging ? "#10B981" : "#F59E0B"} />
-            <text x="136" y="188.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="136"
+              y="188.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               02
             </text>
 
@@ -558,11 +648,32 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "alternator" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "alternator" ? "1.5" : "1"}
               />
-              <line x1="100" y1="0" x2="145" y2="-25" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="100"
+                y1="0"
+                x2="145"
+                y2="-25"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 02: ALTERNATOR {profile.alternatorAmps}
               </text>
-              <text x="8" y="26" fill={isCharging ? "#10B981" : "oklch(0.75 0.01 260)"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+              <text
+                x="8"
+                y="26"
+                fill={isCharging ? "#10B981" : "oklch(0.75 0.01 260)"}
+                fontSize="10.5"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
                 {isCharging
                   ? `${fmtV(altVoltage)}V (PENGISIAN AKTIF)`
                   : `${fmtV(t.v_bat)}V B+ (STANDBY OFF)`}
@@ -612,13 +723,27 @@ export function VehicleTopologyMap({
               stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
               strokeWidth={activeNode === "powertrain" ? "2" : "1"}
             />
-            <text x="221" y="204" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="221"
+              y="204"
+              fill="#F2EFE9"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               ENGINE
             </text>
 
             {/* Probe Number Badge */}
             <circle cx="215" cy="180" r="9" fill="#10B981" />
-            <text x="211" y="183.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="211"
+              y="183.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               03
             </text>
 
@@ -634,12 +759,34 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "powertrain" ? "1.5" : "1"}
               />
-              <line x1="60" y1="0" x2="45" y2="-70" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="60"
+                y1="0"
+                x2="45"
+                y2="-70"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 03: TRANSDUSER MESIN
               </text>
-              <text x="8" y="26" fill="#F2EFE9" fontSize="10.5" fontWeight="bold" fontFamily="monospace">
-                {!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`} | {!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c}°C`}
+              <text
+                x="8"
+                y="26"
+                fill="#F2EFE9"
+                fontSize="10.5"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
+                {!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`} |{" "}
+                {!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c}°C`}
               </text>
             </g>
           </g>
@@ -682,13 +829,27 @@ export function VehicleTopologyMap({
               stroke={activeNode === "can_obd" ? "#F2EFE9" : isCanFault ? "#F45B60" : "#10B981"}
               strokeWidth={activeNode === "can_obd" ? "2" : "1.5"}
             />
-            <text x="372" y="248" fill="#F2EFE9" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="372"
+              y="248"
+              fill="#F2EFE9"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               OBD
             </text>
 
             {/* Probe Number Badge */}
             <circle cx="367" cy="235" r="9" fill={isCanFault ? "#F45B60" : "#10B981"} />
-            <text x="363" y="238.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="363"
+              y="238.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               04
             </text>
 
@@ -704,11 +865,32 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "can_obd" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "can_obd" ? "1.5" : "1"}
               />
-              <line x1="45" y1="0" x2="45" y2="-35" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="45"
+                y1="0"
+                x2="45"
+                y2="-35"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 04: OBD-II / CAN BUS
               </text>
-              <text x="8" y="26" fill={isCanFault ? "#F45B60" : "#10B981"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
+              <text
+                x="8"
+                y="26"
+                fill={isCanFault ? "#F45B60" : "#10B981"}
+                fontSize="10.5"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
                 {t.can_ok === false ? "CAN FAULT" : "CAN OK"} | DTC: {t.dtc}
               </text>
             </g>
@@ -753,18 +935,42 @@ export function VehicleTopologyMap({
               height="40"
               rx="1.5"
               fill={activeNode === "esp32_core" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
-              stroke={activeNode === "esp32_core" ? "#F2EFE9" : isLinkOffline ? "#64748B" : "#10B981"}
+              stroke={
+                activeNode === "esp32_core" ? "#F2EFE9" : isLinkOffline ? "#64748B" : "#10B981"
+              }
               strokeWidth={activeNode === "esp32_core" ? "2" : "1.5"}
             />
             {/* IC Chip on PCB */}
-            <rect x="508" y="190" width="24" height="20" fill="oklch(0.10 0.008 265)" stroke={isLinkOffline ? "#64748B" : "#10B981"} strokeWidth="0.8" />
-            <text x="496" y="202" fill="#F2EFE9" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+            <rect
+              x="508"
+              y="190"
+              width="24"
+              height="20"
+              fill="oklch(0.10 0.008 265)"
+              stroke={isLinkOffline ? "#64748B" : "#10B981"}
+              strokeWidth="0.8"
+            />
+            <text
+              x="496"
+              y="202"
+              fill="#F2EFE9"
+              fontSize="7.5"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               ESP32
             </text>
 
             {/* Probe Number Badge */}
             <circle cx="490" cy="180" r="9" fill={isLinkOffline ? "#64748B" : "#10B981"} />
-            <text x="486" y="183.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <text
+              x="486"
+              y="183.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               05
             </text>
 
@@ -780,11 +986,32 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "esp32_core" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "esp32_core" ? "1.5" : "1"}
               />
-              <line x1="50" y1="32" x2="50" y2="155" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="50"
+                y1="32"
+                x2="50"
+                y2="155"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 05: ORION GATEWAY v1.0
               </text>
-              <text x="8" y="26" fill={isLinkOffline ? "oklch(0.70 0.01 260)" : "#10B981"} fontSize="10" fontWeight="bold" fontFamily="monospace">
+              <text
+                x="8"
+                y="26"
+                fill={isLinkOffline ? "oklch(0.70 0.01 260)" : "#10B981"}
+                fontSize="10"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
                 RTC: {t.rtc_temp_c.toFixed(1)}°C | Boot #{t.boot} #{t.seq ?? t.boot}
               </text>
             </g>
@@ -820,13 +1047,42 @@ export function VehicleTopologyMap({
             )}
 
             {/* Antenna Symbol */}
-            <circle cx="680" cy="200" r="12" fill="oklch(0.18 0.01 265)" stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"} strokeWidth="1" />
-            <path d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190" stroke={isOutOfYard || isLinkOffline ? "oklch(0.50 0.01 260)" : "#10B981"} fill="none" strokeWidth="1.2" />
-            <circle cx="680" cy="200" r="2.5" fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"} />
+            <circle
+              cx="680"
+              cy="200"
+              r="12"
+              fill="oklch(0.18 0.01 265)"
+              stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+              strokeWidth="1"
+            />
+            <path
+              d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190"
+              stroke={isOutOfYard || isLinkOffline ? "oklch(0.50 0.01 260)" : "#10B981"}
+              fill="none"
+              strokeWidth="1.2"
+            />
+            <circle
+              cx="680"
+              cy="200"
+              r="2.5"
+              fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"}
+            />
 
             {/* Probe Number Badge */}
-            <circle cx="680" cy="188" r="9" fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"} />
-            <text x="676" y="191.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
+            <circle
+              cx="680"
+              cy="188"
+              r="9"
+              fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"}
+            />
+            <text
+              x="676"
+              y="191.5"
+              fill="#0B0D11"
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
               06
             </text>
 
@@ -842,11 +1098,38 @@ export function VehicleTopologyMap({
                 stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "rf_network" ? "1.5" : "1"}
               />
-              <line x1="0" y1="20" x2="-20" y2="175" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
-              <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
+              <line
+                x1="0"
+                y1="20"
+                x2="-20"
+                y2="175"
+                stroke="oklch(0.40 0.01 265)"
+                strokeDasharray="2 2"
+              />
+              <text
+                x="8"
+                y="14"
+                fill="oklch(0.72 0.01 260)"
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight="600"
+              >
                 PROBE 06: RF &amp; GEOFENCE
               </text>
-              <text x="8" y="26" fill={isOutOfYard || isLinkOffline ? "oklch(0.70 0.01 260)" : unit.net_zone === "TECH_HOTSPOT" ? "#F59E0B" : "#10B981"} fontSize="10" fontWeight="bold" fontFamily="monospace">
+              <text
+                x="8"
+                y="26"
+                fill={
+                  isOutOfYard || isLinkOffline
+                    ? "oklch(0.70 0.01 260)"
+                    : unit.net_zone === "TECH_HOTSPOT"
+                      ? "#F59E0B"
+                      : "#10B981"
+                }
+                fontSize="10"
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
                 {unit.net_zone ?? "YARD"} ({t.rssi} dBm) {isLinkOffline ? "[SLEEP]" : "[LIVE]"}
               </text>
             </g>
