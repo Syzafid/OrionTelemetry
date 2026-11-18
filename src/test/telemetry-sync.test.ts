@@ -308,4 +308,47 @@ describe("applyRemoteUpdate (live API merge)", () => {
     // Re-applying identical zone payload keeps exact reference
     expect(applyRemoteUpdate(next, zonePayload, UNITS[0]!.unit_id)).toBe(next);
   });
+
+  it("upserts a newly discovered live unit from get_data.php when metadata and telemetry are present", () => {
+    const before = clone();
+    const next = applyRemoteUpdate(
+      before,
+      {
+        units: [
+          {
+            unit_id: "ORION-LIVE-99",
+            bay: "C-08",
+            model: "XFORCE",
+            trim: "ULTIMATE CVT",
+            vin: "MMBXF999999",
+            color: "Quartz White",
+            status_label: "Critical Battery Drain",
+            state: "CRITICAL",
+            in_yard: true,
+            online_status: "OFFLINE",
+            connection_badge: "OFFLINE / DEEP SLEEP",
+            buffer_used: 2,
+            telemetry: {
+              unit_id: "ORION-LIVE-99",
+              v_bat: 11.72,
+              adc_raw_mv: 2152,
+              boot: 9,
+              seq: 102,
+              sync_ssid: "POCOF6",
+            },
+          },
+        ],
+      },
+      UNITS[0]!.unit_id,
+    );
+
+    expect(next).not.toBe(before);
+    expect(next).toHaveLength(before.length + 1);
+    const added = next.find((u) => u.unit_id === "ORION-LIVE-99");
+    expect(added).toBeDefined();
+    expect(added?.bay).toBe("C-08");
+    expect(added?.model).toBe("XFORCE");
+    expect(added?.telemetry.v_bat).toBe(11.72);
+    expect(added?.telemetry.sync_ssid).toBe("POCOF6");
+  });
 });

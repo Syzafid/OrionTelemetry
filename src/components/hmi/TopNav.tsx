@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Command, Layers, Radio, Settings2, Volume2, VolumeX } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
 import { CommandPaletteModal } from "./CommandPaletteModal";
 import { OrionLogo } from "./OrionLogo";
@@ -160,25 +161,36 @@ export function TopNav() {
   const statusTone = !live ? "dim" : apiStatus === "CONNECTED" ? "emerald" : "amber";
   const statusClass = !live ? "text-muted-foreground" : apiStatus === "CONNECTED" ? "text-emerald" : "text-amber";
 
-  const onlineUnits = units.filter((u) => u.in_yard);
-  const onlineCount = onlineUnits.length;
+  const inYardUnits = units.filter((u) => u.in_yard);
+  const activeOnlineUnits = units.filter((u) => getUnitConnectionState(u, live).isOnline);
+  const onlineCount = activeOnlineUnits.length;
   const totalCount = units.length;
+  const rssiSource = inYardUnits.length > 0 ? inYardUnits : units;
   const avgRssi =
-    onlineCount > 0
-      ? Math.round(onlineUnits.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / onlineCount)
+    rssiSource.length > 0
+      ? Math.round(rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length)
       : null;
 
   const apTone: "emerald" | "amber" | "crimson" =
-    onlineCount === 0 ? "crimson" : onlineCount < totalCount ? "amber" : "emerald";
+    inYardUnits.length === 0 && onlineCount === 0
+      ? "crimson"
+      : onlineCount < totalCount
+        ? "amber"
+        : "emerald";
   const apToneClass =
-    onlineCount === 0 ? "text-crimson" : onlineCount < totalCount ? "text-amber" : "text-emerald";
+    apTone === "crimson" ? "text-crimson" : apTone === "amber" ? "text-amber" : "text-emerald";
 
   const apLabel =
     onlineCount === 0
-      ? `Yard AP (0/${totalCount} Online)`
+      ? inYardUnits.length > 0
+        ? `Yard AP (0/${totalCount} Live · ${inYardUnits.length} Deep Sleep, ${avgRssi} dBm)`
+        : `Yard AP (0/${totalCount} Online)`
       : `Yard AP (${onlineCount}/${totalCount} Online, Avg ${avgRssi} dBm)`;
 
-  const apLabelMobile = onlineCount === 0 ? `AP 0/${totalCount}` : `AP ${onlineCount}/${totalCount}`;
+  const apLabelMobile =
+    onlineCount === 0 && inYardUnits.length > 0
+      ? `AP 0/${totalCount} (Sleep)`
+      : `AP ${onlineCount}/${totalCount}`;
 
   return (
     <>
@@ -226,7 +238,7 @@ export function TopNav() {
             {/* Global Fleet Total Units Indicator */}
             <div
               className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-muted-foreground sm:px-3 sm:text-[11px]"
-              title="Total 12 unit kendaraan terdaftar di stock yard Mitsubishi"
+              title={`Total ${units.length} unit kendaraan aktif pada mode tampilan saat ini`}
             >
               <Layers size={13} strokeWidth={1.75} className="shrink-0 text-foreground" aria-hidden="true" />
               <span>{units.length} Units Yard</span>
@@ -265,7 +277,7 @@ export function TopNav() {
             <button
               type="button"
               onClick={() => setDataSource(live ? "SIMULATOR" : "LIVE_API")}
-              title={live ? "Kembali ke simulator sandbox" : "Polling live API setiap 0.75 detik"}
+              title={live ? "Kembali ke simulator sandbox" : "Polling live API setiap 3 detik"}
               className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider transition-colors hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
             >
               <Led tone={statusTone} pulse={live && apiStatus === "FALLBACK_ERROR"} />
@@ -332,8 +344,8 @@ export function TopNav() {
                 </button>
                 <p className="mt-2 num text-[10px] leading-relaxed text-muted-foreground">
                   {live
-                    ? "Polling every 0.75s with 1.5s timeout. Failed fetch preserves offline localStorage snapshot."
-                    : "Switch to Live API to poll the endpoint every 0.75 seconds."}
+                    ? "Polling every 3s with 1.5s timeout. Failed fetch preserves offline localStorage snapshot."
+                    : "Switch to Live API to poll the endpoint every 3 seconds."}
                 </p>
               </PopoverContent>
             </Popover>

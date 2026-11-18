@@ -1,8 +1,17 @@
 import { useMemo, useState } from "react";
-import type { VehicleUnit, PiggybackConfig } from "@/data/mockTelemetry";
+import {
+  getUnitConnectionState,
+  voltageHistory,
+  type PiggybackConfig,
+  type VehicleUnit,
+  type VoltagePoint,
+} from "@/data/mockTelemetry";
+import type { ModuleId } from "@/context/TelemetryContext";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 import {
+  formatDurationCompact,
+  formatSleepInterval,
   getVehicleElectricalProfile,
   type TopologyNodeId,
   type VehicleElectricalProfile,
@@ -13,6 +22,9 @@ interface ComponentNodeInspectorProps {
   activeNode: TopologyNodeId;
   onSelectNode?: ((node: TopologyNodeId) => void) | undefined;
   config?: PiggybackConfig | undefined;
+  historyPoints?: VoltagePoint[] | undefined;
+  isLiveApi?: boolean | undefined;
+  onNavigateModule?: ((mod: ModuleId) => void) | undefined;
   className?: string;
 }
 
@@ -28,150 +40,42 @@ interface ChannelRow {
   waveformType: "battery" | "shunt" | "alternator" | "rpm" | "coolant" | "can" | "rtc" | "rf";
 }
 
-interface MiniWaveformProps {
+interface ChannelTelemetryVisualProps {
   type: ChannelRow["waveformType"];
   tone: Tone;
-  active: boolean;
+  historyPoints: VoltagePoint[];
   vBat: number;
-  adcRawMv: number;
   engineOn: boolean;
   rpm: number;
   tempC: number;
+  rtcTempC: number;
+  rssi: number;
+  isOnline: boolean;
   canOk: boolean;
   dtcCnt: number;
-  seq: number;
   shuntUa: number;
 }
 
 /**
- * Authentic Dynamic Waveform Generator (SAE J1979 / Automotive Scope)
- * Real evidence over claims: wave points dynamically fluctuate with physical telemetry states.
+ * Honest Telemetry Sparkline & Proportional Channel Meter.
+ * Renders real MySQL/simulator voltage history for V_BAT without synthetic Math.sin waves,
+ * and proportional measured bars for digital/scalar hardware channels.
  */
-function MiniWaveform({
+function ChannelTelemetryVisual({
   type,
   tone,
-  active,
+  historyPoints,
   vBat,
-  adcRawMv,
   engineOn,
   rpm,
   tempC,
+  rtcTempC,
+  rssi,
+  isOnline,
   canOk,
   dtcCnt,
-  seq,
   shuntUa,
-}: MiniWaveformProps) {
-  const points = useMemo(() => {
-    switch (type) {
-      case "battery": {
-        const clampedV = Math.max(11.0, Math.min(14.8, vBat));
-        const baseY = 21 - ((clampedV - 11.0) / 3.8) * 17;
-        const pts: string[] = [];
-        for (let i = 0; i <= 10; i++) {
-          const x = i * 15;
-          const noise = Math.sin((i * 1.7) + (seq % 10) + (adcRawMv % 5)) * 1.4;
-          const y = Math.max(3, Math.min(22, baseY + noise));
-          pts.push(`${x},${y.toFixed(1)}`);
-        }
-        return pts.join(" ");
-      }
-
-      case "shunt": {
-        if (engineOn) {
-          return "0,12 30,12 60,11 90,12 120,11 150,12";
-        }
-        const pts: string[] = [];
-        const isExcess = shuntUa > 480;
-        for (let i = 0; i <= 10; i++) {
-          const x = i * 15;
-          const y = isExcess && (i === 4 || i === 8) ? 10 : 18;
-          pts.push(`${x},${y}`);
-        }
-        return pts.join(" ");
-      }
-
-      case "alternator": {
-        if (!active || !engineOn) {
-          return "0,21 150,21";
-        }
-        const phase = (seq % 6) * 0.5;
-        const pts: string[] = [];
-        for (let i = 0; i <= 15; i++) {
-          const x = i * 10;
-          const ripple = Math.abs(Math.sin((i * 0.4) + phase)) * 7;
-          const y = 8 + ripple;
-          pts.push(`${x},${y.toFixed(1)}`);
-        }
-        return pts.join(" ");
-      }
-
-      case "rpm": {
-        if (!engineOn || rpm <= 0) {
-          return "0,18 150,18";
-        }
-        const period = Math.max(10, Math.min(30, Math.round(18000 / rpm)));
-        const pts: string[] = [];
-        for (let x = 0; x <= 150; x += 5) {
-          const mod = (x + (seq * 4)) % period;
-          let y = 18;
-          if (mod === 0) y = 4;
-          else if (mod === 5) y = 22;
-          pts.push(`${x},${y}`);
-        }
-        return pts.join(" ");
-      }
-
-      case "coolant": {
-        const clampedT = Math.max(30, Math.min(115, tempC > 0 ? tempC : 40));
-        const endY = 21 - ((clampedT - 30) / 85) * 16;
-        const pts: string[] = [];
-        for (let i = 0; i <= 8; i++) {
-          const x = i * 18.75;
-          const interp = 21 - ((21 - endY) * (i / 8));
-          pts.push(`${x.toFixed(0)},${interp.toFixed(1)}`);
-        }
-        return pts.join(" ");
-      }
-
-      case "can": {
-        if (!canOk || dtcCnt > 0) {
-          return "0,16 15,16 15,6 20,6 25,22 35,16 60,16 65,4 70,22 90,16 120,16 150,16";
-        }
-        const pts: string[] = ["0,16"];
-        const bitPattern = [10, 10, 20, 15, 25, 20, 20, 30];
-        let currX = 0;
-        let isHigh = false;
-        for (const span of bitPattern) {
-          currX += span;
-          if (currX > 150) break;
-          isHigh = !isHigh;
-          const y = isHigh ? 6 : 16;
-          pts.push(`${currX},${isHigh ? 16 : 6} ${currX},${y}`);
-        }
-        pts.push("150,16");
-        return pts.join(" ");
-      }
-
-      case "rtc": {
-        const yBase = 12 + ((tempC > 0 ? tempC : 28) - 25) * 0.1;
-        return `0,${yBase.toFixed(1)} 150,${yBase.toFixed(1)}`;
-      }
-
-      case "rf": {
-        const pts: string[] = [];
-        for (let i = 0; i <= 10; i++) {
-          const x = i * 15;
-          const isPulse = (i + seq) % 4 === 0;
-          pts.push(`${x},${isPulse ? 6 : 18}`);
-        }
-        return pts.join(" ");
-      }
-
-      default:
-        return "0,15 150,15";
-    }
-  }, [type, active, vBat, adcRawMv, engineOn, rpm, tempC, canOk, dtcCnt, seq, shuntUa]);
-
+}: ChannelTelemetryVisualProps) {
   const strokeColor =
     tone === "crimson"
       ? "#F45B60"
@@ -181,17 +85,109 @@ function MiniWaveform({
           ? "#10B981"
           : "oklch(0.50 0.015 260)";
 
+  const fillBarClass =
+    tone === "crimson"
+      ? "bg-crimson"
+      : tone === "amber"
+        ? "bg-amber"
+        : tone === "emerald"
+          ? "bg-emerald"
+          : "bg-muted-foreground/50";
+
+  const batterySpark = useMemo(() => {
+    if (type !== "battery") return null;
+    const pts = historyPoints.length > 0 ? historyPoints : [{ t: "NOW", v: vBat }];
+    let minV = pts[0]!.v;
+    let maxV = pts[0]!.v;
+    for (const p of pts) {
+      if (p.v < minV) minV = p.v;
+      if (p.v > maxV) maxV = p.v;
+    }
+    const span = Math.max(0.05, maxV - minV);
+    const coords = pts.map((p, idx) => {
+      const x = pts.length === 1 ? 75 : (idx / (pts.length - 1)) * 150;
+      const y = 20 - ((p.v - minV) / span) * 16;
+      return `${x.toFixed(1)},${Math.max(3, Math.min(21, y)).toFixed(1)}`;
+    });
+    if (pts.length === 1) {
+      const ySingle = coords[0]!.split(",")[1];
+      return {
+        pointsAttr: `0,${ySingle} 150,${ySingle}`,
+        count: 1,
+        minV,
+        maxV,
+      };
+    }
+    return {
+      pointsAttr: coords.join(" "),
+      count: pts.length,
+      minV,
+      maxV,
+    };
+  }, [type, historyPoints, vBat]);
+
+  if (type === "battery" && batterySpark) {
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        <svg viewBox="0 0 150 24" className="h-5 w-24 sm:h-6 sm:w-28 shrink-0 select-none" aria-hidden="true">
+          <polyline
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            points={batterySpark.pointsAttr}
+          />
+        </svg>
+        <span className="text-[8.5px] text-muted-foreground num">
+          {batterySpark.count} sampel ({batterySpark.minV.toFixed(2)}V..{batterySpark.maxV.toFixed(2)}V)
+        </span>
+      </div>
+    );
+  }
+
+  let pct = 0;
+  let meterLabel = "";
+  if (type === "shunt") {
+    if (engineOn) {
+      pct = 0;
+      meterLabel = "BYPASSED (0 µA)";
+    } else {
+      pct = Math.max(0, Math.min(100, Math.round((shuntUa / 600) * 100)));
+      meterLabel = `${shuntUa} / 450 µA`;
+    }
+  } else if (type === "alternator") {
+    pct = Math.max(0, Math.min(100, Math.round(((vBat - 11.0) / 3.8) * 100)));
+    meterLabel = `${vBat.toFixed(2)} V Bus`;
+  } else if (type === "rpm") {
+    pct = engineOn ? Math.max(0, Math.min(100, Math.round((rpm / 3000) * 100))) : 0;
+    meterLabel = engineOn ? `${rpm} RPM` : "0 RPM (OFF)";
+  } else if (type === "coolant") {
+    pct = engineOn && tempC > 0 ? Math.max(0, Math.min(100, Math.round((tempC / 120) * 100))) : 0;
+    meterLabel = engineOn && tempC > 0 ? `${tempC}°C / 120°C` : "OFF / --";
+  } else if (type === "can") {
+    pct = canOk ? 100 : 15;
+    meterLabel = `${canOk ? "TRANSCEIVER OK" : "BUS FAULT"} · ${dtcCnt} DTC`;
+  } else if (type === "rtc") {
+    pct = Math.max(0, Math.min(100, Math.round((rtcTempC / 65) * 100)));
+    meterLabel = `${rtcTempC.toFixed(1)}°C / 65°C`;
+  } else if (type === "rf") {
+    pct = isOnline ? Math.max(0, Math.min(100, Math.round(((rssi + 100) / 60) * 100))) : 12;
+    meterLabel = `${rssi} dBm · ${isOnline ? "ONLINE" : "SLEEP"}`;
+  }
+
   return (
-    <svg viewBox="0 0 150 24" className="h-5 w-24 sm:h-6 sm:w-28 shrink-0 select-none">
-      <polyline
-        fill="none"
-        stroke={strokeColor}
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-    </svg>
+    <div className="flex w-28 sm:w-32 flex-col items-end gap-1">
+      <div className="h-1.5 w-full overflow-hidden rounded-[1px] bg-secondary">
+        <div
+          className={cn("h-full transition-all duration-300", fillBarClass)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[8.5px] text-muted-foreground num truncate max-w-full">
+        {meterLabel}
+      </span>
+    </div>
   );
 }
 
@@ -335,13 +331,13 @@ function buildHarnessSpecs(
       nodeName: "PROBE 05: ORION IOT GATEWAY v1.0 & RTC DS3231",
       wireColor: "Kabel Pita Internal PCB v1.0 (Regulasi DC-DC TPS54302 3.3V)",
       pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
-      spec: "ESP32 Dual-Core 240MHz, Flash LittleFS 1.5MB (Tier-2 Buffer 20 record)",
-      diagProcedure: "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi aktif 80mA.",
+      spec: "ESP32 Dual-Core 240MHz, Tier-1 20 RTC SRAM + Tier-2 2.000 LittleFS (176 KB)",
+      diagProcedure: "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi harian daya.",
       sopSteps: [
         {
           code: "SOP E.1",
           instruction:
-            "Periksa tegangan rel 3.3V keluaran regulator buck TPS54302 (toleransi: 3.28V - 3.34V).",
+            "Periksa tegangan rel 3.3V keluaran regulator buck TPS54302 saat pemeliharaan PCB (toleransi: 3.28V - 3.34V).",
         },
         {
           code: "SOP E.2",
@@ -350,7 +346,7 @@ function buildHarnessSpecs(
         },
         {
           code: "SOP E.3",
-          instruction: "Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi LittleFS.",
+          instruction: "Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi Two-Tier RTC/LittleFS.",
         },
       ],
     },
@@ -358,9 +354,9 @@ function buildHarnessSpecs(
       nodeName: "PROBE 06: ANTENA RF DUAL-BAND & GEOFENCE",
       wireColor: "Koaksial Mikro U.FL 50 Ohm ke Antena PCB 2.4 GHz",
       pinout: "Transceiver RF 2.4 GHz 802.11 b/g/n, Tx Power +19.5 dBm",
-      spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Teknisi Fallback, Offline Buffer",
+      spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Teknisi Fallback, Offline Two-Tier Buffer",
       diagProcedure:
-        "Ambang batas koneksi real-time: RSSI >= -85 dBm. Buffer ke LittleFS jika di luar jangkauan.",
+        "Ambang batas koneksi real-time: RSSI >= -85 dBm. Buffer ke RTC SRAM + LittleFS jika di luar jangkauan.",
       sopSteps: [
         {
           code: "SOP R.1",
@@ -385,6 +381,9 @@ export function ComponentNodeInspector({
   activeNode,
   onSelectNode,
   config,
+  historyPoints,
+  isLiveApi,
+  onNavigateModule,
   className,
 }: ComponentNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"matrix" | "transducer" | "sop">("matrix");
@@ -393,12 +392,17 @@ export function ComponentNodeInspector({
   const profile = getVehicleElectricalProfile(unit.model);
   const harnessSpecs = useMemo(() => buildHarnessSpecs(unit.model, profile), [unit.model, profile]);
 
+  const critV = config?.crit_v ?? 11.80;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
-  const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
+  const isBatteryCrit = t.crit_alert || t.v_bat < critV;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
   const isCanFault = t.can_ok === false || t.dtc_cnt > 0;
-  const isOffline =
+
+  const conn = getUnitConnectionState(unit, Boolean(isLiveApi));
+  const isOutOfYard =
     unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
+  const isLinkOffline = !conn.isOnline;
+  const resolvedSsid = (t.sync_ssid || unit.sync_ssid || "").trim();
 
   const activeSpec = harnessSpecs[activeNode] ?? harnessSpecs.all;
 
@@ -408,6 +412,23 @@ export function ComponentNodeInspector({
   const vCalculated = (t.adc_raw_mv * calSlope) + calOffset;
   const vDelta = Math.abs(t.v_bat - vCalculated);
   const isCalibrated = vDelta < 0.08;
+  const pendingAck = Boolean((config as (PiggybackConfig & { pending_ack?: boolean }) | undefined)?.pending_ack);
+
+  const effectiveHistory = useMemo<VoltagePoint[]>(() => {
+    if (historyPoints && historyPoints.length > 0) return historyPoints;
+    return voltageHistory(t.v_bat, t.engine_on);
+  }, [historyPoints, t.v_bat, t.engine_on]);
+
+  const { minHistV, maxHistV } = useMemo(() => {
+    if (effectiveHistory.length === 0) return { minHistV: t.v_bat, maxHistV: t.v_bat };
+    let min = effectiveHistory[0]!.v;
+    let max = effectiveHistory[0]!.v;
+    for (const p of effectiveHistory) {
+      if (p.v < min) min = p.v;
+      if (p.v > max) max = p.v;
+    }
+    return { minHistV: min, maxHistV: max };
+  }, [effectiveHistory, t.v_bat]);
 
   const altVoltage = t.ecu_v && t.ecu_v > 0 ? t.ecu_v : t.v_bat;
 
@@ -434,7 +455,7 @@ export function ComponentNodeInspector({
         parameter: "V_BAT (Tegangan Aki Terminal)",
         readout: `${fmtV(t.v_bat)} V`,
         subReadout: `${t.adc_raw_mv} mV (GPIO34)`,
-        range: "11.80V - 14.40V",
+        range: `${critV.toFixed(2)}V - 14.40V`,
         status: isBatteryCrit ? "CRIT_ALERT" : isBatteryLow ? "LOW_WARN" : "NOMINAL",
         tone: isBatteryCrit ? "crimson" : isBatteryLow ? "amber" : "emerald",
         waveformType: "battery",
@@ -515,21 +536,32 @@ export function ComponentNodeInspector({
         nodeKey: "esp32_core",
         parameter: "DS3231_TEMP (Suhu Kristal & Node)",
         readout: `${t.rtc_temp_c.toFixed(2)} °C`,
-        subReadout: `Uptime: ${t.active_ms}ms | Seq #${t.seq ?? t.boot}`,
-        range: "-10.0°C s/d +65.0°C",
-        status: "TCXO_COMPENSATED",
-        tone: "emerald",
+        subReadout: `Boot #${t.boot} · Seq #${t.seq ?? t.boot} · Wake ${t.active_ms}ms`,
+        range: `Sleep: ${formatSleepInterval(t.sleep_cfg)} (${t.sleep_cfg}s)`,
+        status: isLinkOffline ? "DEEP_SLEEP" : "TCXO_ACTIVE",
+        tone: isLinkOffline ? "dim" : "emerald",
         waveformType: "rtc",
       },
       {
         channelId: "RF-01",
         nodeKey: "rf_network",
         parameter: "TELEMETRY_UPLINK (Gateway Jaringan)",
-        readout: `${unit.net_zone ?? "YARD"} (${t.rssi} dBm)`,
-        subReadout: `Buffer: ${unit.buffer_used}/20 slot`,
-        range: "RSSI >= -85 dBm (Yard)",
-        status: isOffline ? "TIER1_BUFFERING" : "LIVE_SYNC",
-        tone: isOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald",
+        readout: `${unit.net_zone ?? "YARD"}${resolvedSsid ? ` · ${resolvedSsid}` : ""} (${t.rssi} dBm)`,
+        subReadout: `${conn.badgeText}${
+          unit.last_seen
+            ? ` · ${unit.last_seen}`
+            : conn.lastSeenSec !== null
+              ? ` · ${formatDurationCompact(conn.lastSeenSec)}`
+              : ""
+        } | Antrean: ${unit.buffer_used} rec`,
+        range: "RSSI >= -85 dBm | Two-Tier 2.020 Slot",
+        status: isOutOfYard ? "TIER1_BUFFERING" : isLinkOffline ? "DEEP_SLEEP_HOLD" : "LIVE_SYNC",
+        tone:
+          isOutOfYard || isLinkOffline
+            ? "dim"
+            : unit.net_zone === "TECH_HOTSPOT"
+              ? "amber"
+              : "emerald",
         waveformType: "rf",
       },
     ];
@@ -537,6 +569,9 @@ export function ComponentNodeInspector({
     t,
     unit,
     profile,
+    critV,
+    conn,
+    resolvedSsid,
     altVoltage,
     shuntStatus,
     shuntTone,
@@ -544,7 +579,8 @@ export function ComponentNodeInspector({
     isBatteryCrit,
     isBatteryLow,
     isCanFault,
-    isOffline,
+    isOutOfYard,
+    isLinkOffline,
   ]);
 
   const filteredRows = useMemo(() => {
@@ -575,6 +611,33 @@ export function ComponentNodeInspector({
               className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Tampilkan Semua (8 Saluran)
+            </button>
+          )}
+          {onNavigateModule && isBatteryCrit && (
+            <button
+              type="button"
+              onClick={() => onNavigateModule("03")}
+              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Antrean Pemanasan (03)
+            </button>
+          )}
+          {onNavigateModule && isCanFault && (
+            <button
+              type="button"
+              onClick={() => onNavigateModule("04")}
+              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Diagnostik DTC (04)
+            </button>
+          )}
+          {onNavigateModule && (!isCalibrated || pendingAck) && (
+            <button
+              type="button"
+              onClick={() => onNavigateModule("06")}
+              className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[1px] border border-amber/60 bg-amber/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber transition-colors hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {!isCalibrated ? "Kalibrasi SOP C.1 (06)" : "Cek Pending ACK (06)"}
             </button>
           )}
         </div>
@@ -692,18 +755,19 @@ export function ComponentNodeInspector({
                     )}
                   </div>
                   <div className="flex flex-col items-end">
-                    <MiniWaveform
+                    <ChannelTelemetryVisual
                       type={r.waveformType}
                       tone={r.tone}
-                      active={t.engine_on || isCharging}
+                      historyPoints={effectiveHistory}
                       vBat={t.v_bat}
-                      adcRawMv={t.adc_raw_mv}
                       engineOn={t.engine_on}
                       rpm={t.rpm}
                       tempC={t.temp_c}
+                      rtcTempC={t.rtc_temp_c}
+                      rssi={t.rssi}
+                      isOnline={conn.isOnline}
                       canOk={t.can_ok !== false}
                       dtcCnt={t.dtc_cnt}
-                      seq={t.seq ?? 0}
                       shuntUa={t.shunt_sleep_ua}
                     />
                     <span className="mt-0.5 text-[8.5px] text-muted-foreground">
@@ -724,7 +788,7 @@ export function ComponentNodeInspector({
                   <th className="py-1.5 px-2 font-medium">PARAMETER SENSOR</th>
                   <th className="py-1.5 px-2 font-medium">NILAI REAL-TIME</th>
                   <th className="py-1.5 px-2 font-medium">RENTANG / AMBANG</th>
-                  <th className="py-1.5 px-2 font-medium">LIVE WAVEFORM</th>
+                  <th className="py-1.5 px-2 font-medium">TREN HISTORI / METER</th>
                   <th className="py-1.5 pl-2 font-medium text-right">STATUS</th>
                 </tr>
               </thead>
@@ -770,18 +834,19 @@ export function ComponentNodeInspector({
                       {r.range}
                     </td>
                     <td className="py-2 px-2">
-                      <MiniWaveform
+                      <ChannelTelemetryVisual
                         type={r.waveformType}
                         tone={r.tone}
-                        active={t.engine_on || isCharging}
+                        historyPoints={effectiveHistory}
                         vBat={t.v_bat}
-                        adcRawMv={t.adc_raw_mv}
                         engineOn={t.engine_on}
                         rpm={t.rpm}
                         tempC={t.temp_c}
+                        rtcTempC={t.rtc_temp_c}
+                        rssi={t.rssi}
+                        isOnline={conn.isOnline}
                         canOk={t.can_ok !== false}
                         dtcCnt={t.dtc_cnt}
-                        seq={t.seq ?? 0}
                         shuntUa={t.shunt_sleep_ua}
                       />
                     </td>
@@ -865,6 +930,43 @@ export function ComponentNodeInspector({
                   <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi maks 0.080V</div>
                 </div>
               </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">AMBANG KRITIS AKTIF (CRIT_V)</div>
+                  <div className={cn("text-sm font-bold mt-0.5", isBatteryCrit ? "text-crimson" : "text-foreground")}>
+                    {critV.toFixed(2)} V
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    {isBatteryCrit ? "DI BAWAH AMBANG (CRITICAL)" : "AMAN (>= CRIT_V)"}
+                  </div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">ARUS TIDUR R-SENSE (SHUNT)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {t.engine_on ? "BYPASSED (RUN)" : `${t.shunt_sleep_ua} µA`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Status: {shuntStatus}</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SINKRONISASI KONFIGURASI NODE</div>
+                  <div className={cn("text-sm font-bold mt-0.5", pendingAck ? "text-amber" : "text-emerald")}>
+                    {pendingAck ? "PENDING ACK" : "ACK TERSINKRONISASI"}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Interval Sleep Config: {config?.sleep_cfg ?? t.sleep_cfg}s
+                  </div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">SAMPEL LOG HISTORIS (MYSQL)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {effectiveHistory.length} Rekaman
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Rentang: {minHistV.toFixed(2)}V s/d {maxHistV.toFixed(2)}V
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -892,30 +994,30 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN TERMINAL B+</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN STUD B+ (GPIO34)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{fmtV(t.v_bat)} V</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Ambang Cas: &gt;= 13.20V</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">TEGANGAN MODUL ECU (PID 0x42)</div>
                   <div className="text-sm font-bold text-foreground mt-0.5">
-                    {isCharging ? `${fmtV(altVoltage)} V` : `${fmtV(t.v_bat)} V (B+)`}
+                    {t.engine_on && t.ecu_v && t.ecu_v > 0 ? `${fmtV(t.ecu_v)} V` : "0.00 V (ECU Standby)"}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
-                    {isCharging ? "Nominal Cas: 13.2V - 14.6V" : "Kontak Mati (Tegangan Aki Diam)"}
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x42</div>
+                </div>
+                <div className="rounded border border-border/50 bg-card/60 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase">DROP TEGANGAN HARNESS (B+ KE ECU)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {t.engine_on && t.ecu_v && t.ecu_v > 0 ? `${Math.abs(t.v_bat - t.ecu_v).toFixed(2)} V` : "-- (Mesin Mati)"}
                   </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Batas Toleransi Drop: &lt;= 0.25V</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">PUTARAN CUT-IN</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{profile.cutInRpm}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mulai regulasi cas</div>
-                </div>
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">BATAS RIAK AC PENYEARAH</div>
-                  <div className="text-sm font-bold text-emerald mt-0.5">&lt; 250 mV RMS</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Kesehatan Dioda 3-Fase</div>
-                </div>
-                <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">STATUS KONTROL REGULATOR</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">WAKTU JALAN MESIN (PID 0x1F)</div>
                   <div className={cn("text-sm font-bold mt-0.5", isCharging ? "text-emerald" : "text-muted-foreground")}>
-                    {isCharging ? "CHARGING RUN" : "IDLE OFF"}
+                    {t.engine_on ? `${t.run_time_s ?? 0} detik` : "0 detik (Mesin Mati)"}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Terminal L / S Terhubung</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Cut-in Spec: {profile.cutInRpm}</div>
                 </div>
               </div>
             </div>
@@ -927,7 +1029,7 @@ export function ComponentNodeInspector({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground uppercase tracking-wider">
-                    TRANSDUSER PUTARAN ENGKOL (CKP) & SUHU MESIN (ECT)
+                    TRANSDUSER PUTARAN ENGKOL (CKP) &amp; SUHU MESIN (ECT)
                   </span>
                   <span
                     className={cn(
@@ -945,24 +1047,38 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SENSOR CKP (RPM)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on || t.rpm <= 0 ? "0 RPM" : `${t.rpm} RPM`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Roda Reluktansi 60-2 Gigi</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">PUTARAN MESIN CKP (PID 0x0C)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on || t.rpm <= 0 ? "0 RPM (Mati)" : `${t.rpm} RPM`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Target: {profile.idleRpmRange}</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SUHU PENDINGIN ECT</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on || t.temp_c <= 0 ? "--" : `${t.temp_c} °C`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Buka Termostat: 82°C</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">SUHU COOLANT &amp; IAT (0x05 / 0x0F)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on || t.temp_c <= 0 ? "-- °C" : `${t.temp_c} °C`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Suhu Udara Masuk IAT: {!t.engine_on ? "--" : `${t.iat_c ?? 0} °C`}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">BEBAN MESIN TERHITUNG</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0%" : `${(t.load_pct ?? 0).toFixed(0)}%`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x04</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">BEBAN MESIN &amp; THROTTLE (0x04 / 0x11)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on ? "0.0%" : `${(t.load_pct ?? 0).toFixed(1)}%`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Posisi TPS: {!t.engine_on ? "0.0%" : `${(t.tps_pct ?? 0).toFixed(1)}%`}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">LAJU INJEKSI BAHAN BAKAR</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0.00 L/h" : `${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x5E</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">MAP / MAF / LAJU BBM (0x0B / 0x10 / 0x5E)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on ? "0 kPa · 0.00 L/h" : `${t.map_kpa ?? 0} kPa · ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    MAF: {!t.engine_on ? "0.00" : (t.maf_gs ?? 0).toFixed(2)} g/s · Ign: {!t.engine_on ? "0.0" : (t.ign_deg ?? 0).toFixed(1)}°
+                  </div>
                 </div>
               </div>
             </div>
@@ -974,7 +1090,7 @@ export function ComponentNodeInspector({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground uppercase tracking-wider">
-                    ARSITEKTUR PORT OBD-II J1962 & TRANSCEIVER CAN TWAI
+                    ARSITEKTUR PORT OBD-II J1962 &amp; TRANSCEIVER CAN TWAI
                   </span>
                   <span
                     className={cn(
@@ -992,28 +1108,36 @@ export function ComponentNodeInspector({
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">TERMINASI BUS (PIN 6-14)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">60 Ohm</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Toleransi: 54 - 66 Ohm</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">TRANSCEIVER WCMCU-230 (CAN_OK)</div>
+                  <div className={cn("text-sm font-bold mt-0.5", t.can_ok === false ? "text-crimson" : "text-emerald")}>
+                    {t.can_ok === false ? "BUS / LOOPBACK FAULT" : "LOOPBACK / BUS OK"}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">ISO 11898-2 · 500 kbps</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KODE KERUSAKAN DTC</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">KODE KERUSAKAN DTC (MODE 03)</div>
                   <div className={cn("text-sm font-bold mt-0.5", isCanFault ? "text-crimson" : "text-emerald")}>
-                    {t.dtc} ({t.dtc_cnt})
+                    {t.dtc} ({t.dtc_cnt} Kode)
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Read-Only Mode 03/07</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Status MIL PID 0x01: {t.mil_on || t.dtc_cnt > 0 ? "MENYALA (ON)" : "PADAM (OFF)"}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">LAMPU KERUSAKAN (MIL)</div>
-                  <div className={cn("text-sm font-bold mt-0.5", t.mil_on || t.dtc_cnt > 0 ? "text-crimson" : "text-emerald")}>
-                    {t.mil_on || t.dtc_cnt > 0 ? "ILLUMINATED" : "OFF / NORMAL"}
+                  <div className="text-[10px] text-muted-foreground uppercase">SENSOR O2 &amp; FUEL TRIM (0x14 / 0x06)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on ? "-- V · --%" : `${(t.o2_v ?? 0).toFixed(2)} V · ${(t.stft_pct ?? 0).toFixed(1)}%`}
                   </div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x01</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Tegangan ECU 0x42: {!t.engine_on || !t.ecu_v ? "--" : `${fmtV(t.ecu_v)}V`}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KECEPATAN LAJU (SPEED)</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{!t.engine_on ? "0 km/h" : `${t.speed_kmh ?? 0} km/h`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode 01 PID 0x0D</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">LAJU &amp; JARAK SEJAK CLEAR (0x0D / 0x31)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {!t.engine_on ? "0 km/h (CAN Standby)" : `${t.speed_kmh ?? 0} km/h · ${(t.dist_clr_km ?? 0).toLocaleString("id-ID")} km`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Mode: 100% Read-Only ECU</div>
                 </div>
               </div>
             </div>
@@ -1025,37 +1149,48 @@ export function ComponentNodeInspector({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground uppercase tracking-wider">
-                    HARDWARE ORION GATEWAY v1.0 & MEMORI LITTLEFS
+                    HARDWARE ORION GATEWAY v1.0 &amp; TWO-TIER BUFFER
                   </span>
-                  <span className="rounded bg-emerald/15 text-emerald border border-emerald/30 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase">
-                    SYSTEM HEALTHY
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase border",
+                      isLinkOffline
+                        ? "bg-secondary text-muted-foreground border-border"
+                        : "bg-emerald/15 text-emerald border-emerald/30",
+                    )}
+                  >
+                    {isLinkOffline ? "DEEP SLEEP STANDBY" : "SYSTEM ACTIVE"}
                   </span>
                 </div>
                 <span className="text-[10px] text-muted-foreground">
-                  Firmware ESP32 v1.4.1 Production
+                  Firmware ESP32 v1.6.0 Production
                 </span>
               </div>
 
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">SUHU RTC DS3231SN</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">SUHU DIE RTC DS3231SN</div>
                   <div className="text-sm font-bold text-foreground mt-0.5">{t.rtc_temp_c.toFixed(2)} °C</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">TCXO Drift &lt; 2ppm</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">I2C 0x68 · Bangun via GPIO32 SQW</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">PARTISI BUFFER FLASH</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.buffer_used} / 20 Slot</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">LittleFS 1.5MB Partition</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">COUNTER BOOT &amp; SEQUENCE NVS</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    Boot #{t.boot} · Seq #{t.seq ?? t.boot}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Durasi Wake Aktif: {t.active_ms} ms</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">KONSUMSI HARIAN DAYA</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{t.daily_mah} mAh</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Target: &lt; 65 mAh/hari</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">KONFIGURASI SLEEP &amp; ANGGARAN DAYA</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {formatSleepInterval(t.sleep_cfg)} ({t.sleep_cfg}s)
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Konsumsi Harian: {t.daily_mah.toFixed(2)} mAh</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">REGULATOR STEP-DOWN BUCK</div>
-                  <div className="text-sm font-bold text-emerald mt-0.5">3.30 V</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">TI TPS54302 (12V ke 3.3V)</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">KAPASITAS TWO-TIER BUFFER</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.buffer_used} Rekaman Aktif</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Tier-1: 20 RTC SRAM + Tier-2: 2.000 LittleFS (176 KB)</div>
                 </div>
               </div>
             </div>
@@ -1067,19 +1202,19 @@ export function ComponentNodeInspector({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground uppercase tracking-wider">
-                    RF LINK BUDGET & GEOFENCE TELEMETRY UPLINK
+                    RF LINK BUDGET &amp; GEOFENCE TELEMETRY UPLINK
                   </span>
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
-                      isOffline
+                      isOutOfYard || isLinkOffline
                         ? "bg-secondary text-muted-foreground border border-border"
                         : unit.net_zone === "TECH_HOTSPOT"
                           ? "bg-amber/15 text-amber border border-amber/30"
                           : "bg-emerald/15 text-emerald border border-emerald/30",
                     )}
                   >
-                    {unit.net_zone ?? "YARD"}
+                    {unit.net_zone ?? "YARD"} · {conn.badgeText}
                   </span>
                 </div>
                 <span className="text-[10px] text-muted-foreground">
@@ -1091,22 +1226,32 @@ export function ComponentNodeInspector({
                 <div className="rounded border border-border/50 bg-card/60 p-2">
                   <div className="text-[10px] text-muted-foreground uppercase">KEKUATAN SINYAL (RSSI)</div>
                   <div className="text-sm font-bold text-foreground mt-0.5">{t.rssi} dBm</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Ambang Real-time: &gt;= -85dBm</div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Status Koneksi: {conn.badgeText}</div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
                   <div className="text-[10px] text-muted-foreground uppercase">SSID JARINGAN TERHUBUNG</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5 truncate">{unit.net_zone === "TECH_HOTSPOT" ? (t.sync_ssid || "POCO Hotspot") : "YARD_AP_HQ"}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">WPA2-PSK Authentication</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5 truncate">
+                    {resolvedSsid || (unit.net_zone === "TECH_HOTSPOT" ? "Hotspot Teknisi" : unit.in_yard ? "AP Gudang" : "Offline")}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Header X-Sync-SSID · Zona: {unit.net_zone ?? "YARD"}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">STATUS ANTISIPASI GEOFENCE</div>
-                  <div className="text-sm font-bold text-foreground mt-0.5">{unit.in_yard ? "IN YARD BOUNDARY" : "DEPARTED"}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Hysteresis: 3 Siklus Miss</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">WAKTU TERAKHIR TERLIHAT (LAST SEEN)</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5 truncate">
+                    {unit.last_seen ?? (conn.isOnline ? "Live Stream Aktif" : "Mode Simulator")}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">
+                    Umur Paket: {conn.lastSeenSec !== null ? formatDurationCompact(conn.lastSeenSec) : "Real-time"}
+                  </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">BURST SYNC FLUSH QUEUE</div>
-                  <div className="text-sm font-bold text-emerald mt-0.5">{unit.buffer_used === 0 ? "IDLE (0)" : `${unit.buffer_used} PENDING`}</div>
-                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Maksimal 20 slot per batch</div>
+                  <div className="text-[10px] text-muted-foreground uppercase">ANTREAN BURST SYNC</div>
+                  <div className={cn("text-sm font-bold mt-0.5", unit.buffer_used > 0 ? "text-amber" : "text-emerald")}>
+                    {unit.buffer_used === 0 ? "BERSIH (0 Antrean)" : `${unit.buffer_used} Rekaman Tertunda`}
+                  </div>
+                  <div className="text-[9.5px] text-muted-foreground mt-0.5">Maksimal 20 rekaman per HTTP Batch POST</div>
                 </div>
               </div>
             </div>

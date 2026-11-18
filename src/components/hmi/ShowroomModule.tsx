@@ -1,19 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { RefreshCw, Search, X } from "lucide-react";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
 import { Led, Panel, Stat, unitTone, fmtV } from "./primitives";
 import { cn } from "@/lib/utils";
-import { VehicleTopologyMap, type TopologyNodeId } from "./VehicleTopologyMap";
+import {
+  formatDurationCompact,
+  formatSleepInterval,
+  VehicleTopologyMap,
+  type TopologyNodeId,
+} from "./VehicleTopologyMap";
 import { ComponentNodeInspector } from "./ComponentNodeInspector";
 
 export function ShowroomModule({ active: _active }: { active: boolean }) {
-  const { units, selected, selectUnit, configs, dataSource } = useTelemetry();
+  const {
+    units,
+    selected,
+    selectUnit,
+    configs,
+    dataSource,
+    setActiveModule,
+    history,
+    pollNow,
+    lastSyncTime,
+    apiStatus,
+    isOfflineSnapshot,
+  } = useTelemetry();
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [activeTopologyNode, setActiveTopologyNode] = useState<TopologyNodeId>("battery");
   const activeUnitRef = useRef<HTMLButtonElement>(null);
   const t = selected.telemetry;
+  const resolvedSsid = (t.sync_ssid || selected.sync_ssid || "").trim();
   const tone = unitTone(selected, configs[selected.unit_id]?.crit_v ?? 11.80);
   const conn = getUnitConnectionState(selected, dataSource === "LIVE_API");
 
@@ -84,10 +102,63 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   ? `LIVE / ONLINE (${conn.lastSeenSec}s)`
                   : conn.badgeText}
               </span>
+              {(selected.last_seen || (conn.lastSeenSec !== null && !conn.isOnline)) && (
+                <span className="num text-[10.5px] text-muted-foreground">
+                  Last seen: <strong className="text-foreground">{selected.last_seen ?? formatDurationCompact(conn.lastSeenSec)}</strong>
+                  {selected.last_seen && conn.lastSeenSec !== null ? ` (${formatDurationCompact(conn.lastSeenSec)})` : ""}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {dataSource === "LIVE_API" && (
+                <button
+                  type="button"
+                  onClick={pollNow}
+                  title={
+                    isOfflineSnapshot || apiStatus === "FALLBACK_ERROR"
+                      ? "Koneksi bermasalah (Offline Cache). Klik untuk sinkronisasi ulang."
+                      : "Sinkronisasi paksa endpoint get_data.php sekarang"
+                  }
+                  className={cn(
+                    "num inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot
+                      ? "border-amber/60 bg-amber/15 text-amber hover:bg-amber/25"
+                      : "border-border bg-card text-foreground hover:border-foreground/60",
+                  )}
+                >
+                  <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
+                  <span>Poll Live API (Sync: {lastSyncTime ?? "--"})</span>
+                </button>
+              )}
+              {tone === "crimson" && (
+                <button
+                  type="button"
+                  onClick={() => setActiveModule("03")}
+                  className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  Dispatch Pemanasan (Modul 03)
+                </button>
+              )}
+              {(t.dtc_cnt > 0 || t.can_ok === false) && (
+                <button
+                  type="button"
+                  onClick={() => setActiveModule("04")}
+                  className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  Buka Diagnostik OBD (Modul 04)
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveModule("06")}
+                className="num inline-flex min-h-[38px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                Kalibrasi &amp; Config (Modul 06)
+              </button>
+            </div>
             <div className="hidden shrink-0 rounded-[2px] border border-border bg-card/90 px-3.5 py-2 text-right md:block">
               <div className="label-hmi text-[10px]">VIN</div>
               <div className="num text-xs font-medium">{selected.vin}</div>
@@ -103,6 +174,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             activeNode={activeTopologyNode}
             onSelectNode={setActiveTopologyNode}
             config={configs[selected.unit_id]}
+            isLiveApi={dataSource === "LIVE_API"}
             className="flex-1 min-h-[380px]"
           />
           <ComponentNodeInspector
@@ -110,6 +182,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             activeNode={activeTopologyNode}
             onSelectNode={setActiveTopologyNode}
             config={configs[selected.unit_id]}
+            historyPoints={history[selected.unit_id]}
+            isLiveApi={dataSource === "LIVE_API"}
+            onNavigateModule={setActiveModule}
             className="mt-2.5"
           />
         </div>
@@ -136,24 +211,37 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 )}
               >
                 {selected.in_yard
-                  ? `In Yard (Bay ${selected.bay})`
+                  ? `In Yard (Bay ${selected.bay}${resolvedSsid ? ` · SSID: ${resolvedSsid}` : ""})`
                   : (selected.telemetry?.net_zone === "TECH_HOTSPOT" || selected.net_zone === "TECH_HOTSPOT")
-                    ? `Hotspot: ${selected.telemetry?.sync_ssid || selected.sync_ssid || "Teknisi"}`
+                    ? `Hotspot: ${resolvedSsid || "Teknisi"}`
                     : "Luar Geofence (Offline)"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
               <span>Sinkronisasi Data:</span>
-              <span className={cn("font-medium", selected.buffer_used > 0 ? "text-amber" : "text-emerald")}>
-                {selected.buffer_used > 0 ? `Tertunda (${selected.buffer_used} slot)` : "Real-time Uplink"}
+              <span
+                className={cn(
+                  "font-medium",
+                  selected.buffer_used > 0
+                    ? "text-amber"
+                    : !conn.isOnline
+                      ? "text-muted-foreground"
+                      : "text-emerald",
+                )}
+              >
+                {selected.buffer_used > 0
+                  ? `Tertunda (${selected.buffer_used} slot di Buffer)`
+                  : !conn.isOnline
+                    ? `Deep Sleep Hold (${selected.last_seen ? selected.last_seen.slice(11, 19) : formatDurationCompact(conn.lastSeenSec) || "Offline"})`
+                    : `Real-time Uplink (${lastSyncTime ?? "Active"})`}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-3 text-muted-foreground">
-            <span>Protokol: <strong className="text-foreground">ORION v1.4.1</strong></span>
+            <span>Protokol: <strong className="text-foreground">ORION v1.6.0</strong></span>
             <span className="border-l border-border pl-3">Sinyal: <strong className="text-foreground">{t.rssi} dBm</strong></span>
-            <span className="border-l border-border pl-3">Seq: <strong className="text-foreground">#{t.seq ?? t.boot}</strong></span>
+            <span className="border-l border-border pl-3">Boot #{t.boot} · Seq: <strong className="text-foreground">#{t.seq ?? t.boot}</strong></span>
           </div>
         </div>
       </section>
@@ -263,9 +351,9 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             />
             <Stat
               label="Fuel / Rate"
-              value={`${(t.fuel_pct ?? 74.5).toFixed(0)}%`}
-              unit={!t.engine_on ? "/ ----" : `/ ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
-              tone={(t.fuel_pct ?? 74.5) < 20 ? "amber" : "dim"}
+              value={!t.engine_on ? "STANDBY" : `${(t.fuel_pct ?? 0).toFixed(0)}%`}
+              unit={!t.engine_on ? "CAN Off" : `/ ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
+              tone={t.engine_on && (t.fuel_pct ?? 100) < 20 ? "amber" : "dim"}
             />
             <Stat
               label="ECU V / MIL"
@@ -275,14 +363,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             />
             <Stat
               label="Dist Clr (0131)"
-              value={(t.dist_clr_km ?? 1420).toLocaleString("id-ID")}
-              unit="km"
+              value={!t.engine_on ? "----" : (t.dist_clr_km ?? 0).toLocaleString("id-ID")}
+              unit={!t.engine_on ? "CAN Off" : "km"}
               tone="dim"
             />
             <Stat
               label="Daily Budget"
               value={t.daily_mah.toFixed(2)}
-              unit="mAh"
+              unit={`mAh · Sleep ${formatSleepInterval(t.sleep_cfg)}`}
               tone={t.daily_mah > 65 ? "amber" : "dim"}
             />
             <Stat

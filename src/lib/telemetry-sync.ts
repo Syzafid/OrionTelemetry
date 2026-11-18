@@ -122,7 +122,56 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
       if (typeof id !== "string" || !id) continue;
       const source = next ?? units;
       const idx = source.findIndex((u) => u.unit_id === id);
-      if (idx < 0) continue;
+      if (idx < 0) {
+        if (
+          typeof rec["bay"] === "string" &&
+          typeof rec["model"] === "string" &&
+          asRecord(rec["telemetry"]) !== null
+        ) {
+          const baseNewUnit: VehicleUnit = {
+            unit_id: id,
+            bay: String(rec["bay"]),
+            model: String(rec["model"]),
+            trim: typeof rec["trim"] === "string" ? rec["trim"] : "STANDARD",
+            vin: typeof rec["vin"] === "string" ? rec["vin"] : "UNKNOWN",
+            color: typeof rec["color"] === "string" ? rec["color"] : "Neutral",
+            status_label: typeof rec["status_label"] === "string" ? rec["status_label"] : "Standby (Deep Sleep)",
+            state:
+              typeof rec["state"] === "string" &&
+              ["STANDBY", "WARMUP", "CRITICAL", "DEPARTED"].includes(rec["state"])
+                ? (rec["state"] as VehicleUnit["state"])
+                : "STANDBY",
+            in_yard: typeof rec["in_yard"] === "boolean" ? rec["in_yard"] : true,
+            buffer_used: 0,
+            telemetry: {
+              ...(units[0]?.telemetry ?? {
+                unit_id: id,
+                boot: 1,
+                v_bat: 12.6,
+                engine_on: false,
+                crit_alert: false,
+                rpm: 0,
+                temp_c: 0,
+                dtc_cnt: 0,
+                dtc: "NONE",
+                rssi: -60,
+                sleep_cfg: 300,
+                active_ms: 1500,
+                daily_mah: 5.0,
+                rtc_temp_c: 30.0,
+                adc_raw_mv: 2260,
+                shunt_sleep_ua: 410,
+                can_ok: true,
+              }),
+              unit_id: id,
+            },
+          };
+          const created = mergeUnitRecord(baseNewUnit, rec);
+          if (!next) next = units.slice();
+          next.push(created);
+        }
+        continue;
+      }
       const current = source[idx]!;
       const merged = mergeUnitRecord(current, rec);
       if (merged !== current) {

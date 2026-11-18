@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { VehicleUnit, PiggybackConfig } from "@/data/mockTelemetry";
+import { getUnitConnectionState, type VehicleUnit, type PiggybackConfig } from "@/data/mockTelemetry";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +61,25 @@ export function getVehicleElectricalProfile(model: string): VehicleElectricalPro
   };
 }
 
+export function formatDurationCompact(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined || !Number.isFinite(sec)) return "";
+  if (sec < 60) return `${sec}d lalu`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}d lalu`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}j ${Math.floor((sec % 3600) / 60)}m lalu`;
+  return `${Math.floor(sec / 86400)}h ${Math.floor((sec % 86400) / 3600)}j lalu`;
+}
+
+export function formatSleepInterval(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return "300 Detik";
+  if (sec >= 3600 && sec % 3600 === 0) {
+    return `${Math.round(sec / 3600)} Jam`;
+  }
+  if (sec >= 60 && sec % 60 === 0) {
+    return `${Math.round(sec / 60)} Menit`;
+  }
+  return `${Math.round(sec)} Detik`;
+}
+
 const NODE_SEQUENCE: TopologyNodeId[] = [
   "all",
   "battery",
@@ -76,6 +95,7 @@ interface VehicleTopologyMapProps {
   activeNode: TopologyNodeId;
   onSelectNode: (node: TopologyNodeId) => void;
   config?: PiggybackConfig | undefined;
+  isLiveApi?: boolean | undefined;
   className?: string;
 }
 
@@ -84,18 +104,23 @@ export function VehicleTopologyMap({
   activeNode,
   onSelectNode,
   config,
+  isLiveApi,
   className,
 }: VehicleTopologyMapProps) {
   const [focusedNode, setFocusedNode] = useState<TopologyNodeId | null>(null);
 
   const t = unit.telemetry;
   const profile = getVehicleElectricalProfile(unit.model);
+  const critV = config?.crit_v ?? 11.80;
   const isCharging = t.engine_on && t.v_bat >= 13.2;
-  const isBatteryCrit = t.crit_alert || t.v_bat < 11.8;
+  const isBatteryCrit = t.crit_alert || t.v_bat < critV;
   const isBatteryLow = !isBatteryCrit && t.v_bat < 12.3;
   const isCanFault = t.can_ok === false || t.dtc_cnt > 0;
-  const isOffline =
+  const conn = getUnitConnectionState(unit, Boolean(isLiveApi));
+  const isOutOfYard =
     unit.net_zone === "OFFLINE" || (!unit.in_yard && unit.net_zone !== "TECH_HOTSPOT");
+  const isLinkOffline = !conn.isOnline;
+  const resolvedSsid = (t.sync_ssid || unit.sync_ssid || "").trim();
 
   // OLS Calibration status check (Finding #3)
   const calSlope = config?.cal_slope ?? 0.005412;
@@ -110,13 +135,17 @@ export function VehicleTopologyMap({
   const alternatorTone: Tone = isCharging ? "emerald" : t.engine_on ? "amber" : "dim";
   const powertrainTone: Tone = t.engine_on ? (t.temp_c > 105 ? "crimson" : "emerald") : "dim";
   const canTone: Tone = isCanFault ? "crimson" : "emerald";
-  const rfTone: Tone = isOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald";
+  const espTone: Tone = isLinkOffline ? "dim" : "emerald";
+  const rfTone: Tone =
+    isOutOfYard || isLinkOffline ? "dim" : unit.net_zone === "TECH_HOTSPOT" ? "amber" : "emerald";
   const overallTone: Tone =
     isBatteryCrit || isCanFault
       ? "crimson"
       : isBatteryLow || !isCalibrated || (t.engine_on && !isCharging)
         ? "amber"
-        : "emerald";
+        : isLinkOffline
+          ? "dim"
+          : "emerald";
 
   const cycleNextNode = () => {
     const idx = NODE_SEQUENCE.indexOf(activeNode);
@@ -176,13 +205,13 @@ export function VehicleTopologyMap({
     esp32_core: {
       title: "PROBE 05: ORION IOT GATEWAY v1.0 & RTC",
       location: "Konsol Tengah Dashboard / Glovebox",
-      reading: `RTC DS3231: ${t.rtc_temp_c.toFixed(1)}°C | Siklus: #${t.seq} | Uptime: ${t.active_ms}ms`,
-      tone: "emerald",
+      reading: `RTC DS3231: ${t.rtc_temp_c.toFixed(1)}°C | Boot #${t.boot} · Seq #${t.seq ?? t.boot} | Sleep: ${formatSleepInterval(t.sleep_cfg)}`,
+      tone: espTone,
     },
     rf_network: {
       title: "PROBE 06: ANTENA RF DUAL-BAND & GEOFENCE",
       location: "Pilar A Atap Kabin Interior",
-      reading: `Zona: ${unit.net_zone ?? "YARD"} (${t.rssi} dBm) | Queue: ${unit.buffer_used}/20 slot`,
+      reading: `Zona: ${unit.net_zone ?? "YARD"}${resolvedSsid ? ` (${resolvedSsid})` : ""} · ${t.rssi} dBm | ${conn.badgeText} | Buffer: ${unit.buffer_used} rec`,
       tone: rfTone,
     },
   };
@@ -217,7 +246,7 @@ export function VehicleTopologyMap({
             { id: "alternator", label: "ALTERNATOR", tone: alternatorTone },
             { id: "powertrain", label: "MESIN / RPM", tone: powertrainTone },
             { id: "can_obd", label: "CAN BUS", tone: canTone },
-            { id: "esp32_core", label: "ESP32", tone: "emerald" as Tone },
+            { id: "esp32_core", label: "ESP32", tone: espTone },
             { id: "rf_network", label: "GATEWAY RF", tone: rfTone },
           ].map((item) => {
             const on = activeNode === item.id;
@@ -724,17 +753,17 @@ export function VehicleTopologyMap({
               height="40"
               rx="1.5"
               fill={activeNode === "esp32_core" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
-              stroke={activeNode === "esp32_core" ? "#F2EFE9" : "#10B981"}
+              stroke={activeNode === "esp32_core" ? "#F2EFE9" : isLinkOffline ? "#64748B" : "#10B981"}
               strokeWidth={activeNode === "esp32_core" ? "2" : "1.5"}
             />
             {/* IC Chip on PCB */}
-            <rect x="508" y="190" width="24" height="20" fill="oklch(0.10 0.008 265)" stroke="#10B981" strokeWidth="0.8" />
+            <rect x="508" y="190" width="24" height="20" fill="oklch(0.10 0.008 265)" stroke={isLinkOffline ? "#64748B" : "#10B981"} strokeWidth="0.8" />
             <text x="496" y="202" fill="#F2EFE9" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
               ESP32
             </text>
 
             {/* Probe Number Badge */}
-            <circle cx="490" cy="180" r="9" fill="#10B981" />
+            <circle cx="490" cy="180" r="9" fill={isLinkOffline ? "#64748B" : "#10B981"} />
             <text x="486" y="183.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
               05
             </text>
@@ -744,7 +773,7 @@ export function VehicleTopologyMap({
               <rect
                 x="0"
                 y="0"
-                width="175"
+                width="180"
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
@@ -755,8 +784,8 @@ export function VehicleTopologyMap({
               <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
                 PROBE 05: ORION GATEWAY v1.0
               </text>
-              <text x="8" y="26" fill="#10B981" fontSize="10.5" fontWeight="bold" fontFamily="monospace">
-                RTC: {t.rtc_temp_c.toFixed(1)}°C | Day: {t.daily_mah}mAh
+              <text x="8" y="26" fill={isLinkOffline ? "oklch(0.70 0.01 260)" : "#10B981"} fontSize="10" fontWeight="bold" fontFamily="monospace">
+                RTC: {t.rtc_temp_c.toFixed(1)}°C | Boot #{t.boot} #{t.seq ?? t.boot}
               </text>
             </g>
           </g>
@@ -792,11 +821,11 @@ export function VehicleTopologyMap({
 
             {/* Antenna Symbol */}
             <circle cx="680" cy="200" r="12" fill="oklch(0.18 0.01 265)" stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"} strokeWidth="1" />
-            <path d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190" stroke={isOffline ? "oklch(0.50 0.01 260)" : "#10B981"} fill="none" strokeWidth="1.2" />
-            <circle cx="680" cy="200" r="2.5" fill="#10B981" />
+            <path d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190" stroke={isOutOfYard || isLinkOffline ? "oklch(0.50 0.01 260)" : "#10B981"} fill="none" strokeWidth="1.2" />
+            <circle cx="680" cy="200" r="2.5" fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"} />
 
             {/* Probe Number Badge */}
-            <circle cx="680" cy="188" r="9" fill={isOffline ? "#64748B" : "#10B981"} />
+            <circle cx="680" cy="188" r="9" fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"} />
             <text x="676" y="191.5" fill="#0B0D11" fontSize="8" fontWeight="bold" fontFamily="monospace">
               06
             </text>
@@ -806,7 +835,7 @@ export function VehicleTopologyMap({
               <rect
                 x="0"
                 y="0"
-                width="165"
+                width="190"
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
@@ -815,10 +844,10 @@ export function VehicleTopologyMap({
               />
               <line x1="0" y1="20" x2="-20" y2="175" stroke="oklch(0.40 0.01 265)" strokeDasharray="2 2" />
               <text x="8" y="14" fill="oklch(0.72 0.01 260)" fontSize="8.5" fontFamily="monospace" fontWeight="600">
-                PROBE 06: RF & GEOFENCE
+                PROBE 06: RF &amp; GEOFENCE
               </text>
-              <text x="8" y="26" fill={isOffline ? "oklch(0.70 0.01 260)" : unit.net_zone === "TECH_HOTSPOT" ? "#F59E0B" : "#10B981"} fontSize="10.5" fontWeight="bold" fontFamily="monospace">
-                {unit.net_zone ?? "YARD"} ({t.rssi} dBm)
+              <text x="8" y="26" fill={isOutOfYard || isLinkOffline ? "oklch(0.70 0.01 260)" : unit.net_zone === "TECH_HOTSPOT" ? "#F59E0B" : "#10B981"} fontSize="10" fontWeight="bold" fontFamily="monospace">
+                {unit.net_zone ?? "YARD"} ({t.rssi} dBm) {isLinkOffline ? "[SLEEP]" : "[LIVE]"}
               </text>
             </g>
           </g>
