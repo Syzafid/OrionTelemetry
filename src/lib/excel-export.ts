@@ -37,8 +37,10 @@ export function buildFormattedExcelPrettier(
   for (const u of filteredUnits) {
     const t = u.telemetry;
     const critV = configs[u.unit_id]?.crit_v ?? 11.8;
+    const calSlope = configs[u.unit_id]?.cal_slope || 0.005412;
+    const calOffset = configs[u.unit_id]?.cal_offset ?? 0.069;
     const hist =
-      historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 2
+      historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 1
         ? historyMap[u.unit_id]!
         : voltageHistory(t.v_bat, t.engine_on);
 
@@ -74,7 +76,7 @@ export function buildFormattedExcelPrettier(
       const isoTime = new Date(tsEpoch * 1000).toISOString().replace("T", " ").slice(0, 19);
       const seq = Math.max(1, t.boot - idx);
       const vBat = idx === 0 ? t.v_bat : pt.v;
-      const adcMv = idx === 0 ? t.adc_raw_mv : Math.round((vBat - 0.358) / 0.005412);
+      const adcMv = idx === 0 ? t.adc_raw_mv : Math.round((vBat - calOffset) / calSlope);
       const isCrit = vBat < 11.8 || (idx === 0 && t.crit_alert);
       const logCls = isCrit ? "row-red" : logId % 2 === 0 ? "row-even" : "";
       const engStatus = t.engine_on && idx === 0 ? "RUNNING (WARM-UP)" : "STANDBY (SLEEP)";

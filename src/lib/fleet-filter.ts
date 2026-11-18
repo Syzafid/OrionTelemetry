@@ -95,7 +95,7 @@ export function filterAndSortFleetUnits(
     for (const u of filtered) {
       const crit = configs[u.unit_id]?.crit_v ?? 11.8;
       const hist =
-        historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 2
+        historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 1
           ? historyMap[u.unit_id]!
           : voltageHistory(u.telemetry.v_bat, u.telemetry.engine_on);
       const pred = computeBatteryPrediction(

@@ -228,7 +228,7 @@ export function buildTelemetryCsv(
   for (const u of filteredUnits) {
     const t = u.telemetry;
     const hist =
-      historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 2
+      historyMap[u.unit_id] && historyMap[u.unit_id]!.length >= 1
         ? historyMap[u.unit_id]!
         : voltageHistory(t.v_bat, t.engine_on);
 

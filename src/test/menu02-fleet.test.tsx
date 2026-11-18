@@ -44,9 +44,10 @@ afterAll(() => {
 });
 
 function FleetTestHarness({ showLiveToggle = false }: { showLiveToggle?: boolean }) {
-  const { setDataSource } = useTelemetry();
+  const { setDataSource, activeModule, selectedId } = useTelemetry();
   return (
     <>
+      <div data-testid="telemetry-bridge" data-module={activeModule} data-selected={selectedId} />
       {showLiveToggle && (
         <button type="button" onClick={() => setDataSource("LIVE_API")}>
           Switch Live Test
@@ -70,7 +71,7 @@ function renderFleet(showLiveToggle = false) {
 }
 
 describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
-  it("renders Indonesian triage controls, filters by search/status, and resets filters", () => {
+  it("adapts card layout safely across 1-unit, 2-unit, and 3+-unit simulator states and filters/resets", () => {
     renderFleet();
 
     expect(screen.getByText("Armada: 12 Unit")).toBeInTheDocument();
@@ -79,16 +80,46 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     expect(screen.getByRole("button", { name: /^Peringatan/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Normal \/ Mengisi/i })).toBeInTheDocument();
 
-    const searchInput = screen.getByPlaceholderText(/Cari Bay, Model, VIN, atau kode DTC/i);
-    fireEvent.change(searchInput, { target: { value: "P0133" } });
+    // 12 units (3+ units simulator deck): 3-column desktop deck classes
+    const initialCards = screen.getAllByRole("article");
+    expect(initialCards).toHaveLength(12);
+    expect(initialCards[0]!.className).toContain("lg:w-[calc((100%-2rem)/3)]");
 
+    // 2 units ("TRITON"): 2-column 50/50 split without single-card 2-col body grid
+    const searchInput = screen.getByPlaceholderText(/Cari Bay, Model, VIN, atau kode DTC/i);
+    fireEvent.change(searchInput, { target: { value: "TRITON" } });
+    const twoCards = screen.getAllByRole("article");
+    expect(twoCards).toHaveLength(2);
+    expect(twoCards[0]!.className).toContain("lg:w-[calc((100%-1rem)/2)]");
+    expect(twoCards[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]")).toBeNull();
+    expect(screen.getByText(/Lompat Cepat:/i)).toBeInTheDocument();
+
+    // 1 unit ("P0133"): full width + 2-column desktop card body + hidden Lompat Cepat bar
+    fireEvent.change(searchInput, { target: { value: "P0133" } });
     const articlesAfterSearch = screen.getAllByRole("article");
     expect(articlesAfterSearch).toHaveLength(1);
     expect(within(articlesAfterSearch[0]!).getByText(/BAY A-02/i)).toBeInTheDocument();
-    // Adaptive single-card layout expands to full width instead of leaving 2/3 empty columns
     expect(articlesAfterSearch[0]!.className).toContain("w-full");
     expect(articlesAfterSearch[0]!.className).not.toContain("lg:w-[calc((100%-2rem)/3)]");
+    expect(
+      articlesAfterSearch[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]"),
+    ).not.toBeNull();
     expect(screen.queryByText(/Lompat Cepat:/i)).not.toBeInTheDocument();
+
+    // Cross-module quick buttons navigate to Module 04 & Module 01 with unit selected
+    fireEvent.click(
+      within(articlesAfterSearch[0]!).getByRole("button", { name: /Diagnostik DTC \(04\)/i }),
+    );
+    expect(screen.getByTestId("telemetry-bridge")).toHaveAttribute("data-module", "04");
+    expect(screen.getByTestId("telemetry-bridge")).toHaveAttribute(
+      "data-selected",
+      "MITSUBISHI-STOCK-04",
+    );
+
+    fireEvent.click(
+      within(articlesAfterSearch[0]!).getByRole("button", { name: /Topologi & Probe \(01\)/i }),
+    );
+    expect(screen.getByTestId("telemetry-bridge")).toHaveAttribute("data-module", "01");
 
     fireEvent.change(searchInput, { target: { value: "TIDAK-ADA-UNIT-99" } });
     expect(screen.getByText(/Tidak Ada Unit Kendaraan yang Cocok/i)).toBeInTheDocument();

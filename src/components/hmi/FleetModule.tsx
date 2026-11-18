@@ -152,11 +152,9 @@ export function FleetModule() {
   const {
     units,
     fleetScale,
-    setFleetScale,
     selectedId,
     selectUnit,
     configs,
-    simulate,
     dataSource,
     apiUrl,
     apiStatus,
@@ -619,7 +617,7 @@ export function FleetModule() {
                   className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <ChevronLeft size={14} strokeWidth={1.75} aria-hidden="true" />
-                  <span>Prev</span>
+                  <span>Sebelumnya</span>
                 </button>
                 <button
                   type="button"
@@ -627,7 +625,7 @@ export function FleetModule() {
                   onClick={() => handlePageChange(safeDeckPage + 1)}
                   className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <span>Next</span>
+                  <span>Berikutnya</span>
                   <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
                 </button>
               </div>
@@ -703,12 +701,12 @@ export function FleetModule() {
             const isComplete = elapsedSec >= WARMUP_TARGET_SEC;
             const isCopied = copiedUnitId === u.unit_id;
 
-            const cardWidthClasses =
-              filteredUnits.length === 1
-                ? "w-full md:max-h-none md:h-full md:min-h-0"
-                : filteredUnits.length === 2
-                  ? "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0"
-                  : "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0 lg:w-[calc((100%-2rem)/3)] lg:snap-start lg:h-full lg:min-h-0";
+            const isSingleCard = filteredUnits.length === 1;
+            const cardWidthClasses = isSingleCard
+              ? "w-full md:max-h-none md:h-full md:min-h-0"
+              : filteredUnits.length === 2
+                ? "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0"
+                : "w-[88vw] sm:w-[380px] snap-center max-h-[75dvh] md:w-[calc((100%-1rem)/2)] md:snap-start md:max-h-none md:h-full md:min-h-0 lg:w-[calc((100%-2rem)/3)] lg:snap-start lg:h-full lg:min-h-0";
 
             return (
               <m.article
@@ -774,337 +772,385 @@ export function FleetModule() {
                   </div>
                 </header>
 
-                {/* 2. INTERNAL CARD SCROLLABLE BODY (flex-1 min-h-0 overflow-y-auto card-scroll) */}
+                {/* 2. INTERNAL CARD SCROLLABLE BODY (Adaptive 2-Col for Single Card, 1-Col for 2 or 3+ Cards) */}
                 <div
-                  className="card-scroll flex-1 min-h-0 overflow-y-auto p-4 space-y-3"
+                  className={cn(
+                    "card-scroll flex-1 min-h-0 overflow-y-auto p-4",
+                    isSingleCard
+                      ? "space-y-3 lg:grid lg:grid-cols-[1.15fr_1fr] lg:gap-4 lg:space-y-0 lg:items-start"
+                      : "space-y-3",
+                  )}
                   tabIndex={0}
                 >
-                  {/* Visual Alarm / Warm-up Banner */}
-                  {isCritical ? (
-                    <div className="flex items-start gap-2 rounded-[2px] border border-crimson/50 bg-crimson/10 px-3 py-2">
-                      <AlertTriangle
-                        size={15}
-                        className="mt-0.5 shrink-0 text-crimson"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0 leading-tight">
-                        <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-crimson">
-                          {t.dtc_cnt > 0
-                            ? `Alarm Kritis & ECU Fault (${t.dtc})`
-                            : `Alarm Voltase Kritis (< ${fmtV(crit)} V)`}
-                        </div>
-                        <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
-                          Risiko sulfasi sel timbal-asam. Prioritaskan pemanasan mesin alternator 10
-                          menit.
-                        </div>
-                      </div>
-                    </div>
-                  ) : isWarmup ? (
-                    <div className="flex items-start gap-2 rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-2">
-                      <BadgeCheck
-                        size={15}
-                        className="mt-0.5 shrink-0 text-emerald"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0 leading-tight">
-                        <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-emerald">
-                          Pemanasan Mesin Alternator Aktif
-                        </div>
-                        <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
-                          Alternator ({fmtV(t.v_bat)} V) sedang memulihkan muatan baterai.
-                        </div>
-                      </div>
-                    </div>
-                  ) : isWarning ? (
-                    <div className="flex items-center gap-2 rounded-[2px] border border-amber/40 bg-amber/10 px-3 py-2">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
-                      <span className="num text-[10px] text-amber">
-                        Peringatan: Voltase mendekati ambang kritis ({fmtV(crit)} V). Jadwalkan
-                        pemanasan.
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Active 10-Min Warm-Up Stopwatch inside Scrollable Card Body */}
-                  {t.engine_on && (
-                    <div className="rounded-[2px] border border-emerald/40 bg-background/70 p-2.5">
-                      <div className="flex justify-between num text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-1 text-foreground">
-                          <Timer
-                            size={12}
-                            strokeWidth={1.5}
-                            className="text-emerald"
-                            aria-hidden="true"
-                          />
-                          <span>Sesi Pemanasan {formatMmSs(elapsedSec)} / 10:00</span>
-                        </span>
-                        <span
-                          className={isComplete ? "font-semibold text-emerald" : "text-foreground"}
-                        >
-                          {isComplete ? "100% Selesai" : `${progressPct}%`}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-[1px] bg-muted">
-                        <div
-                          className="h-full bg-emerald transition-all duration-500"
-                          style={{ width: `${progressPct}%` }}
+                  {/* Group Left: Alert Banner, Stopwatch, OLS Forecast, and 24-Hour Curve */}
+                  <div className="space-y-3 min-w-0">
+                    {/* Visual Alarm / Warm-up Banner */}
+                    {isCritical ? (
+                      <div className="flex items-start gap-2 rounded-[2px] border border-crimson/50 bg-crimson/10 px-3 py-2">
+                        <AlertTriangle
+                          size={15}
+                          className="mt-0.5 shrink-0 text-crimson"
+                          aria-hidden="true"
                         />
+                        <div className="min-w-0 leading-tight">
+                          <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-crimson">
+                            {t.dtc_cnt > 0
+                              ? `Alarm Kritis & ECU Fault (${t.dtc})`
+                              : `Alarm Voltase Kritis (< ${fmtV(crit)} V)`}
+                          </div>
+                          <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                            Risiko sulfasi sel timbal-asam. Prioritaskan pemanasan mesin alternator
+                            10 menit.
+                          </div>
+                        </div>
                       </div>
-                      {verified && (
-                        <div className="mt-1.5 flex items-center gap-1.5 num text-[10px] text-emerald">
-                          <BadgeCheck size={12} strokeWidth={1.5} aria-hidden="true" />
-                          <span>
-                            Pengisian alternator terverifikasi ({fmtV(t.v_bat)} V &ge;{" "}
-                            {ALT_VERIFY_V.toFixed(2)} V)
+                    ) : isWarmup ? (
+                      <div className="flex items-start gap-2 rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-2">
+                        <BadgeCheck
+                          size={15}
+                          className="mt-0.5 shrink-0 text-emerald"
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 leading-tight">
+                          <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-emerald">
+                            Pemanasan Mesin Alternator Aktif
+                          </div>
+                          <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                            Alternator ({fmtV(t.v_bat)} V) sedang memulihkan muatan baterai.
+                          </div>
+                        </div>
+                      </div>
+                    ) : isWarning ? (
+                      <div className="flex items-center gap-2 rounded-[2px] border border-amber/40 bg-amber/10 px-3 py-2">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
+                        <span className="num text-[10px] text-amber">
+                          Peringatan: Voltase mendekati ambang kritis ({fmtV(crit)} V). Jadwalkan
+                          pemanasan.
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {/* Active 10-Min Warm-Up Stopwatch */}
+                    {t.engine_on && (
+                      <div className="rounded-[2px] border border-emerald/40 bg-background/70 p-2.5">
+                        <div className="flex justify-between num text-[10px] text-muted-foreground">
+                          <span className="flex items-center gap-1 text-foreground">
+                            <Timer
+                              size={12}
+                              strokeWidth={1.5}
+                              className="text-emerald"
+                              aria-hidden="true"
+                            />
+                            <span>Sesi Pemanasan {formatMmSs(elapsedSec)} / 10:00</span>
+                          </span>
+                          <span
+                            className={
+                              isComplete ? "font-semibold text-emerald" : "text-foreground"
+                            }
+                          >
+                            {isComplete ? "100% Selesai" : `${progressPct}%`}
                           </span>
                         </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* OLS Battery Forecast + DS3231SN Thermal Compensation & Arrhenius Penalty */}
-                  <div className="rounded-[2px] border border-border bg-background/60 px-3 py-2 space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="label-hmi flex items-center gap-1.5 text-[10px]">
-                        <TrendingDown
-                          size={13}
-                          strokeWidth={1.5}
-                          className="text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span>Drain Rate &amp; TTC</span>
-                      </span>
-                      <span
-                        className={cn(
-                          "num inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[10.5px] font-semibold",
-                          PREDICTION_BADGE_STYLE[prediction.tone],
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-[1px] bg-muted">
+                          <div
+                            className="h-full bg-emerald transition-all duration-500"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                        {verified && (
+                          <div className="mt-1.5 flex items-center gap-1.5 num text-[10px] text-emerald">
+                            <BadgeCheck size={12} strokeWidth={1.5} aria-hidden="true" />
+                            <span>
+                              Pengisian alternator terverifikasi ({fmtV(t.v_bat)} V &ge;{" "}
+                              {ALT_VERIFY_V.toFixed(2)} V)
+                            </span>
+                          </div>
                         )}
-                      >
-                        {prediction.statusText}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-1 text-foreground/90">
-                        <Thermometer
-                          size={11}
-                          strokeWidth={1.75}
-                          className="text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span>
-                          25&deg;C Comp:{" "}
-                          <strong className="text-foreground">
-                            {prediction.compensatedV25.toFixed(2)}V
-                          </strong>{" "}
-                          ({prediction.tempCompensatedSocPct}% SOC)
+                      </div>
+                    )}
+
+                    {/* OLS Battery Forecast + DS3231SN Thermal Compensation & Arrhenius Penalty */}
+                    <div className="rounded-[2px] border border-border bg-background/60 px-3 py-2 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="label-hmi flex items-center gap-1.5 text-[10px]">
+                          <TrendingDown
+                            size={13}
+                            strokeWidth={1.5}
+                            className="text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span>Laju Kuras &amp; Estimasi TTC</span>
                         </span>
-                      </span>
-                      <span
-                        className={cn(
-                          "font-medium",
-                          prediction.thermalFactor > 1.35 ? "text-amber" : "text-muted-foreground",
-                        )}
-                      >
-                        Thermal Load: {prediction.thermalFactor.toFixed(2)}x @{" "}
-                        {t.rtc_temp_c.toFixed(1)}&deg;C
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Shift Handover & Maintenance Ticket Workflow (Shown for units with active ticket or Critical/Warning state) */}
-                  {(unitTicket || isCritical || isWarning) && (
-                    <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
-                          <Wrench
-                            size={12}
+                        <span
+                          className={cn(
+                            "num inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[10.5px] font-semibold",
+                            PREDICTION_BADGE_STYLE[prediction.tone],
+                          )}
+                        >
+                          {prediction.statusText}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1 text-foreground/90">
+                          <Thermometer
+                            size={11}
                             strokeWidth={1.75}
                             className="text-muted-foreground"
                             aria-hidden="true"
                           />
                           <span>
-                            {unitTicket ? `Ticket ${unitTicket.ticket_code}` : "Maintenance Triage"}
+                            Komp. 25&deg;C:{" "}
+                            <strong className="text-foreground">
+                              {prediction.compensatedV25.toFixed(2)}V
+                            </strong>{" "}
+                            ({prediction.tempCompensatedSocPct}% SOC)
                           </span>
                         </span>
                         <span
                           className={cn(
-                            "num inline-flex items-center gap-1 overflow-hidden rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider transition-colors duration-200",
-                            TICKET_BADGE_STYLE[unitTicket?.status ?? "OPEN"],
+                            "font-medium",
+                            prediction.thermalFactor > 1.35
+                              ? "text-amber"
+                              : "text-muted-foreground",
                           )}
                         >
-                          {unitTicket?.status === "RESOLVED" && (
-                            <ResolveCheck
-                              animateIn={!initialResolvedRef.current?.has(u.unit_id)}
-                              className="h-3 w-3"
-                            />
-                          )}
-                          <m.span
-                            key={unitTicket?.status ?? "OPEN"}
-                            initial={cardsMountedRef.current ? { opacity: 0, y: -4 } : false}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: DURATION.quick, ease: EASE_STANDARD }}
-                          >
-                            {(unitTicket?.status ?? "OPEN").replace("_", " ")}
-                          </m.span>
+                          Beban Termal: {prediction.thermalFactor.toFixed(2)}x @{" "}
+                          {t.rtc_temp_c.toFixed(1)}&deg;C
                         </span>
                       </div>
-                      <div className="num text-[10px] leading-relaxed text-muted-foreground">
-                        <div>
-                          PIC:{" "}
-                          <span className="font-medium text-foreground">
-                            {unitTicket?.assigned_to ?? "Unassigned"}
-                          </span>
-                        </div>
-                        <div
-                          className="truncate"
-                          title={unitTicket?.handover_note ?? u.status_label}
-                        >
-                          Note:{" "}
-                          <span className="text-foreground/85">
-                            {unitTicket?.handover_note ?? u.status_label}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          disabled={unitTicket?.status === "IN_PROGRESS"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateTicketStatus(
-                              u.unit_id,
-                              "IN_PROGRESS",
-                              unitTicket?.assigned_to && unitTicket.assigned_to !== "Unassigned"
-                                ? unitTicket.assigned_to
-                                : "Teknisi Shift Aktif",
-                              "Tiket diklaim teknisi; sedang dilakukan pemeriksaan di stock yard.",
-                            );
-                          }}
-                          className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Wrench size={12} strokeWidth={1.75} aria-hidden="true" />
-                          <span>Klaim Tiket</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={unitTicket?.status === "RESOLVED"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setResolvingTicketUnitId(u.unit_id);
-                          }}
-                          className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <ClipboardCheck size={12} strokeWidth={1.75} aria-hidden="true" />
-                          <span>Tutup Tiket...</span>
-                        </button>
-                      </div>
                     </div>
-                  )}
 
-                  {/* 24-Hour Voltage Discharge / Charge Curve */}
-                  <div className="fleet-chart h-32 -mx-1 touch-pan-y">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id={`g-${u.unit_id}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={c} stopOpacity={0.45} />
-                            <stop offset="100%" stopColor={c} stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis
-                          dataKey="t"
-                          tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
-                          interval="preserveStartEnd"
-                          axisLine={{ stroke: "#282E3B" }}
-                          tickLine={false}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            background: "#0F1116",
-                            border: "1px solid #1E222B",
-                            borderRadius: 2,
-                            fontFamily: "JetBrains Mono",
-                            fontSize: 11,
-                          }}
-                          formatter={(val: unknown) => [`${Number(val).toFixed(2)} V`, "Baterai"]}
-                          labelFormatter={(lbl) => `Pukul: ${lbl}`}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="v"
-                          stroke={c}
-                          strokeWidth={1.5}
-                          fill={`url(#g-${u.unit_id})`}
-                          isAnimationActive={chartIntro}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    {/* 24-Hour Voltage Discharge / Charge Curve */}
+                    <div
+                      className={cn(
+                        "fleet-chart -mx-1 touch-pan-y",
+                        isSingleCard ? "h-36 lg:h-44" : "h-32",
+                      )}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id={`g-${u.unit_id}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={c} stopOpacity={0.45} />
+                              <stop offset="100%" stopColor={c} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis
+                            dataKey="t"
+                            tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                            interval="preserveStartEnd"
+                            axisLine={{ stroke: "#282E3B" }}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: "#0F1116",
+                              border: "1px solid #1E222B",
+                              borderRadius: 2,
+                              fontFamily: "JetBrains Mono",
+                              fontSize: 11,
+                            }}
+                            formatter={(val: unknown) => [`${Number(val).toFixed(2)} V`, "Baterai"]}
+                            labelFormatter={(lbl) => `Pukul: ${lbl}`}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="v"
+                            stroke={c}
+                            strokeWidth={1.5}
+                            fill={`url(#g-${u.unit_id})`}
+                            isAnimationActive={chartIntro}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
 
-                  {/* Complementary Hardware Metrics (Non-duplicated from header) */}
-                  <div className="grid grid-cols-3 gap-2 border-t border-border pt-2.5">
-                    <Stat
-                      label="Arus Tidur"
-                      value={t.engine_on ? "BYPASS" : t.shunt_sleep_ua}
-                      unit={t.engine_on ? "" : "µA"}
-                      tone={!t.engine_on && t.shunt_sleep_ua > 450 ? "amber" : "dim"}
-                    />
-                    <Stat
-                      label="Durasi Bangun"
-                      value={t.active_ms.toLocaleString("id-ID")}
-                      unit="ms"
-                    />
-                    <Stat
-                      label="Beban Harian"
-                      value={t.daily_mah.toFixed(2)}
-                      unit="mAh"
-                      tone={t.daily_mah > 65 ? "amber" : "dim"}
-                    />
-                  </div>
-
-                  {/* Ringkasan Diagnostik & Jaringan (Compact Single-Pass Hardware Breakdown) */}
-                  <div
-                    className={cn(
-                      "rounded-[2px] border p-2.5 num text-[10px] space-y-1",
-                      isCritical
-                        ? "border-crimson/35 bg-background/85"
-                        : "border-border bg-background/45",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>Status Unit:</span>
-                      <span className={cn("font-semibold truncate", `text-${tone}`)}>
-                        {u.status_label}
-                      </span>
+                  {/* Group Right: Hardware Metrics, Diagnostic Summary + Quick Nav, and Ticket Workflow */}
+                  <div className="space-y-3 min-w-0">
+                    {/* Complementary Hardware Metrics (Non-duplicated from header) */}
+                    <div className="grid grid-cols-3 gap-2 border-t border-border pt-2.5 lg:border-t-0 lg:pt-0">
+                      <Stat
+                        label="Arus Tidur"
+                        value={t.engine_on ? "BYPASS" : t.shunt_sleep_ua}
+                        unit={t.engine_on ? "" : "µA"}
+                        tone={!t.engine_on && t.shunt_sleep_ua > 450 ? "amber" : "dim"}
+                      />
+                      <Stat
+                        label="Durasi Bangun"
+                        value={t.active_ms.toLocaleString("id-ID")}
+                        unit="ms"
+                      />
+                      <Stat
+                        label="Beban Harian"
+                        value={t.daily_mah.toFixed(2)}
+                        unit="mAh"
+                        tone={t.daily_mah > 65 ? "amber" : "dim"}
+                      />
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>CAN Bus &amp; Memori DTC:</span>
-                      <span
-                        className={cn(
-                          "font-semibold",
-                          t.can_ok === false || t.dtc_cnt > 0 ? "text-crimson" : "text-emerald",
+
+                    {/* Ringkasan Diagnostik & Jaringan + Pintasan Lintas Modul */}
+                    <div
+                      className={cn(
+                        "rounded-[2px] border p-2.5 num text-[10px] space-y-1",
+                        isCritical
+                          ? "border-crimson/35 bg-background/85"
+                          : "border-border bg-background/45",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                        <span>Status Unit:</span>
+                        <span className={cn("font-semibold truncate", `text-${tone}`)}>
+                          {u.status_label}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                        <span>CAN Bus &amp; Memori DTC:</span>
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            t.can_ok === false || t.dtc_cnt > 0 ? "text-crimson" : "text-emerald",
+                          )}
+                        >
+                          {t.can_ok === false ? "CAN FAULT" : "CAN OK"} ·{" "}
+                          {t.dtc_cnt > 0 ? `${t.dtc} (${t.dtc_cnt} DTC)` : "0 DTC (Normal)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                        <span>Jaringan &amp; Buffer:</span>
+                        <span className="font-medium text-foreground">
+                          {zoneOrSsid} ({t.rssi} dBm) · {u.buffer_used} slot
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                        <span>Siklus Tidur &amp; Sync:</span>
+                        <span className="font-medium text-foreground">
+                          Sleep {formatSleepInterval(t.sleep_cfg)} ·{" "}
+                          {u.last_seen ??
+                            (conn.lastSeenSec !== null
+                              ? formatDurationCompact(conn.lastSeenSec)
+                              : "Real-time")}
+                        </span>
+                      </div>
+                      <div className="pt-1.5 border-t border-border/50 flex flex-wrap items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectUnit(u.unit_id);
+                            setActiveModule("01");
+                          }}
+                          className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          Topologi &amp; Probe (01)
+                        </button>
+                        {(t.dtc_cnt > 0 || t.can_ok === false) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectUnit(u.unit_id);
+                              setActiveModule("04");
+                            }}
+                            className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >
+                            Diagnostik DTC (04)
+                          </button>
                         )}
-                      >
-                        {t.can_ok === false ? "CAN FAULT" : "CAN OK"} ·{" "}
-                        {t.dtc_cnt > 0 ? `${t.dtc} (${t.dtc_cnt} DTC)` : "0 DTC (Normal)"}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>Jaringan &amp; Buffer:</span>
-                      <span className="font-medium text-foreground">
-                        {zoneOrSsid} ({t.rssi} dBm) · {u.buffer_used} slot
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>Siklus Tidur &amp; Sync:</span>
-                      <span className="font-medium text-foreground">
-                        Sleep {formatSleepInterval(t.sleep_cfg)} ·{" "}
-                        {u.last_seen ??
-                          (conn.lastSeenSec !== null
-                            ? formatDurationCompact(conn.lastSeenSec)
-                            : "Real-time")}
-                      </span>
-                    </div>
+
+                    {/* Shift Handover & Maintenance Ticket Workflow (Shown for units with active ticket or Critical/Warning state) */}
+                    {(unitTicket || isCritical || isWarning) && (
+                      <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
+                            <Wrench
+                              size={12}
+                              strokeWidth={1.75}
+                              className="text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {unitTicket
+                                ? `Tiket ${unitTicket.ticket_code}`
+                                : "Triage Pemeliharaan"}
+                            </span>
+                          </span>
+                          <span
+                            className={cn(
+                              "num inline-flex items-center gap-1 overflow-hidden rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider transition-colors duration-200",
+                              TICKET_BADGE_STYLE[unitTicket?.status ?? "OPEN"],
+                            )}
+                          >
+                            {unitTicket?.status === "RESOLVED" && (
+                              <ResolveCheck
+                                animateIn={!initialResolvedRef.current?.has(u.unit_id)}
+                                className="h-3 w-3"
+                              />
+                            )}
+                            <m.span
+                              key={unitTicket?.status ?? "OPEN"}
+                              initial={cardsMountedRef.current ? { opacity: 0, y: -4 } : false}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: DURATION.quick, ease: EASE_STANDARD }}
+                            >
+                              {(unitTicket?.status ?? "OPEN").replace("_", " ")}
+                            </m.span>
+                          </span>
+                        </div>
+                        <div className="num text-[10px] leading-relaxed text-muted-foreground">
+                          <div>
+                            PIC:{" "}
+                            <span className="font-medium text-foreground">
+                              {unitTicket?.assigned_to ?? "Belum Ditugaskan"}
+                            </span>
+                          </div>
+                          <div
+                            className="truncate"
+                            title={unitTicket?.handover_note ?? u.status_label}
+                          >
+                            Catatan:{" "}
+                            <span className="text-foreground/85">
+                              {unitTicket?.handover_note ?? u.status_label}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            disabled={unitTicket?.status === "IN_PROGRESS"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateTicketStatus(
+                                u.unit_id,
+                                "IN_PROGRESS",
+                                unitTicket?.assigned_to && unitTicket.assigned_to !== "Unassigned"
+                                  ? unitTicket.assigned_to
+                                  : "Teknisi Shift Aktif",
+                                "Tiket diklaim teknisi; sedang dilakukan pemeriksaan di stock yard.",
+                              );
+                            }}
+                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Wrench size={12} strokeWidth={1.75} aria-hidden="true" />
+                            <span>Klaim Tiket</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={unitTicket?.status === "RESOLVED"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setResolvingTicketUnitId(u.unit_id);
+                            }}
+                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <ClipboardCheck size={12} strokeWidth={1.75} aria-hidden="true" />
+                            <span>Tutup Tiket...</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1189,7 +1235,7 @@ export function FleetModule() {
                           aria-hidden="true"
                         />
                       )}
-                      <span>{isCopied ? "Copied" : "QR Link"}</span>
+                      <span>{isCopied ? "Tersalin" : "Tautan QR"}</span>
                     </button>
                     <button
                       type="button"
@@ -1295,7 +1341,7 @@ function PdiCertificateModal({
   const checklist = [
     {
       parameter: "Battery Open-Circuit Voltage",
-      reading: `${t.v_bat.toFixed(2)} V (25°C Comp: ${prediction.compensatedV25.toFixed(2)} V)`,
+      reading: `${t.v_bat.toFixed(2)} V (Komp. 25°C: ${prediction.compensatedV25.toFixed(2)} V)`,
       target: ">= 12.20 V",
       passed: t.v_bat >= 12.2,
     },
@@ -1411,7 +1457,7 @@ function PdiCertificateModal({
                 ) : (
                   <Copy size={12} strokeWidth={1.75} aria-hidden="true" />
                 )}
-                <span>{deepLinkCopied ? "URL Copied!" : "Copy Deep-Link URL"}</span>
+                <span>{deepLinkCopied ? "URL Tersalin!" : "Salin URL Deep-Link"}</span>
               </button>
             </div>
 
@@ -1544,7 +1590,7 @@ function PdiCertificateModal({
             className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-border bg-secondary/60 px-3.5 py-2 text-xs font-semibold text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FileSpreadsheet size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span>Export Excel Report</span>
+            <span>Ekspor Laporan Excel</span>
           </button>
           <button
             type="button"
@@ -1552,7 +1598,7 @@ function PdiCertificateModal({
             className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-border bg-secondary/60 px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Download size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span>Download Unit CSV</span>
+            <span>Unduh Log CSV</span>
           </button>
           <button
             type="button"
@@ -1560,7 +1606,7 @@ function PdiCertificateModal({
             className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-foreground/50 bg-secondary px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:border-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Printer size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span>Print / Save PDF</span>
+            <span>Cetak / Simpan PDF</span>
           </button>
         </div>
       </m.div>
