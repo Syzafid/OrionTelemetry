@@ -41,7 +41,7 @@ const MODULE_META: { id: ModuleId; name: string; shortcut: string }[] = [
   { id: "01", name: "Topologi Kelistrikan & Transduser", shortcut: "Alt+1" },
   { id: "02", name: "Armada & PDI Stock Yard", shortcut: "Alt+2" },
   { id: "03", name: "Antrean Pemanasan Mesin", shortcut: "Alt+3" },
-  { id: "04", name: "Engine & OBD-II Diagnostics", shortcut: "Alt+4" },
+  { id: "04", name: "Diagnostik Mesin & OBD-II", shortcut: "Alt+4" },
   { id: "05", name: "Presensi & Log Pergerakan", shortcut: "Alt+5" },
   { id: "06", name: "Konfigurasi Node & Kalibrasi", shortcut: "Alt+6" },
 ];
@@ -151,8 +151,8 @@ export function CommandPaletteModal({
       ...MODULE_META.map((m) => ({
         id: `mod-${m.id}`,
         group: "ACTIONS" as const,
-        title: `Switch to Module ${m.id}: ${m.name}`,
-        subtitle: "Control Room Navigation",
+        title: `Buka Modul ${m.id}: ${m.name}`,
+        subtitle: "Navigasi Ruang Kontrol",
         badge: m.shortcut,
         tone: "dim" as const,
         onSelect: () => {
@@ -165,8 +165,8 @@ export function CommandPaletteModal({
             {
               id: "act-scale",
               group: "ACTIONS" as const,
-              title: `Toggle Fleet Scale (${fleetScale === 3 ? "Switch to 12 Units Yard" : "Switch to 3 Core Units"})`,
-              subtitle: `Currently showing ${fleetScale} units`,
+              title: `Ubah Skala Armada Sandbox (${fleetScale === 3 ? "Pindah ke 12 Unit Yard" : "Kembali ke 3 Unit Inti"})`,
+              subtitle: `Menampilkan ${fleetScale} unit simulasi`,
               badge: `${fleetScale} -> ${fleetScale === 3 ? 12 : 3}`,
               tone: "dim" as const,
               onSelect: () => {
@@ -179,8 +179,8 @@ export function CommandPaletteModal({
       {
         id: "act-excel",
         group: "ACTIONS",
-        title: "Export Formatted Excel Report (.xls)",
-        subtitle: "Download executive summary & conditional formatting spreadsheet",
+        title: "Ekspor Laporan Excel Terformat (.xls)",
+        subtitle: "Unduh ringkasan armada & log riwayat berformat tabel",
         badge: "XLS",
         tone: "emerald",
         onSelect: () => {
@@ -192,10 +192,10 @@ export function CommandPaletteModal({
         id: "act-alarm",
         group: "ACTIONS",
         title: alarmArmed
-          ? "Mute Industrial Web Audio Alarm"
-          : "Arm Industrial Web Audio Alarm (880Hz/660Hz)",
-        subtitle: `Audio chime currently ${alarmArmed ? "ARMED" : "MUTED"}`,
-        badge: alarmArmed ? "MUTE" : "ARM",
+          ? "Bisukan Alarm Audio Industri"
+          : "Aktifkan Alarm Audio Industri (880Hz/660Hz)",
+        subtitle: `Status audio saat ini: ${alarmArmed ? "AKTIF" : "SENYAP"}`,
+        badge: alarmArmed ? "BISUKAN" : "AKTIFKAN",
         tone: alarmArmed ? "amber" : "crimson",
         onSelect: () => {
           onToggleAlarm();
@@ -207,10 +207,9 @@ export function CommandPaletteModal({
             {
               id: "act-burst",
               group: "ACTIONS" as const,
-              title: `Trigger Burst Sync Simulation (${selected.bay})`,
-              subtitle:
-                "Simulate 28 offline records (20 RTC SRAM + 8 LittleFS) & open Presence Log",
-              badge: "+28 RECS",
+              title: `Simulasi Burst Sync (${selected.bay})`,
+              subtitle: "Simulasikan 28 rekaman offline (20 RTC SRAM + 8 LittleFS) & buka Presensi",
+              badge: "+28 REK",
               tone: "amber" as const,
               onSelect: () => {
                 simulateBurstSync(selected.unit_id);
@@ -292,10 +291,10 @@ export function CommandPaletteModal({
       {open && (
         <m.div
           key="command-palette"
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 pt-14 sm:p-6 sm:pt-20 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 pt-14 sm:p-6 sm:pt-20"
           role="dialog"
           aria-modal="true"
-          aria-label="ORION Global Command Palette"
+          aria-label="Palet Perintah Global ORION"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { duration: DURATION.quick, ease: EASE_STANDARD } }}
           exit={{ opacity: 0, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
@@ -305,7 +304,7 @@ export function CommandPaletteModal({
           onKeyDown={handleKeyDown}
         >
           <m.div
-            className="panel flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden border border-border bg-card shadow-2xl"
+            className="panel flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden border border-border bg-card shadow-xl"
             initial={{ opacity: 0, scale: 0.98, y: -8 }}
             animate={{
               opacity: 1,
@@ -321,7 +320,7 @@ export function CommandPaletteModal({
             }}
           >
             {/* Search Input Header */}
-            <div className="flex shrink-0 items-center gap-2.5 border-b border-border px-3.5 py-2.5">
+            <div className="flex shrink-0 items-center gap-2.5 border-b border-border px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
               <Search
                 size={16}
                 strokeWidth={1.75}
@@ -333,16 +332,16 @@ export function CommandPaletteModal({
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Type Bay (A-02), Model (Triton), VIN, DTC (P0133), or Control Action..."
-                aria-label="Search units and control room commands"
-                className="min-h-[44px] flex-1 bg-transparent num text-xs sm:text-sm text-foreground outline-none placeholder:text-dim"
+                placeholder="Cari Bay (A-02), Model (Triton), VIN, DTC (P0133), atau Aksi Kontrol..."
+                aria-label="Cari unit kendaraan dan perintah ruang kontrol"
+                className="min-h-[44px] flex-1 bg-transparent num text-xs sm:text-sm text-foreground focus:outline-none placeholder:text-dim"
               />
               {query && (
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  aria-label="Clear command query"
-                  className="inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label="Bersihkan kata kunci pencarian"
+                  className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X size={14} strokeWidth={1.75} aria-hidden="true" />
                 </button>
@@ -350,7 +349,7 @@ export function CommandPaletteModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[2px] border border-border bg-background/60 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:border-foreground hover:text-foreground"
+                className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[2px] border border-border bg-background/60 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 ESC
               </button>
@@ -366,8 +365,8 @@ export function CommandPaletteModal({
                 <>
                   {unitResults.length > 0 && (
                     <div>
-                      <div className="label-hmi mb-1.5 px-2 text-[10px] text-muted-foreground">
-                        Stock Yard Fleet Directory ({unitResults.length} Matched)
+                      <div className="label-hmi mb-1.5 px-2 text-[11px] text-muted-foreground">
+                        Direktori Armada Stock Yard ({unitResults.length} Cocok)
                       </div>
                       <div className="space-y-1">
                         {unitResults.map((item) => {
@@ -380,7 +379,7 @@ export function CommandPaletteModal({
                               onClick={item.onSelect}
                               onMouseEnter={() => setActiveIndex(globalIdx)}
                               className={cn(
-                                "relative flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-3 rounded-[2px] border px-3 py-2 text-left transition-colors",
+                                "relative flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-3 rounded-[2px] border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                 isFocused
                                   ? "border-transparent text-foreground"
                                   : "border-transparent bg-background/40 text-muted-foreground hover:border-border hover:text-foreground",
@@ -389,20 +388,17 @@ export function CommandPaletteModal({
                               {isFocused && <FocusHighlight />}
                               <div className="relative min-w-0">
                                 <div className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wider text-foreground">
-                                  <Led
-                                    tone={item.tone ?? "emerald"}
-                                    pulse={item.tone === "crimson"}
-                                  />
+                                  <Led tone={item.tone ?? "emerald"} />
                                   <span className="truncate">{item.title}</span>
                                 </div>
-                                <div className="num mt-0.5 text-[10px] text-muted-foreground truncate">
+                                <div className="num mt-0.5 text-[11px] text-muted-foreground truncate">
                                   {item.subtitle}
                                 </div>
                               </div>
                               {item.badge && (
                                 <span
                                   className={cn(
-                                    "relative num shrink-0 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold",
+                                    "relative num shrink-0 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold",
                                     item.tone === "crimson"
                                       ? "border-crimson/50 bg-crimson/15 text-crimson"
                                       : item.tone === "amber"
@@ -422,8 +418,8 @@ export function CommandPaletteModal({
 
                   {actionResults.length > 0 && (
                     <div>
-                      <div className="label-hmi mb-1.5 px-2 text-[10px] text-muted-foreground">
-                        Control Room Quick Actions ({actionResults.length})
+                      <div className="label-hmi mb-1.5 px-2 text-[11px] text-muted-foreground">
+                        Aksi Cepat Ruang Kontrol ({actionResults.length})
                       </div>
                       <div className="space-y-1">
                         {actionResults.map((item) => {
@@ -436,7 +432,7 @@ export function CommandPaletteModal({
                               onClick={item.onSelect}
                               onMouseEnter={() => setActiveIndex(globalIdx)}
                               className={cn(
-                                "relative flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-3 rounded-[2px] border px-3 py-2 text-left transition-colors",
+                                "relative flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-3 rounded-[2px] border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                 isFocused
                                   ? "border-transparent text-foreground"
                                   : "border-transparent bg-background/40 text-muted-foreground hover:border-border hover:text-foreground",
@@ -487,13 +483,13 @@ export function CommandPaletteModal({
                                   <div className="num text-xs font-semibold text-foreground truncate">
                                     {item.title}
                                   </div>
-                                  <div className="num text-[10px] text-muted-foreground truncate">
+                                  <div className="num text-[11px] text-muted-foreground truncate">
                                     {item.subtitle}
                                   </div>
                                 </div>
                               </div>
                               {item.badge && (
-                                <span className="relative num shrink-0 rounded-[2px] border border-border bg-secondary px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                                <span className="relative num shrink-0 rounded-[2px] border border-border bg-secondary px-2 py-0.5 text-[11px] font-semibold text-foreground">
                                   {item.badge}
                                 </span>
                               )}
@@ -508,16 +504,16 @@ export function CommandPaletteModal({
             </div>
 
             {/* Footer Shortcuts Legend */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-background/70 px-3.5 py-2 num text-[10px] text-muted-foreground">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-background/70 px-3.5 py-2 num text-[11px] text-muted-foreground">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <Command size={11} className="text-muted-foreground" aria-hidden="true" />
-                  <span>Navigate: Up/Down</span>
+                  <Command size={12} className="text-muted-foreground" aria-hidden="true" />
+                  <span>Navigasi: Atas/Bawah</span>
                 </span>
-                <span>Select: Enter</span>
-                <span>Close: Esc</span>
+                <span>Pilih: Enter</span>
+                <span>Tutup: Esc</span>
               </div>
-              <div>Shortcuts: Alt+1 .. Alt+6 (Switch Module)</div>
+              <div>Pintasan: Alt+1 .. Alt+6 (Pindah Modul)</div>
             </div>
           </m.div>
         </m.div>

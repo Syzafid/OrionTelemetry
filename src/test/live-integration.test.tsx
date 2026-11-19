@@ -4,6 +4,7 @@ import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
 import { CommandPaletteModal } from "@/components/hmi/CommandPaletteModal";
 import { ComponentNodeInspector } from "@/components/hmi/ComponentNodeInspector";
+import { OrionLogo } from "@/components/hmi/OrionLogo";
 import { ShowroomModule } from "@/components/hmi/ShowroomModule";
 import { DEFAULT_CONFIG, UNITS, type VehicleUnit } from "@/data/mockTelemetry";
 
@@ -120,17 +121,17 @@ describe("Cross-System Live API Honesty & State Isolation", () => {
       expect(probe).toHaveAttribute("data-audit", '["BURST_SYNC"]');
     });
 
-    expect(screen.getByText(/Stock Yard Fleet Directory \(1 Matched\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Direktori Armada Stock Yard \(1 Cocok\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/MITSUBISHI-STOCK-08/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Toggle Fleet Scale/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Trigger Burst Sync Simulation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ubah Skala Armada Sandbox/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Simulasi Burst Sync/i)).not.toBeInTheDocument();
 
     // 2. Switch LIVE_API -> SIMULATOR -> LIVE_API again: dummy tickets/audit must be cleared, not stuck by sectionHashesRef
     fireEvent.click(screen.getByRole("button", { name: "Mode Sim" }));
     await waitFor(() => {
       const probe = screen.getByTestId("sync-probe");
       expect(probe.getAttribute("data-tickets")).toContain("TKT-0401");
-      expect(screen.getByText(/Toggle Fleet Scale/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ubah Skala Armada Sandbox/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Mode Live" }));
@@ -243,5 +244,68 @@ describe("Cross-System Live API Honesty & State Isolation", () => {
       expect(screen.getByText("KOSONG (0)")).toBeInTheDocument();
     });
     expect(screen.queryByText("LIVE (0)")).not.toBeInTheDocument();
+  }, 15000);
+
+  it("sets CONNECTING initial state during pending LIVE_API fetch, sizes OrionLogo img intrinsically, and renders Indonesian Ringkasan panel", async () => {
+    render(<OrionLogo variant="icon" />);
+    const logoImg = screen.getByRole("img");
+    expect(logoImg).toHaveAttribute("width", "64");
+    expect(logoImg).toHaveAttribute("height", "64");
+
+    cleanup();
+
+    let resolveFetch!: (val: unknown) => void;
+    globalThis.fetch = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    ) as unknown as typeof fetch;
+
+    function ConnectingProbe() {
+      const { apiStatus, setDataSource } = useTelemetry();
+      return (
+        <div>
+          <button type="button" onClick={() => setDataSource("LIVE_API")}>
+            Start Connecting
+          </button>
+          <span data-testid="api-status-probe">{apiStatus}</span>
+          <ShowroomModule active={true} />
+        </div>
+      );
+    }
+
+    render(
+      <MotionConfig reducedMotion="always">
+        <LazyMotion features={domAnimation}>
+          <TelemetryProvider>
+            <ConnectingProbe />
+          </TelemetryProvider>
+        </LazyMotion>
+      </MotionConfig>,
+    );
+
+    expect(screen.getByText("Ringkasan OBD-II & Node")).toBeInTheDocument();
+    expect(screen.getByTestId("api-status-probe")).toHaveTextContent("SANDBOX");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Connecting" }));
+    expect(screen.getByTestId("api-status-probe")).toHaveTextContent("CONNECTING");
+
+    resolveFetch({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        units: [UNITS[0]],
+        configs: { [UNITS[0]!.unit_id]: DEFAULT_CONFIG(UNITS[0]!.unit_id) },
+        history: {},
+        movement: [],
+        audit_logs: [],
+        tickets: [],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("api-status-probe")).toHaveTextContent("CONNECTED");
+    });
   }, 15000);
 });

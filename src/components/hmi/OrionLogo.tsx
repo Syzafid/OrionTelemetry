@@ -3,13 +3,7 @@ import { useAnime } from "@/hooks/useAnime";
 import { cn } from "@/lib/utils";
 
 export type OrionLogoVariant =
-  | "horizontal"
-  | "wordmark"
-  | "stacked"
-  | "icon"
-  | "emblem"
-  | "mono-dark"
-  | "mono-light";
+  "horizontal" | "wordmark" | "stacked" | "icon" | "emblem" | "mono-dark" | "mono-light";
 
 export interface OrionLogoProps {
   variant?: OrionLogoVariant;
@@ -82,7 +76,10 @@ export function OrionLogo({
     svgRef,
     (anime, el) => {
       try {
-        if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(LOGO_DRAWN_SESSION_KEY) === "1") {
+        if (
+          typeof sessionStorage !== "undefined" &&
+          sessionStorage.getItem(LOGO_DRAWN_SESSION_KEY) === "1"
+        ) {
           return;
         }
         sessionStorage.setItem(LOGO_DRAWN_SESSION_KEY, "1");
@@ -121,10 +118,15 @@ export function OrionLogo({
 
   if (variant !== "emblem" && mode === "img" && !animateDraw) {
     const src = ASSET_MAP[variant][theme];
+    const intrinsicWidth = variant === "horizontal" || variant === "wordmark" ? 180 : 64;
+    const intrinsicHeight = 64;
     return (
       <img
         src={src}
         alt={alt}
+        width={intrinsicWidth}
+        height={intrinsicHeight}
+        decoding="async"
         draggable={false}
         className={cn("select-none object-contain", className)}
       />
@@ -134,12 +136,7 @@ export function OrionLogo({
   const isMonoDark = variant === "mono-dark";
   const isMonoLight = variant === "mono-light";
   const fillVal = isMonoDark ? "#FFFFFF" : isMonoLight ? "#000000" : `url(#${gradId})`;
-  const bgFill =
-    theme === "light" || isMonoLight
-      ? "#F2EFE9"
-      : isMonoDark
-        ? "#1E1E1E"
-        : "#0E1116";
+  const bgFill = theme === "light" || isMonoLight ? "#F2EFE9" : isMonoDark ? "#1E1E1E" : "#0E1116";
   const strokeColor = theme === "light" || isMonoLight ? "#14171F" : "#E8E4DC";
 
   // Exact inline vector fallback / transparent emblem lockup matching `/logo/orion_icon_dark.svg`
@@ -188,7 +185,11 @@ export function OrionLogo({
           strokeOpacity="0.14"
         />
       )}
-      <g transform={variant === "emblem" ? "translate(120 124) scale(0.92)" : "translate(120 126) scale(0.8)"}>
+      <g
+        transform={
+          variant === "emblem" ? "translate(120 124) scale(0.92)" : "translate(120 126) scale(0.8)"
+        }
+      >
         <rect
           data-orion-core="1"
           x="-130"
@@ -203,4 +204,3 @@ export function OrionLogo({
     </svg>
   );
 }
-

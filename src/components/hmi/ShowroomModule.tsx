@@ -60,7 +60,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
         <div className="stage-heading relative z-10 flex shrink-0 flex-col border-b border-border/80 px-3.5 py-2.5 sm:px-4">
           {/* Quick unit switcher pill row for mobile screens */}
           <div className="card-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
-            <span className="label-hmi mr-0.5 shrink-0 text-[10px]">UNIT:</span>
+            <span className="label-hmi mr-0.5 shrink-0 text-[11px]">UNIT:</span>
             {units.map((u) => {
               const on = u.unit_id === selected.unit_id;
               const tn = unitTone(u, configs[u.unit_id]?.crit_v ?? 11.8);
@@ -70,13 +70,13 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   onClick={() => selectUnit(u.unit_id)}
                   type="button"
                   className={cn(
-                    "flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[10.5px] uppercase transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    "flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 num text-[11px] uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     on
                       ? "border-foreground/70 bg-foreground/[0.06] font-semibold text-foreground"
                       : "border-border text-muted-foreground hover:bg-card/60 hover:text-foreground",
                   )}
                 >
-                  <Led tone={tn} pulse={tn === "crimson"} />
+                  <Led tone={tn} />
                   <span>{u.bay}</span>
                   <span className="text-muted-foreground">({fmtV(u.telemetry.v_bat)}V)</span>
                 </button>
@@ -87,7 +87,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           {/* Row 1: Bay + Model Title + VIN / Manual Sync Trigger */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="num text-[10.5px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="num text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 Bay {selected.bay} · {selected.unit_id}
               </div>
               <h1 className="mt-0.5 truncate font-display text-base font-semibold uppercase tracking-[0.06em] sm:text-lg sm:tracking-[0.08em]">
@@ -107,7 +107,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                       : "Sinkronisasi paksa endpoint get_data.php sekarang"
                   }
                   className={cn(
-                    "num inline-flex min-h-[34px] sm:min-h-[30px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    "num inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot
                       ? "border-amber/60 bg-amber/15 text-amber hover:bg-amber/25"
                       : "border-border bg-card text-foreground hover:border-foreground/60",
@@ -118,7 +118,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 </button>
               )}
               <div className="hidden shrink-0 rounded-[2px] border border-border bg-background/80 px-2.5 py-1 text-right sm:block">
-                <div className="label-hmi text-[9.5px]">VIN · {selected.color}</div>
+                <div className="label-hmi text-[11px]">VIN · {selected.color}</div>
                 <div className="num text-[11px] font-medium text-foreground">{selected.vin}</div>
               </div>
             </div>
@@ -128,14 +128,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               <div className="flex items-center gap-1.5">
-                <Led tone={tone} pulse={tone === "crimson" || tone === "amber"} />
+                <Led tone={tone} />
                 <span className="num text-xs font-medium text-foreground">
                   {selected.status_label}
                 </span>
               </div>
               <span
                 className={cn(
-                  "num inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  "num inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                   conn.isOnline
                     ? "border-emerald/50 bg-emerald/15 text-emerald"
                     : "border-border bg-secondary/80 text-muted-foreground",
@@ -147,8 +147,8 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   : conn.badgeText}
               </span>
               {(selected.last_seen || (conn.lastSeenSec !== null && !conn.isOnline)) && (
-                <span className="num text-[10.5px] text-muted-foreground">
-                  Last seen:{" "}
+                <span className="num text-[11px] text-muted-foreground">
+                  Terakhir:{" "}
                   <strong className="text-foreground">
                     {selected.last_seen ?? formatDurationCompact(conn.lastSeenSec)}
                   </strong>
@@ -164,7 +164,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 <button
                   type="button"
                   onClick={() => setActiveModule("03")}
-                  className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="num inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Antrean Pemanasan (03)
                 </button>
@@ -173,7 +173,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 <button
                   type="button"
                   onClick={() => setActiveModule("04")}
-                  className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="num inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Diagnostik OBD (04)
                 </button>
@@ -181,12 +181,30 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               <button
                 type="button"
                 onClick={() => setActiveModule("06")}
-                className="num inline-flex min-h-[32px] sm:min-h-[28px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="num inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Kalibrasi &amp; Config (06)
               </button>
             </div>
           </div>
+          {dataSource === "LIVE_API" && (apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot) && (
+            <div
+              role="alert"
+              className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber/60 bg-amber/10 px-3 py-1.5 num text-[11px] text-amber"
+            >
+              <span>
+                Koneksi Live API terputus. Menampilkan cache snapshot terakhir (
+                {lastSyncTime ?? "--"}).
+              </span>
+              <button
+                type="button"
+                onClick={pollNow}
+                className="min-h-[36px] cursor-pointer rounded-[2px] border border-amber/60 bg-background px-2.5 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Poll Ulang
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Viewport: Orthographic Topology Blueprint & Component Diagnostic Inspector */}
@@ -211,10 +229,10 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
         </div>
 
         {/* Telemetry Link & Node Heartbeat Ribbon */}
-        <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/95 px-4 py-2.5 num text-[10.5px]">
+        <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/95 px-4 py-2.5 num text-[11px]">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <Led tone={t.engine_on ? "emerald" : "dim"} pulse={t.engine_on} />
+              <Led tone={t.engine_on ? "emerald" : "dim"} />
               <span className="font-semibold uppercase tracking-wider text-foreground">
                 ECU: {t.engine_on ? "RUN (CRANK ACTIVE)" : "STANDBY (KEY OFF)"}
               </span>
@@ -279,14 +297,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
       <div className="showroom-sidebar order-2 flex min-h-0 flex-col gap-3 md:order-1">
         {/* Unit List: Shown on desktop; hidden on mobile where top switcher is used */}
         <section
-          aria-label="Stock Yard Units"
+          aria-label="Unit Stock Yard"
           className="panel hidden lg:flex min-h-0 flex-1 flex-col overflow-hidden"
         >
           <header className="shrink-0 border-b border-border p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="label-hmi text-foreground">Stock Yard Units</h3>
-              <span className="num text-[10px] text-muted-foreground">
-                {filteredSidebarUnits.length}/{units.length} Active
+              <h2 className="label-hmi text-foreground">Unit Stock Yard</h2>
+              <span className="num text-[11px] text-muted-foreground">
+                {filteredSidebarUnits.length}/{units.length} Unit
               </span>
             </div>
             {units.length > 3 && (
@@ -302,15 +320,15 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   value={sidebarQuery}
                   onChange={(e) => setSidebarQuery(e.target.value)}
                   placeholder="Filter Bay, Model, VIN..."
-                  aria-label="Filter stock yard units"
-                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+                  aria-label="Filter unit stock yard"
+                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-[11px] text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {sidebarQuery && (
                   <button
                     type="button"
                     onClick={() => setSidebarQuery("")}
-                    aria-label="Clear unit filter"
-                    className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label="Bersihkan filter unit"
+                    className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[44px] min-w-[44px] sm:min-h-[38px] sm:min-w-[38px] cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X size={13} strokeWidth={1.75} aria-hidden="true" />
                   </button>
@@ -334,17 +352,17 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   onClick={() => selectUnit(u.unit_id)}
                   type="button"
                   className={cn(
-                    "shrink-0 rounded-[2px] border border-border bg-card/85 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full",
+                    "shrink-0 rounded-[2px] border border-border bg-card/85 cursor-pointer p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring w-full",
                     on
                       ? "border-foreground/70 bg-foreground/[0.06]"
                       : "hover:border-muted-foreground/60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="num text-[10px] text-muted-foreground">BAY {u.bay}</span>
+                    <span className="num text-[11px] text-muted-foreground">BAY {u.bay}</span>
                     <span
                       className={cn(
-                        "num inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                        "num inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                         uConn.isOnline
                           ? "border-emerald/45 bg-emerald/15 text-emerald"
                           : "border-border bg-secondary/70 text-muted-foreground",
@@ -354,17 +372,17 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                       {uConn.badgeText}
                     </span>
                   </div>
-                  <div className="mt-1 font-display text-sm font-semibold uppercase tracking-widest">
+                  <div className="mt-1 font-display text-sm font-semibold uppercase tracking-wider">
                     {u.model}
                   </div>
-                  <div className="label-hmi text-[10px]">{u.trim}</div>
+                  <div className="label-hmi text-[11px]">{u.trim}</div>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className={cn("num text-[10px] truncate", `text-${tn}`)}>
+                    <span className={cn("num text-[11px] truncate", `text-${tn}`)}>
                       {u.status_label}
                     </span>
                     <span className="num shrink-0 text-xs">
                       {fmtV(u.telemetry.v_bat)} V{" "}
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[11px] text-muted-foreground">
                         ({u.telemetry.adc_raw_mv}mV)
                       </span>
                     </span>
@@ -373,10 +391,10 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               );
             })}
             {dataSource === "LIVE_API" && filteredSidebarUnits.length === 1 && (
-              <div className="rounded-[2px] border border-border/60 bg-background/50 p-2.5 num text-[10.5px] text-muted-foreground space-y-1">
+              <div className="rounded-[2px] border border-border/60 bg-background/50 p-2.5 num text-[11px] text-muted-foreground space-y-1">
                 <div className="flex items-center justify-between text-foreground font-medium">
                   <span>Node Live API Aktif</span>
-                  <span className="text-emerald">Poll 3s</span>
+                  <span className="text-emerald">Poll 3d</span>
                 </div>
                 <p className="leading-relaxed">
                   Terhubung ke node tunggal{" "}
@@ -393,17 +411,17 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
           </div>
         </section>
 
-        {/* OBD-II & Node Summary (Complementary to Topology Map) */}
-        <Panel title="OBD-II & Node Summary" code="PID" className="shrink-0">
+        {/* Ringkasan OBD-II & Node (Pelengkap Peta Topologi) */}
+        <Panel title="Ringkasan OBD-II & Node" code="PID" className="shrink-0">
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-y-1.5">
             <Stat
-              label="Speed / Load"
+              label="Kecepatan / Beban"
               value={!t.engine_on ? "----" : (t.speed_kmh ?? 0)}
               unit={!t.engine_on ? "" : `km/h · ${(t.load_pct ?? 0).toFixed(0)}%`}
               tone="dim"
             />
             <Stat
-              label="Fuel / Rate"
+              label="BBM / Laju"
               value={!t.engine_on ? "STANDBY" : `${(t.fuel_pct ?? 0).toFixed(0)}%`}
               unit={!t.engine_on ? "CAN Off" : `/ ${(t.fuel_rate_lh ?? 0).toFixed(2)} L/h`}
               tone={t.engine_on && (t.fuel_pct ?? 100) < 20 ? "amber" : "dim"}
@@ -415,22 +433,22 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               tone={t.mil_on || t.dtc_cnt > 0 ? "crimson" : "dim"}
             />
             <Stat
-              label="Dist Clr (0131)"
+              label="Jarak Reset (0131)"
               value={!t.engine_on ? "----" : (t.dist_clr_km ?? 0).toLocaleString("id-ID")}
               unit={!t.engine_on ? "CAN Off" : "km"}
               tone="dim"
             />
             <Stat
-              label="Daily Budget"
+              label="Anggaran Harian"
               value={t.daily_mah.toFixed(2)}
               unit="mAh"
               tone={t.daily_mah > 65 ? "amber" : "dim"}
             />
             <Stat
-              label="Burst Queue"
+              label="Antrean Burst"
               value={
                 selected.buffer_used > 0
-                  ? `${selected.buffer_used} Recs`
+                  ? `${selected.buffer_used} Rek`
                   : conn.isOnline
                     ? "LIVE (0)"
                     : "KOSONG (0)"
@@ -438,7 +456,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               tone={selected.buffer_used > 0 ? "amber" : conn.isOnline ? "emerald" : "dim"}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5 num text-[10px] text-muted-foreground">
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5 num text-[11px] text-muted-foreground">
             <span className="truncate">
               Siklus:{" "}
               <strong className="text-foreground">

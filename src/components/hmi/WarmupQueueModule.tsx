@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock, Flame, History, UserCheck, Zap } from "lucide-react";
+import {
+  BatteryCharging,
+  CheckCircle2,
+  Clock,
+  History,
+  Power,
+  RefreshCw,
+  Thermometer,
+  UserCheck,
+} from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -90,6 +99,9 @@ export function WarmupQueueModule() {
     dispatchWarmup,
     configs,
     dataSource,
+    apiStatus,
+    isOfflineSnapshot,
+    pollNow,
     history,
     auditLogs,
     setActiveModule,
@@ -346,11 +358,28 @@ export function WarmupQueueModule() {
 
   return (
     <div className="module-warmup flex h-full min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
+      <h1 className="sr-only">Antrean Pemanasan Mesin &amp; Verifikasi Alternator</h1>
+      {dataSource === "LIVE_API" && (apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot) && (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber/60 bg-amber/10 px-3 py-2 num text-xs text-amber"
+        >
+          <span>Koneksi Live API terputus. Menampilkan cache snapshot terakhir.</span>
+          <button
+            type="button"
+            onClick={pollNow}
+            className="inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/60 bg-background px-3 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <RefreshCw size={12} aria-hidden="true" />
+            <span>Poll Ulang</span>
+          </button>
+        </div>
+      )}
       {/* Top Operational KPI Command Bar */}
       <div className="panel flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <Flame className="text-emerald shrink-0" size={16} aria-hidden="true" />
+            <Thermometer className="text-emerald shrink-0" size={16} aria-hidden="true" />
             <span className="font-display text-xs font-semibold uppercase tracking-wider text-foreground">
               Pemantauan Pemanasan Mesin (SOP 10 Menit Mitsubishi)
             </span>
@@ -362,7 +391,7 @@ export function WarmupQueueModule() {
 
         <div className="flex flex-wrap items-center gap-2 num text-[11px]">
           <div className="flex items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1">
-            <Led tone={warmingCount > 0 ? "emerald" : "dim"} pulse={warmingCount > 0} />
+            <Led tone={warmingCount > 0 ? "emerald" : "dim"} />
             <span className="text-muted-foreground">Sedang Nyala:</span>
             <span className="font-semibold text-foreground">{warmingCount} Unit</span>
           </div>
@@ -388,7 +417,7 @@ export function WarmupQueueModule() {
 
       {/* Target Node Quick-Selection Bar (Horizontal Scrollable Strip) */}
       <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto card-scroll rounded-[2px] border border-border bg-card/75 px-3 py-1.5 min-w-0">
-        <span className="label-hmi mr-1 shrink-0 text-[10px]">Pilih Unit ({units.length}):</span>
+        <span className="label-hmi mr-1 shrink-0 text-[11px]">Pilih Unit ({units.length}):</span>
         {units.map((u) => {
           const isSelected = u.unit_id === selected.unit_id;
           const uWarm = u.telemetry.engine_on || u.telemetry.v_bat >= ALT_VERIFY_V;
@@ -400,7 +429,7 @@ export function WarmupQueueModule() {
               type="button"
               onClick={() => selectUnit(u.unit_id)}
               className={cn(
-                "num inline-flex min-h-[40px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                "num inline-flex min-h-[44px] sm:min-h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
                   ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                   : uWarm
@@ -408,12 +437,12 @@ export function WarmupQueueModule() {
                     : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
               )}
             >
-              <Led tone={uWarm ? "emerald" : tn} pulse={uWarm} />
+              <Led tone={uWarm ? "emerald" : tn} />
               <span>{u.bay}</span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 ({fmtV(u.telemetry.v_bat)}V)
               </span>
-              {uWarm && <span className="text-[9px] uppercase font-bold text-emerald">RUN</span>}
+              {uWarm && <span className="text-[11px] uppercase font-bold text-emerald">RUN</span>}
             </button>
           );
         })}
@@ -432,7 +461,7 @@ export function WarmupQueueModule() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span
                   className={cn(
-                    "num inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                    "num inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                     conn.isOnline
                       ? "border-emerald/50 bg-emerald/15 text-emerald"
                       : "border-border bg-secondary/70 text-muted-foreground",
@@ -443,13 +472,13 @@ export function WarmupQueueModule() {
                 </span>
                 <span
                   className={cn(
-                    "num inline-flex items-center gap-1.5 rounded-[2px] border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                    "num inline-flex items-center gap-1.5 rounded-[2px] border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                     isEngineOn
                       ? "border-emerald/50 bg-emerald/10 text-emerald"
                       : "border-border bg-secondary/60 text-muted-foreground",
                   )}
                 >
-                  <Led tone={isEngineOn ? "emerald" : "dim"} pulse={isEngineOn} />
+                  <Led tone={isEngineOn ? "emerald" : "dim"} />
                   {isEngineOn ? "MESIN MENYALA (RUN - ALTERNATOR AKTIF)" : "STANDBY (KONTAK MATI)"}
                 </span>
               </div>
@@ -460,7 +489,7 @@ export function WarmupQueueModule() {
               <div className="rounded-[2px] border border-border bg-background/50 p-3.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="label-hmi text-[10px] text-muted-foreground">
+                    <div className="label-hmi text-[11px] text-muted-foreground">
                       {isEngineOn
                         ? "Stopwatch Durasi Nyala Mesin (Target SOP: 10:00)"
                         : "Durasi Pemanasan (Siap Deteksi Otomatis)"}
@@ -488,7 +517,7 @@ export function WarmupQueueModule() {
                             : "border-border bg-secondary/50 text-muted-foreground",
                       )}
                     >
-                      <Zap size={13} className="shrink-0" aria-hidden="true" />
+                      <BatteryCharging size={13} className="shrink-0" aria-hidden="true" />
                       {isAlternatorVerified
                         ? `Alternator OK (${fmtV(t.v_bat)}V)`
                         : isEngineOn
@@ -500,7 +529,7 @@ export function WarmupQueueModule() {
 
                 {/* Progress Bar */}
                 <div className="mt-3 space-y-1">
-                  <div className="flex justify-between num text-[10px] text-muted-foreground">
+                  <div className="flex justify-between num text-[11px] text-muted-foreground">
                     <span>Progres Pengisian SOP 10 Menit:</span>
                     <span className="font-semibold text-foreground">{progressPct}%</span>
                   </div>
@@ -532,7 +561,11 @@ export function WarmupQueueModule() {
                 >
                   {isSopTargetMet ? (
                     <div className="flex items-start gap-2">
-                      <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald" />
+                      <CheckCircle2
+                        size={15}
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-emerald"
+                      />
                       <span>
                         <strong>SOP 10 Menit Terpenuhi!</strong> Alternator telah mengisi baterai
                         optimal selama {formatMmSs(elapsedSec)} pada tegangan {fmtV(t.v_bat)}V.
@@ -541,7 +574,11 @@ export function WarmupQueueModule() {
                     </div>
                   ) : isEngineOn ? (
                     <div className="flex items-start gap-2">
-                      <Zap size={15} className="mt-0.5 shrink-0 text-amber" />
+                      <BatteryCharging
+                        size={15}
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-amber"
+                      />
                       <span>
                         <strong>Proses Pemanasan Berlangsung:</strong> Alternator aktif mengisi aki.
                         Butuh {formatMmSs(remainingSec)} lagi untuk mencapai standar minimal SOP
@@ -550,7 +587,11 @@ export function WarmupQueueModule() {
                     </div>
                   ) : (
                     <div className="flex items-start gap-2">
-                      <Clock size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
+                      <Clock
+                        size={15}
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-muted-foreground"
+                      />
                       <div>
                         <span>
                           <strong>Sistem Deteksi Pasif Aktif:</strong> Pemanasan akan terdeteksi
@@ -559,7 +600,7 @@ export function WarmupQueueModule() {
                           <span className="text-foreground">{prediction.statusText}</span>
                         </span>
                         {selectedLastSession && (
-                          <div className="mt-1 text-[10px] text-foreground/80">
+                          <div className="mt-1 text-[11px] text-foreground/80">
                             Catatan Terakhir: {selectedLastSession.timestamp}
                             {selectedLastSession.durationSec !== null &&
                             selectedLastSession.peakV !== null
@@ -583,7 +624,7 @@ export function WarmupQueueModule() {
               {/* Real-time Telemetry Stats Row (Hardware Pin 34 + OBD-II Mode 01/03) */}
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
-                  <div className="label-hmi text-[10px]">Voltase Aki &amp; ADC</div>
+                  <div className="label-hmi text-[11px]">Voltase Aki &amp; ADC</div>
                   <div
                     className={cn(
                       "num mt-1 text-base font-bold",
@@ -597,13 +638,13 @@ export function WarmupQueueModule() {
                     {fmtV(t.v_bat)}{" "}
                     <span className="text-xs font-normal text-muted-foreground">V</span>
                   </div>
-                  <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                  <div className="num mt-0.5 text-[11px] text-muted-foreground">
                     {t.adc_raw_mv} mV · Komp 25°C: {prediction.compensatedV25.toFixed(2)} V
                   </div>
                 </div>
 
                 <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
-                  <div className="label-hmi text-[10px]">Putaran &amp; Beban Mesin</div>
+                  <div className="label-hmi text-[11px]">Putaran &amp; Beban Mesin</div>
                   <div
                     className={cn(
                       "num mt-1 text-base font-bold",
@@ -615,13 +656,13 @@ export function WarmupQueueModule() {
                       <span className="ml-1 text-xs font-normal text-muted-foreground">RPM</span>
                     )}
                   </div>
-                  <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                  <div className="num mt-0.5 text-[11px] text-muted-foreground">
                     Beban: {(t.load_pct ?? 0).toFixed(1)}% · ECU: {(t.ecu_v ?? 0).toFixed(2)} V
                   </div>
                 </div>
 
                 <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
-                  <div className="label-hmi text-[10px]">Suhu Coolant &amp; RTC</div>
+                  <div className="label-hmi text-[11px]">Suhu Coolant &amp; RTC</div>
                   <div
                     className={cn(
                       "num mt-1 text-base font-bold",
@@ -634,13 +675,13 @@ export function WarmupQueueModule() {
                   >
                     {isEngineOn && t.temp_c > 0 ? `${t.temp_c}°C` : "Standby"}
                   </div>
-                  <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                  <div className="num mt-0.5 text-[11px] text-muted-foreground">
                     RTC: {t.rtc_temp_c.toFixed(1)}°C · IAT: {t.iat_c ?? 0}°C
                   </div>
                 </div>
 
                 <div className="rounded-[2px] border border-border bg-background/40 p-2.5">
-                  <div className="label-hmi text-[10px]">Diagnostik &amp; BBM</div>
+                  <div className="label-hmi text-[11px]">Diagnostik &amp; BBM</div>
                   <div
                     className={cn(
                       "num mt-1 text-sm font-semibold",
@@ -649,7 +690,7 @@ export function WarmupQueueModule() {
                   >
                     {t.dtc_cnt > 0 ? `${t.dtc} (${t.dtc_cnt} DTC)` : "0 DTC (OK)"}
                   </div>
-                  <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                  <div className="num mt-0.5 text-[11px] text-muted-foreground">
                     BBM: {(t.fuel_pct ?? 0).toFixed(1)}% · {(t.fuel_rate_lh ?? 0).toFixed(2)} L/j
                   </div>
                 </div>
@@ -678,11 +719,10 @@ export function WarmupQueueModule() {
                   <button
                     type="button"
                     onClick={() => setActiveModule("04")}
-                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/40 px-3 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/40 px-3 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     title="Buka instrumen lengkap OBD-II di Modul 04"
                   >
                     <span>Instrumen OBD-II</span>
-                    <ArrowRight size={13} aria-hidden="true" />
                   </button>
                 </div>
 
@@ -691,10 +731,10 @@ export function WarmupQueueModule() {
                   <button
                     type="button"
                     onClick={handleToggleSandboxContact}
-                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border/80 bg-background px-3 py-1.5 num text-[10.5px] font-medium text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground"
+                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border/80 bg-background px-3 py-1.5 num text-[11px] font-medium text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     title="Simulasikan putaran kontak mesin di lapangan untuk menguji auto-detection"
                   >
-                    <Zap
+                    <Power
                       size={12}
                       className={isEngineOn ? "text-amber" : "text-muted-foreground"}
                       aria-hidden="true"
@@ -715,7 +755,7 @@ export function WarmupQueueModule() {
             title="Daftar Prioritas Pemanasan Armada (Voltase Rendah)"
             code="QUEUE"
             right={
-              <span className="num text-[10px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 {pendingQueue.length} Unit Perlu Dipanaskan
               </span>
             }
@@ -751,7 +791,7 @@ export function WarmupQueueModule() {
                               {u.model} {u.trim}
                             </span>
                           </div>
-                          <div className="num text-[10.5px] text-muted-foreground">
+                          <div className="num text-[11px] text-muted-foreground">
                             VIN: {u.vin} · Tegangan: {u.telemetry.v_bat.toFixed(2)}V
                           </div>
                         </div>
@@ -762,7 +802,7 @@ export function WarmupQueueModule() {
                           type="button"
                           disabled={unitDispatched}
                           onClick={() => handleDispatchStaff(u.unit_id)}
-                          className="num inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/60 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                          className="num inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
                           title="Tandai perintah pemanasan untuk teknisi lapangan"
                         >
                           <UserCheck size={12} aria-hidden="true" />
@@ -771,7 +811,7 @@ export function WarmupQueueModule() {
                         <button
                           type="button"
                           onClick={() => selectUnit(u.unit_id)}
-                          className="num inline-flex min-h-[40px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-background px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground"
+                          className="num inline-flex min-h-[40px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground"
                         >
                           <span>Pilih</span>
                         </button>
@@ -797,12 +837,12 @@ export function WarmupQueueModule() {
             className="shrink-0"
             right={
               isEngineOn ? (
-                <div className="flex items-center gap-2 num text-[10px]">
+                <div className="flex items-center gap-2 num text-[11px]">
                   <span className="text-emerald">RPM (Hijau)</span>
                   <span className="text-amber">Coolant (Amber)</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 num text-[10px]">
+                <div className="flex items-center gap-2 num text-[11px]">
                   <span className="text-emerald">Voltase V (Hijau)</span>
                   <span className="text-amber">Suhu RTC (Amber)</span>
                 </div>
@@ -812,18 +852,26 @@ export function WarmupQueueModule() {
             <div className="h-[180px] sm:h-[190px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid stroke="#282E3B" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis
                     dataKey="t"
-                    tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
-                    axisLine={{ stroke: "#282E3B" }}
+                    tick={{
+                      fill: "var(--muted-foreground)",
+                      fontSize: 10,
+                      fontFamily: "JetBrains Mono",
+                    }}
+                    axisLine={{ stroke: "var(--chart-grid)" }}
                     tickLine={false}
                   />
                   {isEngineOn ? (
                     <YAxis
                       yAxisId="left"
                       domain={[0, 1800]}
-                      tick={{ fill: "#10B981", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                      tick={{
+                        fill: "var(--emerald)",
+                        fontSize: 10,
+                        fontFamily: "JetBrains Mono",
+                      }}
                       width={38}
                       axisLine={false}
                       tickLine={false}
@@ -832,7 +880,11 @@ export function WarmupQueueModule() {
                     <YAxis
                       yAxisId="left"
                       domain={[11.0, 14.8]}
-                      tick={{ fill: "#10B981", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                      tick={{
+                        fill: "var(--emerald)",
+                        fontSize: 10,
+                        fontFamily: "JetBrains Mono",
+                      }}
                       width={38}
                       axisLine={false}
                       tickLine={false}
@@ -842,15 +894,19 @@ export function WarmupQueueModule() {
                     yAxisId="t"
                     orientation="right"
                     domain={[0, 120]}
-                    tick={{ fill: "#F59E0B", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                    tick={{
+                      fill: "var(--amber)",
+                      fontSize: 10,
+                      fontFamily: "JetBrains Mono",
+                    }}
                     width={30}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "#0F1116",
-                      border: "1px solid #1E222B",
+                      background: "var(--background)",
+                      border: "1px solid var(--border)",
                       borderRadius: 2,
                       fontFamily: "JetBrains Mono",
                       fontSize: 11,
@@ -861,13 +917,13 @@ export function WarmupQueueModule() {
                       <ReferenceLine
                         yAxisId="left"
                         y={critV}
-                        stroke="#E60012"
+                        stroke="var(--crimson)"
                         strokeDasharray="3 3"
                       />
                       <ReferenceLine
                         yAxisId="left"
                         y={ALT_VERIFY_V}
-                        stroke="#10B981"
+                        stroke="var(--emerald)"
                         strokeDasharray="3 3"
                       />
                     </>
@@ -877,9 +933,9 @@ export function WarmupQueueModule() {
                     type="monotone"
                     dataKey={isEngineOn ? "rpm" : "v"}
                     name={isEngineOn ? "Putaran (RPM)" : "Tegangan (V)"}
-                    stroke="#10B981"
+                    stroke="var(--emerald)"
                     strokeWidth={1.75}
-                    dot={chartData.length <= 3 ? { r: 3, fill: "#10B981" } : false}
+                    dot={chartData.length <= 3 ? { r: 3, fill: "var(--emerald)" } : false}
                     isAnimationActive={false}
                   />
                   <Line
@@ -887,15 +943,15 @@ export function WarmupQueueModule() {
                     type="monotone"
                     dataKey="temp"
                     name={isEngineOn ? "Coolant (°C)" : "Suhu RTC (°C)"}
-                    stroke="#F59E0B"
+                    stroke="var(--amber)"
                     strokeWidth={1.5}
-                    dot={chartData.length <= 3 ? { r: 2.5, fill: "#F59E0B" } : false}
+                    dot={chartData.length <= 3 ? { r: 2.5, fill: "var(--amber)" } : false}
                     isAnimationActive={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-2 num text-[10.5px] leading-relaxed text-muted-foreground">
+            <div className="mt-2 num text-[11px] leading-relaxed text-muted-foreground">
               {isEngineOn
                 ? dataSource === "LIVE_API"
                   ? "Sampel telemetri live selama sesi pemanasan berjalan. Target pengisian SOP 10 menit terverifikasi pada voltase >= " +
@@ -911,7 +967,7 @@ export function WarmupQueueModule() {
             title="Riwayat Sesi & Penugasan Pemanasan Mesin"
             code="LOG"
             right={
-              <div className="flex items-center gap-1.5 num text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 num text-[11px] text-muted-foreground">
                 <History size={12} aria-hidden="true" />
                 <span>{visibleCompletedLogs.length} Catatan</span>
               </div>
@@ -933,7 +989,7 @@ export function WarmupQueueModule() {
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-left num text-[11px]">
                   <thead>
-                    <tr className="border-b border-border bg-secondary/40 text-[9.5px] uppercase tracking-wider text-muted-foreground">
+                    <tr className="border-b border-border bg-secondary/40 text-[11px] uppercase tracking-wider text-muted-foreground">
                       <th className="py-2 px-2.5 font-medium">Unit &amp; Bay</th>
                       <th className="py-2 px-2.5 font-medium">Waktu</th>
                       <th className="py-2 px-2.5 font-medium">Durasi</th>
@@ -950,7 +1006,7 @@ export function WarmupQueueModule() {
                       >
                         <td className="py-2 px-2.5">
                           <span className="font-semibold text-foreground">{log.bay}</span>{" "}
-                          <span className="text-[10px] text-muted-foreground">({log.model})</span>
+                          <span className="text-[11px] text-muted-foreground">({log.model})</span>
                         </td>
                         <td className="py-2 px-2.5 text-muted-foreground">{log.timestamp}</td>
                         <td className="py-2 px-2.5 font-semibold text-foreground">
@@ -962,7 +1018,7 @@ export function WarmupQueueModule() {
                         <td className="py-2 px-2.5 text-right">
                           <span
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                              "inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                               log.sopStatus === "PASS"
                                 ? "border-emerald/40 bg-emerald/10 text-emerald"
                                 : log.sopStatus === "DISPATCHED"
@@ -985,15 +1041,15 @@ export function WarmupQueueModule() {
             )}
 
             <div className="mt-3 pt-2.5 border-t border-border flex flex-wrap items-center justify-between gap-2">
-              <span className="num text-[10px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 Verifikasi PDI Handover:
               </span>
               <button
                 type="button"
                 onClick={() => setActiveModule("02")}
-                className="num min-h-[36px] cursor-pointer text-[11px] font-semibold text-foreground underline hover:text-muted-foreground"
+                className="num inline-flex min-h-[44px] sm:min-h-[36px] cursor-pointer items-center text-[11px] font-semibold text-foreground underline hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Buka Lembar PDI di Modul 02 &rarr;
+                Buka Lembar PDI di Modul 02
               </button>
             </div>
           </Panel>

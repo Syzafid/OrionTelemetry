@@ -35,7 +35,7 @@ import { applyRemoteUpdate } from "@/lib/telemetry-sync";
 
 export type ModuleId = "01" | "02" | "03" | "04" | "05" | "06";
 export type DataSource = "SIMULATOR" | "LIVE_API";
-export type ApiStatus = "SANDBOX" | "CONNECTED" | "FALLBACK_ERROR";
+export type ApiStatus = "SANDBOX" | "CONNECTING" | "CONNECTED" | "FALLBACK_ERROR";
 export type FleetScale = 3 | 12;
 
 export const DEFAULT_API_URL = "http://localhost/dipo_api/get_data.php";
@@ -887,6 +887,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     setMovementPairs([]);
     setHistory({});
     setMassDisconnectGuard(false);
+    setApiStatus("CONNECTING");
 
     void poll();
 

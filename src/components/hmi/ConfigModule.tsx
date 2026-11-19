@@ -482,6 +482,7 @@ export function ConfigModule() {
     <div className="module-config flex h-full min-h-0 flex-1 flex-col gap-3">
       {/* Sticky/Non-shrinking Header Wrapper (:first-child in .module-config) */}
       <div className="flex shrink-0 flex-col gap-2">
+        <h1 className="sr-only">Konfigurasi Node IoT, Kalibrasi OLS &amp; Tiket</h1>
         {(apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot) && (
           <div
             role="alert"
@@ -584,7 +585,7 @@ export function ConfigModule() {
 
               <span
                 className={cn(
-                  "inline-flex min-h-[32px] items-center gap-1.5 rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase",
+                  "inline-flex min-h-[32px] items-center gap-1.5 rounded-[2px] border px-2 py-1 text-[11px] font-semibold uppercase",
                   conn.isOnline
                     ? "border-emerald/50 bg-emerald/10 text-emerald"
                     : "border-border bg-secondary/70 text-foreground",
@@ -596,7 +597,7 @@ export function ConfigModule() {
 
               <span
                 className={cn(
-                  "inline-flex min-h-[32px] items-center rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+                  "inline-flex min-h-[32px] items-center rounded-[2px] border px-2 py-1 text-[11px] font-semibold uppercase tracking-wider",
                   cfg.pending_ack
                     ? "border-amber/60 bg-amber/15 text-amber"
                     : "border-emerald/40 bg-emerald/10 text-emerald",
@@ -628,7 +629,7 @@ export function ConfigModule() {
                 <button
                   type="button"
                   onClick={pollNow}
-                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-background px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-background px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" />
                   <span>Poll Live API ({lastSyncTime ?? "--"})</span>
@@ -637,14 +638,14 @@ export function ConfigModule() {
               <button
                 type="button"
                 onClick={() => setActiveModule("04")}
-                className="inline-flex min-h-[44px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex min-h-[44px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 Diagnostik OBD (04)
               </button>
               <button
                 type="button"
                 onClick={() => setActiveModule("05")}
-                className="inline-flex min-h-[44px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex min-h-[44px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 Presensi &amp; Debounce (05)
               </button>
@@ -669,12 +670,12 @@ export function ConfigModule() {
                 <button
                   type="button"
                   onClick={handleLoadSandboxExample}
-                  className="inline-flex min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 num text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 num text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Isi Contoh Data (Sandbox)
                 </button>
               ) : (
-                <span className="num text-[10px] font-semibold uppercase text-emerald">
+                <span className="num text-[11px] font-semibold uppercase text-emerald">
                   MySQL Two-Way Persist
                 </span>
               )
@@ -713,14 +714,14 @@ export function ConfigModule() {
               <div className="rounded-[2px] border border-border bg-background/50 p-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
                       1
                     </span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
                       Identitas Hardware Node ESP32 &amp; Revisi PCB
                     </span>
                   </div>
-                  <span className="num text-[10px] text-muted-foreground">
+                  <span className="num text-[11px] text-muted-foreground">
                     Default ADC: m={activePreset.slope.toFixed(7)}, c=
                     {activePreset.offset.toFixed(4)}V
                   </span>
@@ -730,7 +731,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-node-id"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Unit Node ID
                     </label>
@@ -748,7 +749,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-pcb-ver"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Versi Hardware PCB Divider
                     </label>
@@ -768,7 +769,7 @@ export function ConfigModule() {
               {/* Step 2: Vehicle Identity */}
               <div className="rounded-[2px] border border-border bg-background/50 p-3.5">
                 <div className="flex items-center gap-2 border-b border-border/80 pb-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
                     2
                   </span>
                   <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
@@ -780,7 +781,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-vin"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Nomor Rangka (VIN 17-Karakter)
                     </label>
@@ -799,7 +800,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-model"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Model Kendaraan
                     </label>
@@ -817,7 +818,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-trim"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Varian / Trim
                     </label>
@@ -836,7 +837,7 @@ export function ConfigModule() {
               {/* Step 3: Yard Placement & Initial NVS Profile */}
               <div className="rounded-[2px] border border-border bg-background/50 p-3.5">
                 <div className="flex items-center gap-2 border-b border-border/80 pb-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
                     3
                   </span>
                   <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
@@ -848,7 +849,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-bay"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Lokasi Parkir (Bay)
                     </label>
@@ -869,7 +870,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-color"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Warna Bodi
                     </label>
@@ -890,7 +891,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-critv"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Ambang Volt Kritis (V)
                     </label>
@@ -909,7 +910,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="onboard-sleepcfg"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Interval Deep Sleep
                     </label>
@@ -949,7 +950,7 @@ export function ConfigModule() {
             title="Direktori Node IoT Terdaftar"
             code="DIRECTORY"
             right={
-              <span className="num text-[10.5px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 {filteredUnits.length}/{units.length} Unit
               </span>
             }
@@ -969,14 +970,14 @@ export function ConfigModule() {
                   value={nodeFilter}
                   onChange={(e) => setNodeFilter(e.target.value)}
                   placeholder="Cari Unit ID, Bay, Model, atau VIN..."
-                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {nodeFilter && (
                   <button
                     type="button"
                     aria-label="Hapus pencarian node"
                     onClick={() => setNodeFilter("")}
-                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="absolute right-1 top-1/2 flex min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X size={14} aria-hidden="true" />
                   </button>
@@ -1035,12 +1036,12 @@ export function ConfigModule() {
                                 {u.model} {u.trim}
                               </span>
                               {isUnitUnpaired && (
-                                <span className="num rounded-[2px] border border-amber/50 bg-amber/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase text-amber">
+                                <span className="num rounded-[2px] border border-amber/50 bg-amber/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-amber">
                                   Terlepas
                                 </span>
                               )}
                             </div>
-                            <div className="num mt-0.5 text-[10.5px] text-muted-foreground">
+                            <div className="num mt-0.5 text-[11px] text-muted-foreground">
                               ID: <strong className="text-foreground">{u.unit_id}</strong> | VIN:{" "}
                               {u.vin}
                             </div>
@@ -1049,7 +1050,7 @@ export function ConfigModule() {
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
                               className={cn(
-                                "num inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                                "num inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                                 uConn.isOnline
                                   ? "border-emerald/40 bg-emerald/10 text-emerald"
                                   : "border-border bg-secondary/50 text-muted-foreground",
@@ -1061,7 +1062,7 @@ export function ConfigModule() {
 
                             <span
                               className={cn(
-                                "num inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                                "num inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase",
                                 uCfg?.pending_ack
                                   ? "border-amber/50 bg-amber/10 text-amber"
                                   : "border-border bg-secondary/40 text-muted-foreground",
@@ -1072,12 +1073,12 @@ export function ConfigModule() {
                           </div>
                         </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 num text-[10.5px] text-muted-foreground">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 num text-[11px] text-muted-foreground">
                           <span>
                             Baterai:{" "}
                             <strong className="text-foreground">
                               {u.telemetry.v_bat <= 0 &&
-                                u.status_label.toLowerCase().includes("menunggu")
+                              u.status_label.toLowerCase().includes("menunggu")
                                 ? "Menunggu Paket"
                                 : `${fmtV(u.telemetry.v_bat)}V`}
                             </strong>
@@ -1100,7 +1101,7 @@ export function ConfigModule() {
                             aria-pressed={isSelected}
                             onClick={() => selectUnit(u.unit_id)}
                             className={cn(
-                              "min-h-[44px] cursor-pointer rounded-[2px] border px-3 py-1.5 num text-[10.5px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                              "min-h-[44px] cursor-pointer rounded-[2px] border px-3 py-1.5 num text-[11px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                               isSelected
                                 ? "border-foreground bg-foreground/10 text-foreground"
                                 : "border-border bg-secondary/40 text-foreground hover:border-foreground/60",
@@ -1121,7 +1122,7 @@ export function ConfigModule() {
                                 setRepairColor(u.color);
                                 setDirectoryFeedback(null);
                               }}
-                              className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/50 bg-amber/10 px-3 py-1.5 num text-[10.5px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/50 bg-amber/10 px-3 py-1.5 num text-[11px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
                               <Link2Off size={13} aria-hidden="true" />
                               <span>Lepas Node</span>
@@ -1140,7 +1141,7 @@ export function ConfigModule() {
                                   setRepairColor(u.color);
                                 }
                               }}
-                              className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-1.5 num text-[10.5px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-1.5 num text-[11px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
                               <Link2 size={13} aria-hidden="true" />
                               <span>
@@ -1155,14 +1156,14 @@ export function ConfigModule() {
                             onSubmit={(e) => void handleConfirmRepair(e, u.unit_id)}
                             className="mt-3 space-y-2.5 rounded-[2px] border border-amber/40 bg-background/70 p-3 num text-xs"
                           >
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-amber">
+                            <div className="text-[11px] font-semibold uppercase tracking-wider text-amber">
                               Tautkan Ulang {u.unit_id} ke Kendaraan Baru
                             </div>
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               <div>
                                 <label
                                   htmlFor={`repair-vin-${u.unit_id}`}
-                                  className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                                  className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                                 >
                                   VIN Baru
                                 </label>
@@ -1180,7 +1181,7 @@ export function ConfigModule() {
                               <div>
                                 <label
                                   htmlFor={`repair-model-${u.unit_id}`}
-                                  className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                                  className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                                 >
                                   Model Baru
                                 </label>
@@ -1197,7 +1198,7 @@ export function ConfigModule() {
                               <div>
                                 <label
                                   htmlFor={`repair-bay-${u.unit_id}`}
-                                  className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                                  className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                                 >
                                   Bay Parkir
                                 </label>
@@ -1217,7 +1218,7 @@ export function ConfigModule() {
                               <div>
                                 <label
                                   htmlFor={`repair-color-${u.unit_id}`}
-                                  className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                                  className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                                 >
                                   Warna
                                 </label>
@@ -1269,7 +1270,7 @@ export function ConfigModule() {
             title="Parameter NVS ESP32 & Antrean Piggyback ACK"
             code="NVS"
             right={
-              <span className="num text-[10px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 Target: {selected.unit_id} ({selected.bay})
               </span>
             }
@@ -1300,7 +1301,7 @@ export function ConfigModule() {
                   <span className="font-sans text-xs font-semibold text-foreground">
                     1. Parameter NVS Firmware (Dikirim via HTTP 200 ACK)
                   </span>
-                  <span className="rounded-[2px] border border-emerald/40 bg-emerald/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase text-emerald">
+                  <span className="rounded-[2px] border border-emerald/40 bg-emerald/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-emerald">
                     Terapkan di Siklus Wake
                   </span>
                 </div>
@@ -1309,7 +1310,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="cfg-crit-v"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Ambang Voltase Kritis (crit_v)
                     </label>
@@ -1327,7 +1328,7 @@ export function ConfigModule() {
                       />
                       <span className="text-[11px] text-muted-foreground shrink-0">V</span>
                     </div>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-[11px] text-muted-foreground">
                       Batas aman firmware: &gt; 5.0V dan &lt; 16.0V.
                     </p>
                   </div>
@@ -1335,7 +1336,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="cfg-sleep-cfg"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Interval Deep Sleep (sleep_cfg)
                     </label>
@@ -1364,18 +1365,18 @@ export function ConfigModule() {
                   <span className="font-sans text-xs font-semibold text-foreground">
                     2. Profil Evaluasi Server (`node_configs`)
                   </span>
-                  <span className="rounded-[2px] border border-border bg-secondary/60 px-1.5 py-0.5 text-[9.5px] font-medium uppercase text-muted-foreground">
+                  <span className="rounded-[2px] border border-border bg-secondary/60 px-1.5 py-0.5 text-[11px] font-medium uppercase text-muted-foreground">
                     Disimpan di Backend
                   </span>
                 </div>
-                <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
                   Nilai debounce server dan interval fast poll disimpan pada profil tabel
                   `node_configs` dan tidak dikirim di JSON Piggyback ACK firmware.
                 </p>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <span className="label-hmi mb-1 block text-[10px] text-muted-foreground">
+                    <span className="label-hmi mb-1 block text-[11px] text-muted-foreground">
                       Debounce Miss Keberadaan
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1404,7 +1405,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="cfg-fast-poll"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Interval Fast Poll (detik)
                     </label>
@@ -1451,12 +1452,12 @@ export function ConfigModule() {
               {/* Honest Wire Contract JSON Preview (Exact match with simpan_data.php) */}
               <div className="rounded-[2px] border border-border bg-background/40 p-3">
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <span className="label-hmi text-[10px] text-muted-foreground">
+                  <span className="label-hmi text-[11px] text-muted-foreground">
                     Kontrak HTTP 200 JSON (simpan_data.php)
                   </span>
                   <span
                     className={cn(
-                      "rounded-[2px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                      "rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase",
                       cfg.pending_ack
                         ? "border-amber/50 bg-amber/10 text-amber"
                         : "border-emerald/40 bg-emerald/10 text-emerald",
@@ -1467,7 +1468,7 @@ export function ConfigModule() {
                       : "Sinkron (pending_ack: false)"}
                   </span>
                 </div>
-                <pre className="overflow-x-auto font-mono text-[10.5px] leading-relaxed text-foreground/90">
+                <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed text-foreground/90">
                   {JSON.stringify(wireAckPreview, null, 2)}
                 </pre>
               </div>
@@ -1479,7 +1480,7 @@ export function ConfigModule() {
             title="Kalibrasi ADC 4-Titik Pin 34 (SOP C.1 Multimeter)"
             code="OLS"
             right={
-              <span className="num text-[10.5px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 R² = {fit.rSquared.toFixed(4)}
               </span>
             }
@@ -1518,14 +1519,14 @@ export function ConfigModule() {
                 <button
                   type="button"
                   onClick={() => handleLoadCalPreset("1")}
-                  className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   Muat Preset PCB v1.0 (0.069V)
                 </button>
                 <button
                   type="button"
                   onClick={() => handleLoadCalPreset("2")}
-                  className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   Muat Preset PCB v2.0 (0.160V)
                 </button>
@@ -1551,7 +1552,7 @@ export function ConfigModule() {
                         <div>
                           <label
                             htmlFor={`cal-m-dmm-${i}`}
-                            className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                            className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                           >
                             Tegangan DMM (V)
                           </label>
@@ -1571,7 +1572,7 @@ export function ConfigModule() {
                         <div>
                           <label
                             htmlFor={`cal-m-mv-${i}`}
-                            className="label-hmi mb-1 block text-[9.5px] text-muted-foreground"
+                            className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                           >
                             ADC Raw (mV)
                           </label>
@@ -1598,7 +1599,7 @@ export function ConfigModule() {
               <div className="hidden md:block overflow-x-auto rounded-[2px] border border-border/80">
                 <table className="w-full border-collapse text-left num text-xs">
                   <thead>
-                    <tr className="border-b border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr className="border-b border-border bg-secondary/50 text-[11px] uppercase tracking-wider text-muted-foreground">
                       <th className="py-2 px-2.5 font-medium">Titik</th>
                       <th className="py-2 px-2.5 font-medium">Tegangan DMM (V)</th>
                       <th className="py-2 px-2.5 font-medium">ADC Raw (mV)</th>
@@ -1656,13 +1657,13 @@ export function ConfigModule() {
 
               <div className="grid grid-cols-2 gap-2 rounded-[2px] border border-border bg-background/40 p-3 text-center">
                 <div>
-                  <div className="label-hmi text-[9.5px]">Koefisien Slope (m)</div>
+                  <div className="label-hmi text-[11px]">Koefisien Slope (m)</div>
                   <div className="num mt-1 font-mono text-sm font-bold text-emerald">
                     {fit.slope.toFixed(7)}
                   </div>
                 </div>
                 <div>
-                  <div className="label-hmi text-[9.5px]">Offset Koreksi (c)</div>
+                  <div className="label-hmi text-[11px]">Offset Koreksi (c)</div>
                   <div className="num mt-1 font-mono text-sm font-bold text-emerald">
                     {fit.offset.toFixed(4)} V
                   </div>
@@ -1712,7 +1713,7 @@ export function ConfigModule() {
             title="Tiket Pemeliharaan Baterai & Shift Handover"
             code="TICKETS"
             right={
-              <span className="num text-[10.5px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 {activeTicketCount} Tiket Aktif
               </span>
             }
@@ -1749,7 +1750,7 @@ export function ConfigModule() {
                   {selectedTicket && (
                     <span
                       className={cn(
-                        "rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase",
+                        "rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase",
                         TICKET_STATUS_STYLE[selectedTicket.status],
                       )}
                     >
@@ -1762,7 +1763,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="ticket-assignee"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Nama Teknisi Bertugas
                     </label>
@@ -1778,7 +1779,7 @@ export function ConfigModule() {
                   <div>
                     <label
                       htmlFor="ticket-note"
-                      className="label-hmi mb-1 block text-[10px] text-muted-foreground"
+                      className="label-hmi mb-1 block text-[11px] text-muted-foreground"
                     >
                       Catatan Handover Shift
                     </label>
@@ -1798,7 +1799,7 @@ export function ConfigModule() {
                     type="button"
                     disabled={isSavingTicket}
                     onClick={() => void handleTicketAction("OPEN")}
-                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-crimson/50 bg-crimson/10 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-crimson/50 bg-crimson/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     Buka Tiket
                   </button>
@@ -1806,7 +1807,7 @@ export function ConfigModule() {
                     type="button"
                     disabled={isSavingTicket}
                     onClick={() => void handleTicketAction("IN_PROGRESS")}
-                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-amber/50 bg-amber/10 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-amber/50 bg-amber/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     Klaim Dikerjakan
                   </button>
@@ -1814,7 +1815,7 @@ export function ConfigModule() {
                     type="button"
                     disabled={isSavingTicket}
                     onClick={() => void handleTicketAction("RESOLVED")}
-                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="min-h-[44px] cursor-pointer rounded-[2px] border border-emerald/50 bg-emerald/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     Selesaikan Tiket
                   </button>
@@ -1856,7 +1857,7 @@ export function ConfigModule() {
                                 {tk.unit_id}
                               </span>
                             </div>
-                            <div className="mt-0.5 text-[10.5px] text-muted-foreground">
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
                               Masalah:{" "}
                               <strong className="text-foreground">{tk.issue_summary}</strong>
                             </div>
@@ -1864,7 +1865,7 @@ export function ConfigModule() {
 
                           <span
                             className={cn(
-                              "inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider",
+                              "inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                               TICKET_STATUS_STYLE[tk.status],
                             )}
                           >
@@ -1872,7 +1873,7 @@ export function ConfigModule() {
                           </span>
                         </div>
 
-                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 text-[10.5px] text-muted-foreground">
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
                           <div>
                             <div>
                               Teknisi: <strong className="text-foreground">{tk.assigned_to}</strong>
@@ -1886,7 +1887,7 @@ export function ConfigModule() {
                           <button
                             type="button"
                             onClick={() => selectUnit(tk.unit_id)}
-                            className="min-h-[38px] cursor-pointer rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10px] font-semibold uppercase text-foreground hover:border-foreground/60"
+                            className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             Pilih Unit Ini
                           </button>
@@ -1904,7 +1905,7 @@ export function ConfigModule() {
             title="Jejak Audit Operasional & Log Sistem"
             code="AUDIT"
             right={
-              <div className="flex items-center gap-1.5 num text-[10.5px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 num text-[11px] text-muted-foreground">
                 <History size={12} aria-hidden="true" />
                 <span>{filteredAuditLogs.length} Entri</span>
               </div>
@@ -1927,21 +1928,21 @@ export function ConfigModule() {
                     value={auditQuery}
                     onChange={(e) => setAuditQuery(e.target.value)}
                     placeholder="Cari pesan audit, tipe event, atau Unit ID..."
-                    className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+                    className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   {auditQuery && (
                     <button
                       type="button"
                       aria-label="Hapus pencarian log audit"
                       onClick={() => setAuditQuery("")}
-                      className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="absolute right-1 top-1/2 flex min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <X size={14} aria-hidden="true" />
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-1.5 num text-[10.5px]">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 num text-[11px]">
                   <div className="flex flex-wrap items-center gap-1">
                     {(
                       [
@@ -2014,7 +2015,7 @@ export function ConfigModule() {
                           <span className="font-semibold text-foreground">{log.unit_id}</span>
                           <span
                             className={cn(
-                              "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase",
+                              "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase",
                               SEVERITY_BADGE[log.severity],
                             )}
                           >
@@ -2027,7 +2028,7 @@ export function ConfigModule() {
                         <p className="text-[11px] leading-relaxed text-muted-foreground">
                           {log.message}
                         </p>
-                        <div className="text-[10px] text-dim">{log.created_at}</div>
+                        <div className="text-[11px] text-dim">{log.created_at}</div>
                       </div>
                     ))}
                   </div>
@@ -2036,7 +2037,7 @@ export function ConfigModule() {
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full border-collapse text-left num text-[11px]">
                       <thead>
-                        <tr className="border-b border-border bg-secondary/40 text-[9.5px] uppercase tracking-wider text-muted-foreground">
+                        <tr className="border-b border-border bg-secondary/40 text-[11px] uppercase tracking-wider text-muted-foreground">
                           <th className="py-2 px-2.5 font-medium">Waktu</th>
                           <th className="py-2 px-2.5 font-medium">Unit &amp; Tipe</th>
                           <th className="py-2 px-2.5 font-medium">Keterangan Detail</th>
@@ -2053,7 +2054,7 @@ export function ConfigModule() {
                               <div className="font-semibold text-foreground whitespace-nowrap">
                                 {log.unit_id}
                               </div>
-                              <div className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              <div className="text-[11px] text-muted-foreground whitespace-nowrap">
                                 {formatEventTypeLabel(log.event_type)}
                               </div>
                             </td>
@@ -2063,7 +2064,7 @@ export function ConfigModule() {
                             <td className="py-2 px-2.5 text-right align-top">
                               <span
                                 className={cn(
-                                  "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                                  "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                                   SEVERITY_BADGE[log.severity],
                                 )}
                               >

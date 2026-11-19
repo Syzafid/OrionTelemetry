@@ -81,8 +81,6 @@ export function TopNav() {
     isOfflineSnapshot,
     pollNow,
     units,
-    fleetScale,
-    setFleetScale,
     configs,
   } = useTelemetry();
 
@@ -209,19 +207,19 @@ export function TopNav() {
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2 md:px-5">
           <Link
             to="/"
-            className="flex min-h-[44px] items-center gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label="ORION: Back to home"
+            className="flex min-h-[44px] items-center gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="ORION: Kembali ke beranda"
           >
             <OrionLogo variant="icon" animateDraw className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" />
             <div className="leading-tight">
-              <div className="font-display text-sm sm:text-base font-semibold uppercase tracking-[0.22em] text-foreground">
+              <div className="font-display text-sm sm:text-base font-semibold uppercase tracking-[0.14em] text-foreground">
                 ORION
               </div>
-              <div className="label-hmi hidden 2xl:block text-[10px] tracking-[0.06em] text-muted-foreground">
+              <div className="label-hmi hidden 2xl:block text-[11px] tracking-[0.06em] text-muted-foreground">
                 Sistem Monitoring Baterai &amp; Telemetri Stock Yard
               </div>
-              <div className="label-hmi block 2xl:hidden text-[9.5px] sm:text-[10px] text-muted-foreground">
-                DIPO Stock Yard Telemetry
+              <div className="label-hmi block 2xl:hidden text-[11px] text-muted-foreground">
+                Telemetri Stock Yard
               </div>
             </div>
           </Link>
@@ -231,8 +229,8 @@ export function TopNav() {
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              title="Buka Global Command Palette (Ctrl+K / Cmd+K)"
-              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
+              title="Buka Palet Perintah Global (Ctrl+K / Cmd+K)"
+              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
             >
               <Command
                 size={13}
@@ -240,7 +238,7 @@ export function TopNav() {
                 className="shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="hidden md:inline">Command (Ctrl+K)</span>
+              <span className="hidden md:inline">Perintah (Ctrl+K)</span>
               <span className="inline md:hidden">Ctrl+K</span>
             </button>
 
@@ -252,15 +250,15 @@ export function TopNav() {
                 aria-hidden="true"
               />
               <span className="num text-[11px] text-foreground hidden xl:inline">{apLabel}</span>
-              <span className="num text-[10px] text-foreground inline xl:hidden">
+              <span className="num text-[11px] text-foreground inline xl:hidden">
                 {apLabelMobile}
               </span>
-              <Led tone={apTone} pulse={onlineCount === 0} />
+              <Led tone={apTone} />
             </div>
 
             {/* Global Fleet Presence Summary Indicator */}
             <div
-              className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-muted-foreground sm:px-3 sm:text-[11px]"
+              className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-muted-foreground sm:px-3"
               title={`Unit di area yard: ${inYardUnits.length} dari ${totalCount} unit terdaftar`}
             >
               <Layers
@@ -280,11 +278,11 @@ export function TopNav() {
               aria-pressed={alarmArmed}
               title={
                 alarmArmed
-                  ? "Audio Alarm Aktif (Klik untuk Mute)"
+                  ? "Alarm Audio Aktif (Klik untuk Bisukan)"
                   : "Aktifkan Peringatan Suara Kritis (880Hz/660Hz)"
               }
               className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]",
+                "flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3",
                 alarmArmed
                   ? hasCriticalCondition
                     ? "border-crimson/60 bg-crimson/15 text-crimson font-semibold"
@@ -298,26 +296,40 @@ export function TopNav() {
                 <VolumeX size={14} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
               )}
               <span className="hidden sm:inline">
-                Audio Alarm ({alarmArmed ? "Armed" : "Muted"})
+                Alarm Suara ({alarmArmed ? "Aktif" : "Senyap"})
               </span>
-              <span className="inline sm:hidden">{alarmArmed ? "Armed" : "Muted"}</span>
-              {alarmArmed && hasCriticalCondition && <Led tone="crimson" pulse />}
+              <span className="inline sm:hidden">{alarmArmed ? "Aktif" : "Senyap"}</span>
+              {alarmArmed && hasCriticalCondition && <Led tone="crimson" />}
             </button>
 
             <button
               type="button"
               onClick={() => setDataSource(live ? "SIMULATOR" : "LIVE_API")}
               title={live ? "Kembali ke simulator sandbox" : "Polling live API setiap 3 detik"}
-              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider transition-colors hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
+              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider transition-colors hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
             >
-              <Led tone={statusTone} pulse={live && apiStatus === "FALLBACK_ERROR"} />
+              <Led tone={statusTone} />
               <m.span
-                key={live ? (isOfflineSnapshot ? "offline" : "live") : "sim"}
+                key={
+                  live
+                    ? apiStatus === "CONNECTING"
+                      ? "connecting"
+                      : isOfflineSnapshot
+                        ? "offline"
+                        : "live"
+                    : "sim"
+                }
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: DURATION.quick, ease: EASE_STANDARD }}
               >
-                {live ? (isOfflineSnapshot ? "OFFLINE CACHE" : "LIVE API") : "SIM SANDBOX"}
+                {live
+                  ? apiStatus === "CONNECTING"
+                    ? "MENGHUBUNGKAN..."
+                    : isOfflineSnapshot
+                      ? "OFFLINE CACHE"
+                      : "LIVE API"
+                  : "SIM SANDBOX"}
               </m.span>
             </button>
 
@@ -325,20 +337,22 @@ export function TopNav() {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  aria-label="API endpoint settings"
-                  className="grid min-h-[44px] min-w-[44px] cursor-pointer place-items-center panel text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  aria-label="Pengaturan endpoint Live API"
+                  className="grid min-h-[44px] min-w-[44px] cursor-pointer place-items-center panel text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Settings2 size={15} strokeWidth={1.5} aria-hidden="true" />
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 rounded-[2px] border-border bg-card p-4">
-                <div className="label-hmi mb-2">ORION Live API Endpoint</div>
+                <label htmlFor="orion-api-endpoint" className="label-hmi mb-2 block">
+                  Endpoint ORION Live API
+                </label>
                 <input
+                  id="orion-api-endpoint"
                   value={apiUrl}
                   onChange={(e) => setApiUrl(e.target.value)}
                   spellCheck={false}
-                  aria-label="API endpoint URL"
-                  className="min-h-[44px] w-full border border-border bg-background px-2.5 py-2 num text-[11px] outline-none focus:border-foreground/60"
+                  className="min-h-[44px] w-full rounded-[2px] border border-border bg-background px-2.5 py-2 num text-[11px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <div className="mt-3 space-y-1.5 num text-[11px]">
                   <div className="flex justify-between gap-3">
@@ -348,30 +362,32 @@ export function TopNav() {
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">STATUS</span>
                     <span className={statusClass}>
-                      {isOfflineSnapshot ? "FALLBACK SNAPSHOT" : apiStatus}
+                      {isOfflineSnapshot ? "CACHE OFFLINE" : apiStatus}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">LAST SYNC</span>
+                    <span className="text-muted-foreground">SINKRONISASI</span>
                     <span>{lastSyncTime ?? "--"}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">SNAPSHOT CACHE</span>
-                    <span className="text-[10px] text-foreground">{lastSyncedAt ?? "None"}</span>
+                    <span className="text-muted-foreground">CACHE SNAPSHOT</span>
+                    <span className="text-[11px] text-foreground">
+                      {lastSyncedAt ?? "Belum ada"}
+                    </span>
                   </div>
                 </div>
                 <button
                   type="button"
                   disabled={!live}
                   onClick={pollNow}
-                  className="mt-3 min-h-[44px] w-full cursor-pointer border border-border py-2 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mt-3 min-h-[44px] w-full cursor-pointer rounded-[2px] border border-border py-2 num text-[11px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  TEST PING
+                  UJI KONEKSI API
                 </button>
-                <p className="mt-2 num text-[10px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 num text-[11px] leading-relaxed text-muted-foreground">
                   {live
-                    ? "Polling every 3s with 1.5s timeout. Failed fetch preserves offline localStorage snapshot."
-                    : "Switch to Live API to poll the endpoint every 3 seconds."}
+                    ? "Polling otomatis setiap 3 detik (batas tunggu 1,5 detik). Saat gagal, snapshot lokal terakhir tetap dipertahankan."
+                    : "Aktifkan mode Live API untuk melakukan polling endpoint MySQL setiap 3 detik."}
                 </p>
               </PopoverContent>
             </Popover>
@@ -387,7 +403,7 @@ export function TopNav() {
                   type="button"
                   onClick={() => setActiveModule(mod.id)}
                   className={cn(
-                    "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[12px] font-medium tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-4 sm:py-3 md:px-5",
+                    "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[12px] font-medium tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-4 sm:py-3 md:px-5",
                     on
                       ? "bg-card text-foreground"
                       : "text-muted-foreground hover:bg-card/50 hover:text-foreground",

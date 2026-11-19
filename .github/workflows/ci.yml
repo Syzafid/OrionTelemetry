@@ -46,8 +46,11 @@ jobs:
             src/components/hmi/PresenceModule.tsx \
             src/components/hmi/ConfigModule.tsx \
             src/components/hmi/CommandPaletteModal.tsx \
+            src/components/hmi/OrionLogo.tsx \
             src/components/hmi/TopNav.tsx \
+            src/routes/__root.tsx \
             src/routes/index.tsx \
+            src/routes/dashboard.tsx \
             src/test/battery-analytics.test.ts \
             src/test/menu01-topology.test.tsx \
             src/test/menu02-fleet.test.tsx \
@@ -56,13 +59,14 @@ jobs:
             src/test/menu05-presence.test.tsx \
             src/test/menu06-config.test.tsx \
             src/test/live-integration.test.tsx
-          npx eslint --quiet src/context/TelemetryContext.tsx
+          npx eslint --quiet src/context/TelemetryContext.tsx src/components/hmi/primitives.tsx
 
       - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01, 02, 03, 04, 05 & 06)
         run: |
           node -e '
             const fs = require("node:fs");
             const files = [
+              "DESIGN.md",
               "src/lib/vehicle-topology.ts",
               "src/lib/battery-analytics.ts",
               "src/lib/fleet-filter.ts",
@@ -80,8 +84,12 @@ jobs:
               "src/components/hmi/PresenceModule.tsx",
               "src/components/hmi/ConfigModule.tsx",
               "src/components/hmi/CommandPaletteModal.tsx",
+              "src/components/hmi/OrionLogo.tsx",
+              "src/components/hmi/primitives.tsx",
               "src/components/hmi/TopNav.tsx",
+              "src/routes/__root.tsx",
               "src/routes/index.tsx",
+              "src/routes/dashboard.tsx",
               "src/test/battery-analytics.test.ts",
               "src/test/menu01-topology.test.tsx",
               "src/test/menu02-fleet.test.tsx",

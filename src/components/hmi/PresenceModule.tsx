@@ -160,7 +160,7 @@ export function PresenceModule() {
           <button
             type="button"
             onClick={pollNow}
-            className="min-h-[36px] cursor-pointer rounded-[2px] border border-amber/70 bg-amber/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:bg-amber/25"
+            className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-amber/70 bg-amber/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Muat Ulang API
           </button>
@@ -169,6 +169,7 @@ export function PresenceModule() {
 
       {/* Top Guard & Search/Filter Command Bar (shrink-0) */}
       <div className="panel flex shrink-0 flex-col gap-2.5 px-3 py-2.5 sm:px-4">
+        <h1 className="sr-only">Presensi Yard, Buffer Offline &amp; Log Pergerakan</h1>
         <div
           className={cn(
             "flex flex-wrap items-center justify-between gap-2.5",
@@ -183,16 +184,14 @@ export function PresenceModule() {
               aria-hidden="true"
             />
             <div className="min-w-0">
-              <div className="font-display text-xs uppercase tracking-[0.14em] sm:tracking-[0.18em] text-foreground">
+              <div className="font-display text-xs uppercase tracking-[0.08em] text-foreground">
                 Proteksi Mass Disconnect (AP Outage)
               </div>
-              <div className="num text-[10px] text-muted-foreground sm:text-[10.5px]">
-                {guardEval.reasonText}
-              </div>
+              <div className="num text-[11px] text-muted-foreground">{guardEval.reasonText}</div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 num text-xs">
-            <Led tone={guardEval.active ? "amber" : "emerald"} pulse={guardEval.active} />
+            <Led tone={guardEval.active ? "amber" : "emerald"} />
             <span className="hidden sm:inline font-medium">
               {guardEval.active
                 ? "Proteksi Aktif (Keberangkatan Ditahan)"
@@ -220,14 +219,14 @@ export function PresenceModule() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari Bay, Model, VIN, ID Event, Tag..."
               aria-label="Cari unit presensi dan log pergerakan"
-              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-xs text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
                 aria-label="Hapus pencarian presensi"
-                className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[44px] min-w-[44px] sm:min-h-[38px] sm:min-w-[38px] cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X size={14} strokeWidth={1.75} aria-hidden="true" />
               </button>
@@ -273,7 +272,7 @@ export function PresenceModule() {
                   )}
                 >
                   <span>{f.label}</span>
-                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[10px] font-bold">
+                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[11px] font-bold">
                     {f.count}
                   </span>
                 </button>
@@ -303,7 +302,7 @@ export function PresenceModule() {
             <span className="text-border">|</span>
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase",
                 conn.isOnline
                   ? "border-emerald/50 bg-emerald/15 text-emerald"
                   : "border-border bg-secondary/80 text-foreground",
@@ -333,20 +332,20 @@ export function PresenceModule() {
           <div className="flex flex-wrap items-center gap-1.5">
             {!isLiveApi && (
               <div className="flex flex-wrap items-center gap-1.5 border-r border-border/70 pr-2 mr-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   Uji Sandbox:
                 </span>
                 <button
                   type="button"
                   onClick={() => simulate(selected.in_yard ? "DEPARTED" : "STANDBY")}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/40 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/40 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {selected.in_yard ? "Simulasikan Keluar Yard" : "Kembalikan ke Yard"}
                 </button>
                 <button
                   type="button"
                   onClick={() => simulateBurstSync(selected.unit_id)}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-amber/50 bg-amber/10 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-amber/50 bg-amber/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Simulasi Spillover 28 Slot
                 </button>
@@ -356,14 +355,14 @@ export function PresenceModule() {
             <button
               type="button"
               onClick={() => setActiveModule("01")}
-              className="inline-flex min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+              className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Topologi &amp; RF (01)
             </button>
             <button
               type="button"
               onClick={() => setActiveModule("06")}
-              className="inline-flex min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+              className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Config Debounce (06)
             </button>
@@ -376,7 +375,7 @@ export function PresenceModule() {
         <Panel
           title="Presensi Unit & Antrean Dua Tingkat"
           code="BUF"
-          right={<span className="num text-[10px] text-muted-foreground">Maks 2.020 Slot</span>}
+          right={<span className="num text-[11px] text-muted-foreground">Maks 2.020 Slot</span>}
         >
           {/* Filtered Unit Selector Buttons (Accessible >= 44px touch target) */}
           <div className="card-scroll mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -406,7 +405,7 @@ export function PresenceModule() {
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Reset Filter
                 </button>
@@ -420,18 +419,18 @@ export function PresenceModule() {
               <span className="font-sans text-[11px] font-semibold text-foreground">
                 Arsitektur Antrean Dua Tingkat (Two-Tier Queue)
               </span>
-              <span className="rounded-[2px] border border-border bg-secondary/60 px-1.5 py-0.5 text-[9.5px] font-medium text-foreground">
+              <span className="rounded-[2px] border border-border bg-secondary/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground">
                 Kapasitas: 2.020 Slot
               </span>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-muted-foreground">
               <span>Tier 1: 20 Slot (RTC SRAM Cepat)</span>
               <span>Tier 2: 2.000 Slot (LittleFS Flash)</span>
             </div>
           </div>
 
           {/* Tier 1 Visualization: Honest Slot Occupancy (No fabricated hex addresses) */}
-          <div className="mb-2 flex items-center justify-between num text-[10px] text-muted-foreground">
+          <div className="mb-2 flex items-center justify-between num text-[11px] text-muted-foreground">
             <span className="font-sans font-medium text-foreground">
               Tier 1: Antrean RTC SRAM (20 Slot)
             </span>
@@ -449,12 +448,12 @@ export function PresenceModule() {
                     occupied ? "border-amber/60 bg-amber/10" : "border-border",
                   )}
                 >
-                  <span className="num text-[10px] text-muted-foreground">
+                  <span className="num text-[11px] text-muted-foreground">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <span
                     className={cn(
-                      "num text-[9.5px] font-semibold tracking-tight uppercase",
+                      "num text-[11px] font-semibold tracking-tight uppercase",
                       occupied ? "text-amber" : "text-dim",
                     )}
                   >
@@ -466,7 +465,7 @@ export function PresenceModule() {
           </div>
 
           {used > 20 && (
-            <div className="mt-2.5 flex items-center justify-between rounded-[2px] border border-amber/40 bg-amber/5 p-2 num text-[10px] text-amber">
+            <div className="mt-2.5 flex items-center justify-between rounded-[2px] border border-amber/40 bg-amber/5 p-2 num text-[11px] text-amber">
               <span className="flex items-center gap-1.5">
                 <Led tone="amber" />
                 Spillover Flash Non-Volatil Tier-2
@@ -481,7 +480,7 @@ export function PresenceModule() {
               {used > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-amber">{used} rekaman tertahan</span>
-                  <span className="rounded-[2px] border border-amber/50 bg-amber/10 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider text-amber">
+                  <span className="rounded-[2px] border border-amber/50 bg-amber/10 px-1.5 py-0.5 text-[11px] uppercase tracking-wider text-amber">
                     {used > 20 ? "Tier 1 + Tier 2 Flash (> 20)" : "Tier 1 RTC Cache (<= 20)"}
                   </span>
                 </div>
@@ -502,13 +501,13 @@ export function PresenceModule() {
                 <button
                   type="button"
                   onClick={() => flushBuffer(selected.unit_id)}
-                  className="num inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20"
+                  className="num inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <CheckCircle2 size={13} strokeWidth={1.75} aria-hidden="true" />
                   <span>Konfirmasi / Reset Antrean</span>
                 </button>
               )}
-              <span className="num text-[10px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 Boot #{selected.telemetry.boot}
               </span>
             </div>
@@ -532,7 +531,7 @@ export function PresenceModule() {
                     : `Unit Sedang Standby / Offline (${conn.badgeText})`}
               </span>
             </div>
-            <p className="mt-1 text-[10.5px] text-muted-foreground">
+            <p className="mt-1 text-[11px] text-muted-foreground">
               {used > 0
                 ? "Node menyimpan rekaman di Tier-1 RTC SRAM & Tier-2 LittleFS Flash selama terputus. Firmware ESP32 mengirim batch FIFO per 5 rekaman secara otomatis begitu terhubung ke Wi-Fi gudang atau hotspot teknisi."
                 : conn.isOnline
@@ -544,7 +543,7 @@ export function PresenceModule() {
           {/* Real Burst Sync History from audit_logs */}
           <div className="mt-3 rounded-[2px] border border-border/80 bg-background/40 p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="label-hmi text-[10px] text-foreground flex items-center gap-1.5">
+              <span className="label-hmi text-[11px] text-foreground flex items-center gap-1.5">
                 <History
                   size={12}
                   strokeWidth={1.75}
@@ -553,26 +552,26 @@ export function PresenceModule() {
                 />
                 Riwayat Burst Sync Terkirim (Audit Server)
               </span>
-              <span className="num text-[10px] text-muted-foreground">
+              <span className="num text-[11px] text-muted-foreground">
                 {burstSyncAuditRows.length} Terbaru
               </span>
             </div>
             {burstSyncAuditRows.length > 0 ? (
-              <ul className="space-y-1.5 num text-[10.5px]">
+              <ul className="space-y-1.5 num text-[11px]">
                 {burstSyncAuditRows.map((ev) => (
                   <li
                     key={ev.id}
                     className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/40 pt-1.5 first:border-t-0 first:pt-0"
                   >
                     <span className="text-foreground/90">{ev.message}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
+                    <span className="text-[11px] text-muted-foreground shrink-0">
                       {ev.created_at}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="num text-[10.5px] text-muted-foreground">
+              <p className="num text-[11px] text-muted-foreground">
                 Belum ada histori event BURST_SYNC yang tercatat pada sesi audit ini.
               </p>
             )}
@@ -580,7 +579,7 @@ export function PresenceModule() {
 
           {/* Filtered Fleet Presence Directory */}
           <div className="mt-4 border-t border-border pt-3">
-            <div className="label-hmi mb-2 text-[10px]">
+            <div className="label-hmi mb-2 text-[11px]">
               Direktori Presensi Armada ({filteredUnits.length} Unit)
             </div>
             {filteredUnits.length === 0 ? (
@@ -589,7 +588,7 @@ export function PresenceModule() {
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Reset Filter
                 </button>
@@ -619,15 +618,15 @@ export function PresenceModule() {
                         <span className="font-medium text-foreground truncate block sm:inline">
                           {u.model}
                         </span>{" "}
-                        <span className="text-[10px] text-muted-foreground">({u.trim})</span>
+                        <span className="text-[11px] text-muted-foreground">({u.trim})</span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           {fmtV(u.telemetry.v_bat)}V
                         </span>
                         <span
                           className={cn(
-                            "rounded-[2px] border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+                            "rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase",
                             u.in_yard
                               ? uConn.isOnline
                                 ? "border-emerald/40 bg-emerald/15 text-emerald"
@@ -665,7 +664,7 @@ export function PresenceModule() {
                   aria-pressed={unitScope === "ALL"}
                   onClick={() => setUnitScope("ALL")}
                   className={cn(
-                    "num min-h-[36px] cursor-pointer rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase transition-colors",
+                    "num min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     unitScope === "ALL"
                       ? "border-foreground/70 bg-foreground/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground",
@@ -678,7 +677,7 @@ export function PresenceModule() {
                   aria-pressed={unitScope === "SELECTED"}
                   onClick={() => setUnitScope("SELECTED")}
                   className={cn(
-                    "num min-h-[36px] cursor-pointer rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase transition-colors",
+                    "num min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     unitScope === "SELECTED"
                       ? "border-foreground/70 bg-foreground/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground",
@@ -697,7 +696,7 @@ export function PresenceModule() {
                   aria-pressed={logViewMode === "PAIRED"}
                   onClick={() => setLogViewMode("PAIRED")}
                   className={cn(
-                    "num min-h-[36px] cursor-pointer rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase transition-colors",
+                    "num min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     logViewMode === "PAIRED"
                       ? "border-emerald/60 bg-emerald/15 text-emerald"
                       : "border-border text-muted-foreground hover:text-foreground",
@@ -710,7 +709,7 @@ export function PresenceModule() {
                   aria-pressed={logViewMode === "RAW"}
                   onClick={() => setLogViewMode("RAW")}
                   className={cn(
-                    "num min-h-[36px] cursor-pointer rounded-[2px] border px-2 py-1 text-[10px] font-semibold uppercase transition-colors",
+                    "num min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     logViewMode === "RAW"
                       ? "border-foreground/70 bg-foreground/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground",
@@ -761,20 +760,20 @@ export function PresenceModule() {
                             {u?.model ?? row.unit_id} (Bay {u?.bay ?? "--"})
                           </div>
                         </div>
-                        <span className="rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[10px] text-foreground">
+                        <span className="rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[11px] text-foreground">
                           {row.durationLabel}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 border-t border-border/50 pt-2 text-[11px]">
                         <div>
-                          <span className="text-muted-foreground block text-[10px]">Keluar:</span>
+                          <span className="text-muted-foreground block text-[11px]">Keluar:</span>
                           <span className="text-foreground">{row.exitTime}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block text-[10px]">Kembali:</span>
+                          <span className="text-muted-foreground block text-[11px]">Kembali:</span>
                           {row.isStillAway ? (
                             <span className="inline-flex items-center gap-1.5 text-amber font-semibold">
-                              <Led tone="amber" pulse />
+                              <Led tone="amber" />
                               Masih di Luar
                             </span>
                           ) : (
@@ -782,7 +781,7 @@ export function PresenceModule() {
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] text-muted-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
                         <span>{row.zoneRoute}</span>
                         <span>{row.debounceText}</span>
                       </div>
@@ -796,7 +795,7 @@ export function PresenceModule() {
                               aria-pressed={on}
                               onClick={() => tagMovement(row.id, tg, row.pairedId ?? undefined)}
                               className={cn(
-                                "num min-h-[44px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[10.5px] uppercase tracking-wider transition-colors",
+                                "num min-h-[44px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors",
                                 on
                                   ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                                   : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
@@ -846,7 +845,7 @@ export function PresenceModule() {
                           <td className="num py-2.5 pr-3 text-[11px] font-medium text-foreground">
                             <div>{row.id}</div>
                             {row.pairedId && (
-                              <div className="text-[9.5px] text-muted-foreground">
+                              <div className="text-[11px] text-muted-foreground">
                                 Masuk: {row.pairedId}
                               </div>
                             )}
@@ -855,7 +854,7 @@ export function PresenceModule() {
                             <div className="font-display text-[11px] font-medium uppercase tracking-wider">
                               {u?.model ?? row.unit_id}
                             </div>
-                            <div className="num text-[10px] text-muted-foreground">
+                            <div className="num text-[11px] text-muted-foreground">
                               Bay {u?.bay ?? "--"} · {row.zoneRoute}
                             </div>
                           </td>
@@ -865,7 +864,7 @@ export function PresenceModule() {
                           <td className="num py-2.5 pr-3 text-[11px] whitespace-nowrap">
                             {row.isStillAway ? (
                               <span className="inline-flex items-center gap-1.5 text-amber font-semibold">
-                                <Led tone="amber" pulse />
+                                <Led tone="amber" />
                                 Masih di Luar
                               </span>
                             ) : (
@@ -900,7 +899,7 @@ export function PresenceModule() {
                                       tagMovement(row.id, tg, row.pairedId ?? undefined)
                                     }
                                     className={cn(
-                                      "num min-h-[38px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[10.5px] uppercase tracking-wider transition-colors",
+                                      "num min-h-[38px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors",
                                       on
                                         ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                                         : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
@@ -938,7 +937,7 @@ export function PresenceModule() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold text-foreground">{e.id}</span>
-                        <span className="rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[11px]">
                           {e.event_type ?? "EXIT_YARD"}
                         </span>
                       </div>
@@ -968,7 +967,7 @@ export function PresenceModule() {
                             aria-pressed={e.tag === tg}
                             onClick={() => tagMovement(e.id, tg)}
                             className={cn(
-                              "num min-h-[44px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[10.5px] uppercase tracking-wider transition-colors",
+                              "num min-h-[44px] cursor-pointer rounded-[2px] border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors",
                               e.tag === tg
                                 ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                                 : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
@@ -1022,14 +1021,14 @@ export function PresenceModule() {
                             <div className="font-display text-[11px] font-medium uppercase tracking-wider">
                               {u?.model ?? e.unit_id}
                             </div>
-                            <div className="num text-[10px] text-muted-foreground">
+                            <div className="num text-[11px] text-muted-foreground">
                               Bay {u?.bay ?? "--"}
                             </div>
                           </td>
-                          <td className="num py-2.5 pr-3 text-[10.5px]">
+                          <td className="num py-2.5 pr-3 text-[11px]">
                             <span
                               className={cn(
-                                "rounded-[2px] border px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                                "rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase",
                                 isEnter
                                   ? "border-emerald/40 bg-emerald/10 text-emerald"
                                   : "border-amber/40 bg-amber/10 text-amber",
@@ -1044,7 +1043,7 @@ export function PresenceModule() {
                           <td className="num py-2.5 pr-3 text-[11px] whitespace-nowrap">
                             {rawStatus.isStillAway ? (
                               <span className="inline-flex items-center gap-1.5 text-amber font-semibold">
-                                <Led tone="amber" pulse />
+                                <Led tone="amber" />
                                 {rawStatus.label}
                               </span>
                             ) : (
@@ -1066,7 +1065,7 @@ export function PresenceModule() {
                                   aria-pressed={e.tag === tg}
                                   onClick={() => tagMovement(e.id, tg)}
                                   className={cn(
-                                    "num min-h-[38px] cursor-pointer rounded-[2px] border px-2 py-1 text-[10px] uppercase tracking-wider transition-colors",
+                                    "num min-h-[38px] cursor-pointer rounded-[2px] border px-2 py-1 text-[11px] uppercase tracking-wider transition-colors",
                                     e.tag === tg
                                       ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                                       : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",

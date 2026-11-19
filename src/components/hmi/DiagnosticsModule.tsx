@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import {
   Activity,
   AlertTriangle,
+  BatteryCharging,
   CircuitBoard,
   Fuel,
   Lock,
@@ -11,7 +12,6 @@ import {
   WifiOff,
   Wrench,
   X,
-  Zap,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -83,7 +83,7 @@ function Gauge({
     [value, animatedVal, max, redline],
   );
   const inactive = value < 0;
-  const activeStroke = inactive ? "#64748B" : color;
+  const activeStroke = inactive ? "var(--muted-foreground)" : color;
 
   return (
     <div className="engine-gauge flex flex-col items-center">
@@ -95,10 +95,10 @@ function Gauge({
         }
         className="w-full max-w-[210px] sm:max-w-[245px]"
       >
-        <path d={geom.baseArcPath} stroke="#1E222B" strokeWidth="10" fill="none" />
+        <path d={geom.baseArcPath} stroke="var(--border)" strokeWidth="10" fill="none" />
         <path
           d={geom.redlineArcPath}
-          stroke="#F45B60"
+          stroke="var(--crimson)"
           strokeWidth="10"
           fill="none"
           opacity="0.75"
@@ -113,7 +113,7 @@ function Gauge({
             y1={tk.y1}
             x2={tk.x2}
             y2={tk.y2}
-            stroke={tk.isRedline ? "#F45B60" : "#64748B"}
+            stroke={tk.isRedline ? "var(--crimson)" : "var(--muted-foreground)"}
             strokeWidth={tk.isMajor ? 1.5 : 1}
           />
         ))}
@@ -122,7 +122,7 @@ function Gauge({
             key={lbl.key}
             x={lbl.x}
             y={lbl.y}
-            fill="#94A3B8"
+            fill="var(--muted-foreground)"
             fontSize="10"
             fontFamily="JetBrains Mono"
             textAnchor="middle"
@@ -139,11 +139,11 @@ function Gauge({
           stroke={activeStroke}
           strokeWidth="2"
         />
-        <circle cx={140} cy={140} r="6" fill="#0F1116" stroke={activeStroke} />
+        <circle cx={140} cy={140} r="6" fill="var(--background)" stroke={activeStroke} />
         <text
           x={140}
           y={192}
-          fill="#F2EFE9"
+          fill="var(--foreground)"
           fontSize="30"
           fontFamily="JetBrains Mono"
           textAnchor="middle"
@@ -153,7 +153,7 @@ function Gauge({
         <text
           x={140}
           y={212}
-          fill="#94A3B8"
+          fill="var(--muted-foreground)"
           fontSize="10.5"
           fontFamily="JetBrains Mono"
           textAnchor="middle"
@@ -163,7 +163,7 @@ function Gauge({
       </svg>
       <div className="-mt-1 text-center sm:-mt-2">
         <div className="label-hmi text-foreground">{label}</div>
-        <div className="num text-[10px] text-muted-foreground">{pid}</div>
+        <div className="num text-[11px] text-muted-foreground">{pid}</div>
       </div>
     </div>
   );
@@ -426,7 +426,7 @@ export function DiagnosticsModule() {
           <button
             type="button"
             onClick={pollNow}
-            className="min-h-[36px] cursor-pointer rounded-[2px] border border-amber/70 bg-amber/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-amber/70 bg-amber/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Muat Ulang API
           </button>
@@ -435,6 +435,7 @@ export function DiagnosticsModule() {
 
       {/* Target Unit Command & Context Strip (shrink-0) */}
       <div className="flex shrink-0 flex-col gap-2 rounded-[2px] border border-border bg-card/80 px-3 py-2">
+        <h1 className="sr-only">Diagnostik OBD-II &amp; Powertrain Stock Yard</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className="label-hmi mr-1 shrink-0">Target Unit</span>
           {units.length > 3 && (
@@ -451,14 +452,14 @@ export function DiagnosticsModule() {
                 onChange={(e) => setNodeFilter(e.target.value)}
                 placeholder="Cari Bay / Model / DTC..."
                 aria-label="Cari unit diagnostik OBD-II"
-                className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-[11px] text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+                className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-8 pr-11 py-1.5 num text-[11px] text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               {nodeFilter && (
                 <button
                   type="button"
                   onClick={() => setNodeFilter("")}
                   aria-label="Hapus pencarian unit"
-                  className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[44px] min-w-[44px] sm:min-h-[38px] sm:min-w-[38px] cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X size={14} strokeWidth={1.75} aria-hidden="true" />
                 </button>
@@ -501,7 +502,7 @@ export function DiagnosticsModule() {
                 <button
                   type="button"
                   onClick={() => setNodeFilter("")}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Reset Filter
                 </button>
@@ -533,7 +534,7 @@ export function DiagnosticsModule() {
             <span className="text-border">|</span>
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase",
                 conn.isOnline
                   ? "border-emerald/50 bg-emerald/15 text-emerald"
                   : "border-border bg-secondary/80 text-foreground",
@@ -564,20 +565,20 @@ export function DiagnosticsModule() {
           <div className="flex flex-wrap items-center gap-1.5">
             {!isLiveApi && (
               <div className="flex flex-wrap items-center gap-1.5 border-r border-border/70 pr-2 mr-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   Uji Sandbox:
                 </span>
                 <button
                   type="button"
                   onClick={() => simulate(sleeping ? "WARMUP" : "STANDBY")}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/40 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/40 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {sleeping ? "Simulasikan Mesin ON" : "Matikan Mesin (OFF)"}
                 </button>
                 <button
                   type="button"
                   onClick={() => injectDtc(selected.unit_id, "P0133")}
-                  className="min-h-[36px] cursor-pointer rounded-[2px] border border-crimson/50 bg-crimson/10 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/20"
+                  className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-crimson/50 bg-crimson/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Simulasi DTC P0133
                 </button>
@@ -585,7 +586,7 @@ export function DiagnosticsModule() {
                   <button
                     type="button"
                     onClick={() => injectDtc(selected.unit_id, null)}
-                    className="min-h-[36px] cursor-pointer rounded-[2px] border border-emerald/50 bg-emerald/10 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20"
+                    className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-emerald/50 bg-emerald/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Pulihkan Nominal
                   </button>
@@ -597,7 +598,7 @@ export function DiagnosticsModule() {
               <button
                 type="button"
                 onClick={() => setActiveModule("02")}
-                className="inline-flex min-h-[36px] cursor-pointer items-center gap-1 rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/25"
+                className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center gap-1 rounded-[2px] border border-crimson/60 bg-crimson/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-crimson hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Wrench size={12} strokeWidth={1.75} aria-hidden="true" />
                 <span>Buka Tiket Armada (02)</span>
@@ -607,7 +608,7 @@ export function DiagnosticsModule() {
               <button
                 type="button"
                 onClick={() => setActiveModule("03")}
-                className="inline-flex min-h-[36px] cursor-pointer items-center gap-1 rounded-[2px] border border-amber/60 bg-amber/15 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/25"
+                className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center gap-1 rounded-[2px] border border-amber/60 bg-amber/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span>Antrean Pemanasan (03)</span>
               </button>
@@ -615,7 +616,7 @@ export function DiagnosticsModule() {
             <button
               type="button"
               onClick={() => setActiveModule("06")}
-              className="inline-flex min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+              className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span>Kalibrasi &amp; Config (06)</span>
             </button>
@@ -681,7 +682,7 @@ export function DiagnosticsModule() {
                   />
                 )}
                 {tab.id === "ELECTRICAL" && (
-                  <Zap
+                  <BatteryCharging
                     size={14}
                     aria-hidden="true"
                     className={isActive ? "text-amber" : "text-muted-foreground"}
@@ -705,10 +706,7 @@ export function DiagnosticsModule() {
                   : "text-emerald",
             )}
           >
-            <Led
-              tone={!conn.isOnline || sleeping ? "dim" : "emerald"}
-              pulse={conn.isOnline && !sleeping}
-            />
+            <Led tone={!conn.isOnline || sleeping ? "dim" : "emerald"} />
             {!conn.isOnline ? conn.badgeText : sleeping ? "STANDBY / KUNCI OFF" : "LIVE CAN AKTIF"}
           </span>
         </div>
@@ -732,7 +730,7 @@ export function DiagnosticsModule() {
                 label={`Putaran (${profile.fuelType})`}
                 pid="Mode 01, PID 010C"
                 unit="RPM"
-                color="#10B981"
+                color="var(--emerald)"
               />
             </Panel>
 
@@ -744,7 +742,7 @@ export function DiagnosticsModule() {
                 label="Suhu Coolant"
                 pid="Mode 01, PID 0105"
                 unit="°C"
-                color="#F59E0B"
+                color="var(--amber)"
               />
             </Panel>
 
@@ -752,7 +750,7 @@ export function DiagnosticsModule() {
               title="Tren RPM & Suhu Coolant (Riwayat Nyata)"
               code={isLiveApi ? "LIVE" : "HIST"}
               right={
-                <div className="flex items-center gap-3 num text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-3 num text-[11px] text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <span className="inline-block h-2 w-2 bg-emerald" aria-hidden="true" />
                     RPM
@@ -784,7 +782,7 @@ export function DiagnosticsModule() {
                   <button
                     type="button"
                     onClick={() => setActiveModule("03")}
-                    className="mt-3 min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1 num text-[10.5px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60"
+                    className="mt-3 min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-border bg-secondary/50 px-3 py-1 num text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Menuju Antrean Pemanasan (03)
                   </button>
@@ -793,17 +791,25 @@ export function DiagnosticsModule() {
                 <div className="session-chart h-[200px] sm:h-[220px] lg:h-[235px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendSeries.points}>
-                      <CartesianGrid stroke="#282E3B" vertical={false} />
+                      <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                       <XAxis
                         dataKey="t"
-                        tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
-                        axisLine={{ stroke: "#282E3B" }}
+                        tick={{
+                          fill: "var(--muted-foreground)",
+                          fontSize: 10,
+                          fontFamily: "JetBrains Mono",
+                        }}
+                        axisLine={{ stroke: "var(--chart-grid)" }}
                         tickLine={false}
                       />
                       <YAxis
                         yAxisId="r"
                         domain={[0, trendSeries.maxRpmDomain]}
-                        tick={{ fill: "#10B981", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                        tick={{
+                          fill: "var(--emerald)",
+                          fontSize: 10,
+                          fontFamily: "JetBrains Mono",
+                        }}
                         width={40}
                         axisLine={false}
                         tickLine={false}
@@ -812,15 +818,15 @@ export function DiagnosticsModule() {
                         yAxisId="t"
                         orientation="right"
                         domain={[0, 120]}
-                        tick={{ fill: "#F59E0B", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                        tick={{ fill: "var(--amber)", fontSize: 10, fontFamily: "JetBrains Mono" }}
                         width={30}
                         axisLine={false}
                         tickLine={false}
                       />
                       <Tooltip
                         contentStyle={{
-                          background: "#0F1116",
-                          border: "1px solid #1E222B",
+                          background: "var(--background)",
+                          border: "1px solid var(--border)",
                           borderRadius: 2,
                           fontFamily: "JetBrains Mono",
                           fontSize: 11,
@@ -831,7 +837,7 @@ export function DiagnosticsModule() {
                         type="monotone"
                         dataKey="rpm"
                         name="Putaran (RPM)"
-                        stroke="#10B981"
+                        stroke="var(--emerald)"
                         strokeWidth={1.75}
                         dot={false}
                         isAnimationActive={chartIntro}
@@ -841,7 +847,7 @@ export function DiagnosticsModule() {
                         type="monotone"
                         dataKey="temp"
                         name="Coolant (°C)"
-                        stroke="#F59E0B"
+                        stroke="var(--amber)"
                         strokeWidth={1.75}
                         dot={false}
                         isAnimationActive={chartIntro}
@@ -860,7 +866,7 @@ export function DiagnosticsModule() {
             right={
               <span
                 className={cn(
-                  "num text-[10.5px] font-semibold uppercase",
+                  "num text-[11px] font-semibold uppercase",
                   sleeping ? "text-muted-foreground" : "text-emerald",
                 )}
               >
@@ -879,7 +885,7 @@ export function DiagnosticsModule() {
                     <span className="label-hmi text-xs text-foreground font-semibold tracking-wider">
                       {m.label}
                     </span>
-                    <span className="num shrink-0 rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                    <span className="num shrink-0 rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                       PID {m.pid}
                     </span>
                   </div>
@@ -905,7 +911,7 @@ export function DiagnosticsModule() {
                         />
                       </div>
                     )}
-                    <div className="mt-2 num text-[10.5px] text-muted-foreground">{m.refHint}</div>
+                    <div className="mt-2 num text-[11px] text-muted-foreground">{m.refHint}</div>
                   </div>
                 </div>
               ))}
@@ -927,7 +933,7 @@ export function DiagnosticsModule() {
             title="Monitor Kode Kerusakan DTC (Mode 03 Read-Only)"
             code="03/07"
             right={
-              <span className="num inline-flex items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="num inline-flex items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <Lock size={10} strokeWidth={2} aria-hidden="true" />
                 Read-Only ECU
               </span>
@@ -990,7 +996,7 @@ export function DiagnosticsModule() {
                     <div className="label-hmi text-xs text-muted-foreground">{dtc.system}</div>
                     <p className="num text-xs leading-relaxed text-foreground/90">{dtc.detail}</p>
                     <div className="rounded-[2px] border border-border/70 bg-background/50 p-3">
-                      <div className="label-hmi text-[10px] text-foreground mb-1.5">
+                      <div className="label-hmi text-[11px] text-foreground mb-1.5">
                         Langkah Inspeksi SOP Teknisi
                       </div>
                       <ol className="list-decimal pl-4 space-y-1 num text-xs text-muted-foreground">
@@ -1024,7 +1030,7 @@ export function DiagnosticsModule() {
                   <span className="label-hmi text-xs text-foreground font-semibold">
                     Mode 07: Pending Diagnostic Trouble Codes
                   </span>
-                  <span className="num rounded-[2px] border border-border bg-secondary/70 px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                  <span className="num rounded-[2px] border border-border bg-secondary/70 px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
                     Belum Dipoling (FW v1.6.0)
                   </span>
                 </div>
@@ -1138,7 +1144,7 @@ export function DiagnosticsModule() {
                       <span className="label-hmi text-xs text-foreground font-semibold">
                         Konsumsi BBM (Rate)
                       </span>
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                         PID 015E
                       </span>
                     </div>
@@ -1158,7 +1164,7 @@ export function DiagnosticsModule() {
                         <span className="ml-1 text-sm font-normal text-muted-foreground">L/h</span>
                       )}
                     </div>
-                    <div className="mt-1.5 num text-[10.5px] text-muted-foreground">
+                    <div className="mt-1.5 num text-[11px] text-muted-foreground">
                       Normal idle stasioner: 0.7 - 1.5 L/h
                     </div>
                   </div>
@@ -1170,7 +1176,7 @@ export function DiagnosticsModule() {
                       <span className="label-hmi text-xs text-foreground font-semibold">
                         Sensor O2 (Bank 1)
                       </span>
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                         PID 0114
                       </span>
                     </div>
@@ -1190,7 +1196,7 @@ export function DiagnosticsModule() {
                         <span className="ml-1 text-sm font-normal text-muted-foreground">V</span>
                       )}
                     </div>
-                    <div className="mt-1.5 num text-[10.5px] text-muted-foreground">
+                    <div className="mt-1.5 num text-[11px] text-muted-foreground">
                       Rentang switching normal: 0.10 - 0.90 V
                     </div>
                   </div>
@@ -1202,7 +1208,7 @@ export function DiagnosticsModule() {
                       <span className="label-hmi text-xs text-foreground font-semibold">
                         Short-Term Fuel Trim
                       </span>
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                         PID 0106
                       </span>
                     </div>
@@ -1226,7 +1232,7 @@ export function DiagnosticsModule() {
                         <span className="ml-1 text-sm font-normal text-muted-foreground">%</span>
                       )}
                     </div>
-                    <div className="mt-1.5 num text-[10.5px] text-muted-foreground">
+                    <div className="mt-1.5 num text-[11px] text-muted-foreground">
                       Toleransi normal: -10.0% s/d +10.0%
                     </div>
                   </div>
@@ -1238,7 +1244,7 @@ export function DiagnosticsModule() {
                       <span className="label-hmi text-xs text-foreground font-semibold">
                         Status Campuran BBM
                       </span>
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                         O2 + STFT
                       </span>
                     </div>
@@ -1259,9 +1265,7 @@ export function DiagnosticsModule() {
                     >
                       {mixtureStatus}
                     </div>
-                    <div className="mt-1.5 num text-[10.5px] text-muted-foreground">
-                      {mixtureSub}
-                    </div>
+                    <div className="mt-1.5 num text-[11px] text-muted-foreground">{mixtureSub}</div>
                   </div>
                 </div>
               </div>
@@ -1286,7 +1290,7 @@ export function DiagnosticsModule() {
                   <span className="label-hmi text-xs text-foreground font-semibold">
                     Voltase Modul ECU
                   </span>
-                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     PID 0142
                   </span>
                 </div>
@@ -1315,7 +1319,7 @@ export function DiagnosticsModule() {
                   <span className="label-hmi text-xs text-foreground font-semibold">
                     Jarak Sejak Reset DTC
                   </span>
-                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     PID 0131
                   </span>
                 </div>
@@ -1377,7 +1381,7 @@ export function DiagnosticsModule() {
                   <span className="label-hmi text-xs text-foreground font-semibold">
                     Kompensasi Suhu 25°C
                   </span>
-                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                  <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     RTC DS3231
                   </span>
                 </div>
@@ -1431,7 +1435,7 @@ export function DiagnosticsModule() {
                     <span className="font-bold text-foreground">{w.wire}</span>
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                        "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                         w.liveStatus === "FAULT"
                           ? "border-crimson/50 bg-crimson/10 text-crimson"
                           : w.liveStatus === "WARN"
@@ -1464,7 +1468,7 @@ export function DiagnosticsModule() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full border-collapse text-left num text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-border bg-secondary/50 text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2.5 px-3 font-medium">Jalur Kabel</th>
                     <th className="py-2.5 px-3 font-medium">Pinout &amp; Rangkaian</th>
                     <th className="py-2.5 px-3 font-medium">Fungsi Sinyal</th>
@@ -1495,7 +1499,7 @@ export function DiagnosticsModule() {
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-foreground">{w.liveReading}</span>
-                            <span className="rounded-[2px] border border-border bg-secondary/50 px-1.5 py-0.5 text-[9.5px] uppercase text-muted-foreground">
+                            <span className="rounded-[2px] border border-border bg-secondary/50 px-1.5 py-0.5 text-[11px] uppercase text-muted-foreground">
                               {w.sourceKind === "SENSOR" ? "Sensor" : "Referensi"}
                             </span>
                           </div>
@@ -1503,7 +1507,7 @@ export function DiagnosticsModule() {
                         <td className="py-3 px-3 text-right whitespace-nowrap">
                           <span
                             className={cn(
-                              "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                              "inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                               badgeTone === "emerald"
                                 ? "border-emerald/50 bg-emerald/10 text-emerald"
                                 : badgeTone === "crimson"

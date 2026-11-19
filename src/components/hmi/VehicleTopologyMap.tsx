@@ -168,18 +168,18 @@ export function VehicleTopologyMap({
       {/* Workbench Header */}
       <div className="mb-2.5 flex flex-col gap-2 border-b border-border/70 pb-2 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background px-2.5 py-1 num text-[10.5px] uppercase font-semibold text-foreground">
-            <Led tone={overallTone} pulse={overallTone === "crimson"} />
+          <div className="flex items-center gap-1.5 rounded-[1px] border border-border/80 bg-background px-2.5 py-1 num text-[11px] uppercase font-semibold text-foreground">
+            <Led tone={overallTone} />
             <span>TOPOLOGI KELISTRIKAN MITSUBISHI {unit.model}</span>
           </div>
-          <span className="num hidden text-[10.5px] text-muted-foreground sm:inline truncate">
+          <span className="num hidden text-[11px] text-muted-foreground sm:inline truncate">
             {profile.chassisLabel} ({profile.engineCode})
           </span>
         </div>
 
         {/* Quick Filter Pill Controls */}
-        <div className="card-scroll flex items-center gap-1 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible sm:pb-0 num text-[10px]">
-          <span className="mr-0.5 shrink-0 text-muted-foreground text-[9.5px] hidden sm:inline">
+        <div className="card-scroll flex items-center gap-1 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible sm:pb-0 num text-[11px]">
+          <span className="mr-0.5 shrink-0 text-muted-foreground text-[11px] hidden sm:inline">
             PROBE:
           </span>
           {[
@@ -198,7 +198,7 @@ export function VehicleTopologyMap({
                 type="button"
                 onClick={() => onSelectNode(item.id as TopologyNodeId)}
                 className={cn(
-                  "flex min-h-[40px] sm:min-h-[28px] shrink-0 items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer",
+                  "flex min-h-[44px] sm:min-h-[34px] shrink-0 items-center gap-1 rounded-[1px] border px-2 py-0.5 uppercase tracking-wider whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer",
                   on
                     ? "border-foreground/80 bg-foreground/15 font-semibold text-foreground"
                     : "border-border text-muted-foreground hover:bg-card hover:text-foreground",
@@ -234,7 +234,7 @@ export function VehicleTopologyMap({
             x="50"
             y="204"
             fill="oklch(0.72 0.01 260)"
-            fontSize="8.5"
+            fontSize="10"
             fontFamily="monospace"
             fontWeight="500"
           >
@@ -289,7 +289,7 @@ export function VehicleTopologyMap({
               x="200"
               y="98"
               fill="oklch(0.72 0.01 260)"
-              fontSize="9"
+              fontSize="10"
               fontFamily="monospace"
               fontWeight="500"
             >
@@ -318,7 +318,7 @@ export function VehicleTopologyMap({
               x="440"
               y="125"
               fill="oklch(0.72 0.01 260)"
-              fontSize="9"
+              fontSize="10"
               fontFamily="monospace"
               fontWeight="500"
             >
@@ -398,7 +398,7 @@ export function VehicleTopologyMap({
             <path
               d="M 160 185 L 160 140 L 210 140"
               fill="none"
-              stroke={isCharging ? "#10B981" : "oklch(0.40 0.015 265)"}
+              stroke={isCharging ? "var(--emerald)" : "oklch(0.40 0.015 265)"}
               strokeWidth={isCharging ? "2.5" : "1.5"}
             />
 
@@ -406,7 +406,7 @@ export function VehicleTopologyMap({
             <path
               d="M 240 140 L 290 140 L 290 180 L 490 180 L 490 190"
               fill="none"
-              stroke={isBatteryCrit ? "#F45B60" : "#F59E0B"}
+              stroke={isBatteryCrit ? "var(--crimson)" : "var(--amber)"}
               strokeWidth="2"
             />
 
@@ -414,7 +414,7 @@ export function VehicleTopologyMap({
             <path
               d="M 230 230 L 320 230 L 320 250 L 370 250"
               fill="none"
-              stroke={t.engine_on ? "#10B981" : "oklch(0.40 0.015 265)"}
+              stroke={t.engine_on ? "var(--emerald)" : "oklch(0.40 0.015 265)"}
               strokeWidth="1.5"
             />
 
@@ -422,7 +422,7 @@ export function VehicleTopologyMap({
             <path
               d="M 390 240 L 450 240 L 450 215 L 490 215"
               fill="none"
-              stroke={isCanFault ? "#F45B60" : "#10B981"}
+              stroke={isCanFault ? "var(--crimson)" : "var(--emerald)"}
               strokeWidth="2"
               strokeDasharray={isCanFault ? "4 2" : "none"}
             />
@@ -432,7 +432,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 1: 12V BATTERY & SHUNT SENSOR (Ruang Mesin Kiri) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("battery"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("battery"),
+            )}
             onClick={() => onSelectNode("battery")}
             onFocus={() => setFocusedNode("battery")}
             onBlur={() => setFocusedNode(null)}
@@ -455,7 +458,7 @@ export function VehicleTopologyMap({
                 height="50"
                 rx="3"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -471,23 +474,23 @@ export function VehicleTopologyMap({
               fill={activeNode === "battery" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={
                 activeNode === "battery"
-                  ? "#F2EFE9"
+                  ? "var(--foreground)"
                   : isBatteryCrit
-                    ? "#F45B60"
+                    ? "var(--crimson)"
                     : isBatteryLow
-                      ? "#F59E0B"
-                      : "#10B981"
+                      ? "var(--amber)"
+                      : "var(--emerald)"
               }
               strokeWidth={activeNode === "battery" ? "2" : "1.5"}
             />
             {/* Battery Terminals */}
-            <rect x="206" y="110" width="8" height="5" fill="#F45B60" />
-            <rect x="236" y="110" width="8" height="5" fill="#64748B" />
+            <rect x="206" y="110" width="8" height="5" fill="var(--crimson)" />
+            <rect x="236" y="110" width="8" height="5" fill="var(--muted-foreground)" />
             <text
               x="210"
               y="138"
-              fill="#F2EFE9"
-              fontSize="9"
+              fill="var(--foreground)"
+              fontSize="10"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -495,12 +498,12 @@ export function VehicleTopologyMap({
             </text>
 
             {/* Probe Number Badge (Always Visible on Mobile & Desktop) */}
-            <circle cx="200" cy="115" r="9" fill="#10B981" />
+            <circle cx="200" cy="115" r="9" fill="var(--emerald)" />
             <text
               x="196"
               y="118.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -516,7 +519,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "battery" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "battery" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "battery" ? "1.5" : "1"}
               />
               <line
@@ -531,7 +534,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -541,18 +544,22 @@ export function VehicleTopologyMap({
                 x="8"
                 y="26"
                 fill={
-                  isBatteryCrit ? "#F45B60" : isBatteryLow || !isCalibrated ? "#F59E0B" : "#10B981"
+                  isBatteryCrit
+                    ? "var(--crimson)"
+                    : isBatteryLow || !isCalibrated
+                      ? "var(--amber)"
+                      : "var(--emerald)"
                 }
                 fontSize="11"
                 fontWeight="bold"
                 fontFamily="monospace"
               >
                 {fmtV(t.v_bat)} V{" "}
-                <tspan fill="oklch(0.72 0.01 260)" fontSize="9">
+                <tspan fill="oklch(0.72 0.01 260)" fontSize="10">
                   ({t.adc_raw_mv} mV)
                 </tspan>
                 {!isCalibrated && (
-                  <tspan fill="#F59E0B" fontSize="8.5" fontWeight="bold">
+                  <tspan fill="var(--amber)" fontSize="10" fontWeight="bold">
                     {" "}
                     [DRIFT]
                   </tspan>
@@ -563,7 +570,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 2: ALTERNATOR & REGULATOR (Ruang Mesin Depan) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("alternator"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("alternator"),
+            )}
             onClick={() => onSelectNode("alternator")}
             onFocus={() => setFocusedNode("alternator")}
             onBlur={() => setFocusedNode(null)}
@@ -584,7 +594,7 @@ export function VehicleTopologyMap({
                 cy="200"
                 r="26"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -598,9 +608,9 @@ export function VehicleTopologyMap({
               fill={activeNode === "alternator" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={
                 activeNode === "alternator"
-                  ? "#F2EFE9"
+                  ? "var(--foreground)"
                   : isCharging
-                    ? "#10B981"
+                    ? "var(--emerald)"
                     : "oklch(0.35 0.015 265)"
               }
               strokeWidth={activeNode === "alternator" ? "2" : "1.5"}
@@ -615,8 +625,8 @@ export function VehicleTopologyMap({
             <text
               x="146"
               y="203"
-              fill="#F2EFE9"
-              fontSize="8"
+              fill="var(--foreground)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -624,12 +634,12 @@ export function VehicleTopologyMap({
             </text>
 
             {/* Probe Number Badge */}
-            <circle cx="140" cy="185" r="9" fill={isCharging ? "#10B981" : "#F59E0B"} />
+            <circle cx="140" cy="185" r="9" fill={isCharging ? "var(--emerald)" : "var(--amber)"} />
             <text
               x="136"
               y="188.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -645,7 +655,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "alternator" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "alternator" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "alternator" ? "1.5" : "1"}
               />
               <line
@@ -660,7 +670,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -669,7 +679,7 @@ export function VehicleTopologyMap({
               <text
                 x="8"
                 y="26"
-                fill={isCharging ? "#10B981" : "oklch(0.75 0.01 260)"}
+                fill={isCharging ? "var(--emerald)" : "oklch(0.75 0.01 260)"}
                 fontSize="10.5"
                 fontWeight="bold"
                 fontFamily="monospace"
@@ -683,7 +693,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 3: ENGINE TRANSDUCERS (RPM & COOLANT SENSOR) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("powertrain"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("powertrain"),
+            )}
             onClick={() => onSelectNode("powertrain")}
             onFocus={() => setFocusedNode("powertrain")}
             onBlur={() => setFocusedNode(null)}
@@ -706,7 +719,7 @@ export function VehicleTopologyMap({
                 height="50"
                 rx="3"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -720,14 +733,14 @@ export function VehicleTopologyMap({
               height="40"
               rx="1.5"
               fill={activeNode === "powertrain" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
-              stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+              stroke={activeNode === "powertrain" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
               strokeWidth={activeNode === "powertrain" ? "2" : "1"}
             />
             <text
               x="221"
               y="204"
-              fill="#F2EFE9"
-              fontSize="8"
+              fill="var(--foreground)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -735,12 +748,12 @@ export function VehicleTopologyMap({
             </text>
 
             {/* Probe Number Badge */}
-            <circle cx="215" cy="180" r="9" fill="#10B981" />
+            <circle cx="215" cy="180" r="9" fill="var(--emerald)" />
             <text
               x="211"
               y="183.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -756,7 +769,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "powertrain" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "powertrain" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "powertrain" ? "1.5" : "1"}
               />
               <line
@@ -771,7 +784,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -780,7 +793,7 @@ export function VehicleTopologyMap({
               <text
                 x="8"
                 y="26"
-                fill="#F2EFE9"
+                fill="var(--foreground)"
                 fontSize="10.5"
                 fontWeight="bold"
                 fontFamily="monospace"
@@ -793,7 +806,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 4: OBD-II PORT J1962 & CAN BUS (Bawah Setir Kabin) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("can_obd"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("can_obd"),
+            )}
             onClick={() => onSelectNode("can_obd")}
             onFocus={() => setFocusedNode("can_obd")}
             onBlur={() => setFocusedNode(null)}
@@ -816,7 +832,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="3"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -826,14 +842,20 @@ export function VehicleTopologyMap({
             <path
               d="M 370 235 L 395 235 L 398 255 L 367 255 Z"
               fill={activeNode === "can_obd" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
-              stroke={activeNode === "can_obd" ? "#F2EFE9" : isCanFault ? "#F45B60" : "#10B981"}
+              stroke={
+                activeNode === "can_obd"
+                  ? "var(--foreground)"
+                  : isCanFault
+                    ? "var(--crimson)"
+                    : "var(--emerald)"
+              }
               strokeWidth={activeNode === "can_obd" ? "2" : "1.5"}
             />
             <text
               x="372"
               y="248"
-              fill="#F2EFE9"
-              fontSize="8"
+              fill="var(--foreground)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -841,12 +863,17 @@ export function VehicleTopologyMap({
             </text>
 
             {/* Probe Number Badge */}
-            <circle cx="367" cy="235" r="9" fill={isCanFault ? "#F45B60" : "#10B981"} />
+            <circle
+              cx="367"
+              cy="235"
+              r="9"
+              fill={isCanFault ? "var(--crimson)" : "var(--emerald)"}
+            />
             <text
               x="363"
               y="238.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -862,7 +889,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "can_obd" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "can_obd" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "can_obd" ? "1.5" : "1"}
               />
               <line
@@ -877,7 +904,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -886,7 +913,7 @@ export function VehicleTopologyMap({
               <text
                 x="8"
                 y="26"
-                fill={isCanFault ? "#F45B60" : "#10B981"}
+                fill={isCanFault ? "var(--crimson)" : "var(--emerald)"}
                 fontSize="10.5"
                 fontWeight="bold"
                 fontFamily="monospace"
@@ -898,7 +925,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 5: ORION ESP32 GATEWAY (Laci Kabin / Konsol Tengah) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("esp32_core"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("esp32_core"),
+            )}
             onClick={() => onSelectNode("esp32_core")}
             onFocus={() => setFocusedNode("esp32_core")}
             onBlur={() => setFocusedNode(null)}
@@ -921,7 +951,7 @@ export function VehicleTopologyMap({
                 height="50"
                 rx="3"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -936,7 +966,11 @@ export function VehicleTopologyMap({
               rx="1.5"
               fill={activeNode === "esp32_core" ? "oklch(0.24 0.02 265)" : "oklch(0.18 0.01 265)"}
               stroke={
-                activeNode === "esp32_core" ? "#F2EFE9" : isLinkOffline ? "#64748B" : "#10B981"
+                activeNode === "esp32_core"
+                  ? "var(--foreground)"
+                  : isLinkOffline
+                    ? "var(--muted-foreground)"
+                    : "var(--emerald)"
               }
               strokeWidth={activeNode === "esp32_core" ? "2" : "1.5"}
             />
@@ -947,13 +981,13 @@ export function VehicleTopologyMap({
               width="24"
               height="20"
               fill="oklch(0.10 0.008 265)"
-              stroke={isLinkOffline ? "#64748B" : "#10B981"}
+              stroke={isLinkOffline ? "var(--muted-foreground)" : "var(--emerald)"}
               strokeWidth="0.8"
             />
             <text
               x="496"
               y="202"
-              fill="#F2EFE9"
+              fill="var(--foreground)"
               fontSize="7.5"
               fontWeight="bold"
               fontFamily="monospace"
@@ -962,12 +996,17 @@ export function VehicleTopologyMap({
             </text>
 
             {/* Probe Number Badge */}
-            <circle cx="490" cy="180" r="9" fill={isLinkOffline ? "#64748B" : "#10B981"} />
+            <circle
+              cx="490"
+              cy="180"
+              r="9"
+              fill={isLinkOffline ? "var(--muted-foreground)" : "var(--emerald)"}
+            />
             <text
               x="486"
               y="183.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -983,7 +1022,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "esp32_core" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "esp32_core" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "esp32_core" ? "1.5" : "1"}
               />
               <line
@@ -998,7 +1037,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -1007,7 +1046,7 @@ export function VehicleTopologyMap({
               <text
                 x="8"
                 y="26"
-                fill={isLinkOffline ? "oklch(0.70 0.01 260)" : "#10B981"}
+                fill={isLinkOffline ? "oklch(0.70 0.01 260)" : "var(--emerald)"}
                 fontSize="10"
                 fontWeight="bold"
                 fontFamily="monospace"
@@ -1019,7 +1058,10 @@ export function VehicleTopologyMap({
 
           {/* PROBE 6: RF ANTENNA & GEOFENCE (Pilar Atap Kabin) */}
           <g
-            className={cn("cursor-pointer outline-none", getNodeOpacityClass("rf_network"))}
+            className={cn(
+              "cursor-pointer focus-visible:outline-none",
+              getNodeOpacityClass("rf_network"),
+            )}
             onClick={() => onSelectNode("rf_network")}
             onFocus={() => setFocusedNode("rf_network")}
             onBlur={() => setFocusedNode(null)}
@@ -1040,7 +1082,7 @@ export function VehicleTopologyMap({
                 cy="200"
                 r="22"
                 fill="none"
-                stroke="#F2EFE9"
+                stroke="var(--foreground)"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
               />
@@ -1052,12 +1094,12 @@ export function VehicleTopologyMap({
               cy="200"
               r="12"
               fill="oklch(0.18 0.01 265)"
-              stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+              stroke={activeNode === "rf_network" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
               strokeWidth="1"
             />
             <path
               d="M 674 195 A 8 8 0 0 1 686 195 M 671 190 A 13 13 0 0 1 689 190"
-              stroke={isOutOfYard || isLinkOffline ? "oklch(0.50 0.01 260)" : "#10B981"}
+              stroke={isOutOfYard || isLinkOffline ? "oklch(0.50 0.01 260)" : "var(--emerald)"}
               fill="none"
               strokeWidth="1.2"
             />
@@ -1065,7 +1107,7 @@ export function VehicleTopologyMap({
               cx="680"
               cy="200"
               r="2.5"
-              fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"}
+              fill={isOutOfYard || isLinkOffline ? "var(--muted-foreground)" : "var(--emerald)"}
             />
 
             {/* Probe Number Badge */}
@@ -1073,13 +1115,13 @@ export function VehicleTopologyMap({
               cx="680"
               cy="188"
               r="9"
-              fill={isOutOfYard || isLinkOffline ? "#64748B" : "#10B981"}
+              fill={isOutOfYard || isLinkOffline ? "var(--muted-foreground)" : "var(--emerald)"}
             />
             <text
               x="676"
               y="191.5"
-              fill="#0B0D11"
-              fontSize="8"
+              fill="var(--background)"
+              fontSize="9.5"
               fontWeight="bold"
               fontFamily="monospace"
             >
@@ -1095,7 +1137,7 @@ export function VehicleTopologyMap({
                 height="32"
                 rx="1"
                 fill="oklch(0.12 0.01 265 / 0.95)"
-                stroke={activeNode === "rf_network" ? "#F2EFE9" : "oklch(0.35 0.015 265)"}
+                stroke={activeNode === "rf_network" ? "var(--foreground)" : "oklch(0.35 0.015 265)"}
                 strokeWidth={activeNode === "rf_network" ? "1.5" : "1"}
               />
               <line
@@ -1110,7 +1152,7 @@ export function VehicleTopologyMap({
                 x="8"
                 y="14"
                 fill="oklch(0.72 0.01 260)"
-                fontSize="8.5"
+                fontSize="10"
                 fontFamily="monospace"
                 fontWeight="600"
               >
@@ -1123,8 +1165,8 @@ export function VehicleTopologyMap({
                   isOutOfYard || isLinkOffline
                     ? "oklch(0.70 0.01 260)"
                     : unit.net_zone === "TECH_HOTSPOT"
-                      ? "#F59E0B"
-                      : "#10B981"
+                      ? "var(--amber)"
+                      : "var(--emerald)"
                 }
                 fontSize="10"
                 fontWeight="bold"
@@ -1140,12 +1182,12 @@ export function VehicleTopologyMap({
       {/* High-Legibility Mobile Active Probe Callout Banner (R-03 / R-25) */}
       <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[2px] border border-border/80 bg-background/90 px-3 py-2 sm:hidden num">
         <div className="flex items-center gap-2 min-w-0">
-          <Led tone={activeProbeMeta.tone} pulse={activeProbeMeta.tone === "crimson"} />
+          <Led tone={activeProbeMeta.tone} />
           <div className="min-w-0">
             <div className="text-[11px] font-semibold text-foreground truncate">
               {activeProbeMeta.title}
             </div>
-            <div className="text-[10px] text-muted-foreground truncate">
+            <div className="text-[11px] text-muted-foreground truncate">
               {activeProbeMeta.reading}
             </div>
           </div>
@@ -1153,7 +1195,7 @@ export function VehicleTopologyMap({
         <button
           type="button"
           onClick={cycleNextNode}
-          className="min-h-[40px] shrink-0 cursor-pointer rounded-[1px] border border-border bg-card px-2.5 py-1 text-[10px] font-semibold uppercase text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-[44px] shrink-0 cursor-pointer rounded-[1px] border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Probe Berikutnya
         </button>

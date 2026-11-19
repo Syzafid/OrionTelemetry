@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -14,10 +22,10 @@ import {
   Download,
   FileCheck2,
   FileSpreadsheet,
-  Flame,
   Layers,
   Printer,
   QrCode,
+  RefreshCw,
   RotateCcw,
   Search,
   Thermometer,
@@ -64,7 +72,12 @@ import * as m from "motion/react-m";
 import { DURATION, EASE_EXIT, EASE_STANDARD, SPRING_LAYOUT } from "@/lib/motion-tokens";
 import { CriticalFlash, ResolveCheck, useChartIntroOnly, useCriticalEdges } from "./motion-bits";
 
-const HEX = { emerald: "#10B981", crimson: "#E60012", amber: "#F59E0B", dim: "#6B7684" };
+const HEX = {
+  emerald: "var(--emerald)",
+  crimson: "var(--crimson)",
+  amber: "var(--amber)",
+  dim: "var(--muted-foreground)",
+};
 const WARMUP_TARGET_SEC = 600; // 10 minutes SOP alternator charge
 const CARDS_PER_DECK = 3;
 
@@ -177,6 +190,8 @@ export function FleetModule() {
     dataSource,
     apiUrl,
     apiStatus,
+    isOfflineSnapshot,
+    pollNow,
     history,
     dispatchWarmup,
     auditLogs,
@@ -573,6 +588,23 @@ export function FleetModule() {
 
   return (
     <div className="module-fleet flex h-full min-h-0 flex-1 flex-col gap-3">
+      <h1 className="sr-only">Armada &amp; Inspeksi PDI Stock Yard</h1>
+      {dataSource === "LIVE_API" && (apiStatus === "FALLBACK_ERROR" || isOfflineSnapshot) && (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber/60 bg-amber/10 px-3 py-2 num text-xs text-amber"
+        >
+          <span>Koneksi Live API terputus. Menampilkan cache snapshot terakhir.</span>
+          <button
+            type="button"
+            onClick={pollNow}
+            className="inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/60 bg-background px-3 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <RefreshCw size={12} aria-hidden="true" />
+            <span>Poll Ulang</span>
+          </button>
+        </div>
+      )}
       {/* Sticky Command & Filter Bar (shrink-0) */}
       <section
         aria-label="Fleet Command and Triage Filter Bar"
@@ -593,14 +625,14 @@ export function FleetModule() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari Bay, Model, VIN, atau kode DTC (mis. P0133)..."
               aria-label="Cari armada berdasarkan Bay, Model, VIN, Unit ID, atau kode DTC"
-              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-9 pr-8 py-2 num text-xs text-foreground outline-none placeholder:text-dim focus:border-foreground/60"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background pl-9 pr-11 py-2 num text-xs text-foreground placeholder:text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
                 aria-label="Hapus kata kunci pencarian"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex min-h-[32px] min-w-[32px] cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] cursor-pointer items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X size={13} strokeWidth={1.75} aria-hidden="true" />
               </button>
@@ -638,7 +670,7 @@ export function FleetModule() {
                   )}
                 >
                   <span>{f.label}</span>
-                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[10px] font-bold">
+                  <span className="rounded-[2px] bg-card px-1.5 py-0.5 text-[11px] font-bold">
                     {f.count}
                   </span>
                 </button>
@@ -659,7 +691,7 @@ export function FleetModule() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as FleetSortMode)}
                 aria-label="Urutkan unit armada berdasarkan prioritas triage"
-                className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground outline-none focus:border-foreground/60"
+                className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="PRIORITY">Urut: Prioritas Triage</option>
                 <option value="LOWEST_V">Urut: Voltase Terendah</option>
@@ -684,7 +716,7 @@ export function FleetModule() {
             <button
               type="button"
               onClick={() => openExportModal("EXCEL", activeExportTarget)}
-              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title={`Konfigurasi & Ekspor Workbook Excel 3-Sheet ber-AutoFilter (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <FileSpreadsheet size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -695,7 +727,7 @@ export function FleetModule() {
             <button
               type="button"
               onClick={() => openExportModal("CSV", activeExportTarget)}
-              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title={`Konfigurasi & Unduh Data Mentah CSV 39 Kolom (${exportUnitCount} unit sesuai filter aktif)`}
             >
               <Download size={12} strokeWidth={1.75} aria-hidden="true" />
@@ -708,7 +740,7 @@ export function FleetModule() {
         {filteredUnits.length > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2">
             <div className="flex items-center gap-1.5 overflow-x-auto card-scroll py-0.5 max-w-full">
-              <span className="label-hmi mr-1 shrink-0 text-[10px]">Lompat Cepat:</span>
+              <span className="label-hmi mr-1 shrink-0 text-[11px]">Lompat Cepat:</span>
               {filteredUnits.map((u, idx) => {
                 const crit = configs[u.unit_id]?.crit_v ?? 11.8;
                 const tn = unitTone(u, crit);
@@ -721,7 +753,7 @@ export function FleetModule() {
                     type="button"
                     onClick={() => handleQuickJumpUnit(u.unit_id)}
                     className={cn(
-                      "num inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[10.5px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      "num inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                       isSelected
                         ? "border-foreground/70 bg-foreground/10 font-semibold text-foreground"
                         : isOnCurrentDeck
@@ -730,9 +762,9 @@ export function FleetModule() {
                     )}
                     title={`${u.model} ${u.trim} (${fmtV(u.telemetry.v_bat)}V)`}
                   >
-                    <Led tone={tn} pulse={tn === "crimson"} />
+                    <Led tone={tn} />
                     <span>{u.bay}</span>
-                    <span className="text-[9.5px] text-dim">{fmtV(u.telemetry.v_bat)}V</span>
+                    <span className="text-[11px] text-dim">{fmtV(u.telemetry.v_bat)}V</span>
                   </button>
                 );
               })}
@@ -814,6 +846,8 @@ export function FleetModule() {
               t.rtc_temp_c,
             );
             const c = HEX[tone];
+            const chartMinV = data.length > 0 ? Math.min(...data.map((p) => p.v)) : t.v_bat;
+            const chartMaxV = data.length > 0 ? Math.max(...data.map((p) => p.v)) : t.v_bat;
             const isCritical = tone === "crimson" || t.v_bat < crit || t.dtc_cnt > 0;
             const isWarmup = t.engine_on;
             const isWarning = tone === "amber";
@@ -868,18 +902,18 @@ export function FleetModule() {
                 <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-foreground">
+                      <span className="num rounded-[2px] bg-secondary px-1.5 py-0.5 text-[11px] font-bold text-foreground">
                         #{String(globalRank).padStart(2, "0")}
                       </span>
                       <span className="num text-xs font-semibold text-foreground">BAY {u.bay}</span>
-                      <span className="num text-[10.5px] text-muted-foreground truncate">
+                      <span className="num text-[11px] text-muted-foreground truncate">
                         ({u.unit_id})
                       </span>
                     </div>
                     <h3 className="mt-1 font-display text-sm font-semibold uppercase tracking-wider text-foreground truncate">
                       {u.model} <span className="font-normal text-muted-foreground">{u.trim}</span>
                     </h3>
-                    <div className="num mt-0.5 text-[10.5px] text-muted-foreground">
+                    <div className="num mt-0.5 text-[11px] text-muted-foreground">
                       VIN: <span className="text-foreground/90">{u.vin}</span>
                     </div>
                   </div>
@@ -888,13 +922,13 @@ export function FleetModule() {
                       {fmtV(t.v_bat)}{" "}
                       <span className="text-xs font-normal text-muted-foreground">V</span>
                     </div>
-                    <div className="num mt-0.5 text-[10px] text-muted-foreground">
+                    <div className="num mt-0.5 text-[11px] text-muted-foreground">
                       {t.adc_raw_mv} mV (ADC)
                     </div>
                     <div className="mt-1.5 flex items-center justify-end">
                       <span
                         className={cn(
-                          "num inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                          "num inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
                           conn.isOnline
                             ? "border-emerald/50 bg-emerald/15 text-emerald"
                             : "border-border bg-secondary/80 text-muted-foreground",
@@ -928,12 +962,12 @@ export function FleetModule() {
                           aria-hidden="true"
                         />
                         <div className="min-w-0 leading-tight">
-                          <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-crimson">
+                          <div className="num text-[11px] font-semibold uppercase tracking-wide text-crimson">
                             {t.dtc_cnt > 0
                               ? `Alarm Kritis & ECU Fault (${t.dtc})`
                               : `Alarm Voltase Kritis (< ${fmtV(crit)} V)`}
                           </div>
-                          <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                          <div className="num mt-0.5 text-[11px] text-muted-foreground">
                             Risiko sulfasi sel timbal-asam. Prioritaskan pemanasan mesin alternator
                             10 menit.
                           </div>
@@ -947,10 +981,10 @@ export function FleetModule() {
                           aria-hidden="true"
                         />
                         <div className="min-w-0 leading-tight">
-                          <div className="num text-[10.5px] font-semibold uppercase tracking-wide text-emerald">
+                          <div className="num text-[11px] font-semibold uppercase tracking-wide text-emerald">
                             Pemanasan Mesin Alternator Aktif
                           </div>
-                          <div className="num mt-0.5 text-[9.5px] text-muted-foreground">
+                          <div className="num mt-0.5 text-[11px] text-muted-foreground">
                             Alternator ({fmtV(t.v_bat)} V) sedang memulihkan muatan baterai.
                           </div>
                         </div>
@@ -958,7 +992,7 @@ export function FleetModule() {
                     ) : isWarning ? (
                       <div className="flex items-center gap-2 rounded-[2px] border border-amber/40 bg-amber/10 px-3 py-2">
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
-                        <span className="num text-[10px] text-amber">
+                        <span className="num text-[11px] text-amber">
                           Peringatan: Voltase mendekati ambang kritis ({fmtV(crit)} V). Jadwalkan
                           pemanasan.
                         </span>
@@ -968,7 +1002,7 @@ export function FleetModule() {
                     {/* Active 10-Min Warm-Up Stopwatch */}
                     {t.engine_on && (
                       <div className="rounded-[2px] border border-emerald/40 bg-background/70 p-2.5">
-                        <div className="flex justify-between num text-[10px] text-muted-foreground">
+                        <div className="flex justify-between num text-[11px] text-muted-foreground">
                           <span className="flex items-center gap-1 text-foreground">
                             <Timer
                               size={12}
@@ -993,7 +1027,7 @@ export function FleetModule() {
                           />
                         </div>
                         {verified && (
-                          <div className="mt-1.5 flex items-center gap-1.5 num text-[10px] text-emerald">
+                          <div className="mt-1.5 flex items-center gap-1.5 num text-[11px] text-emerald">
                             <BadgeCheck size={12} strokeWidth={1.5} aria-hidden="true" />
                             <span>
                               Pengisian alternator terverifikasi ({fmtV(t.v_bat)} V &ge;{" "}
@@ -1007,7 +1041,7 @@ export function FleetModule() {
                     {/* OLS Battery Forecast + DS3231SN Thermal Compensation & Arrhenius Penalty */}
                     <div className="rounded-[2px] border border-border bg-background/60 px-3 py-2 space-y-1.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="label-hmi flex items-center gap-1.5 text-[10px]">
+                        <span className="label-hmi flex items-center gap-1.5 text-[11px]">
                           <TrendingDown
                             size={13}
                             strokeWidth={1.5}
@@ -1018,14 +1052,14 @@ export function FleetModule() {
                         </span>
                         <span
                           className={cn(
-                            "num inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[10.5px] font-semibold",
+                            "num inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold",
                             PREDICTION_BADGE_STYLE[prediction.tone],
                           )}
                         >
                           {prediction.statusText}
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[10px] text-muted-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-1 border-t border-border/60 pt-1.5 num text-[11px] text-muted-foreground">
                         <span className="flex items-center gap-1 text-foreground/90">
                           <Thermometer
                             size={11}
@@ -1055,49 +1089,81 @@ export function FleetModule() {
                       </div>
                     </div>
 
-                    {/* 24-Hour Voltage Discharge / Charge Curve */}
-                    <div
-                      className={cn(
-                        "fleet-chart -mx-1 touch-pan-y",
-                        isSingleCard ? "h-36 lg:h-44" : "h-32",
-                      )}
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id={`g-${u.unit_id}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={c} stopOpacity={0.45} />
-                              <stop offset="100%" stopColor={c} stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <XAxis
-                            dataKey="t"
-                            tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
-                            interval="preserveStartEnd"
-                            axisLine={{ stroke: "#282E3B" }}
-                            tickLine={false}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              background: "#0F1116",
-                              border: "1px solid #1E222B",
-                              borderRadius: 2,
-                              fontFamily: "JetBrains Mono",
-                              fontSize: 11,
-                            }}
-                            formatter={(val: unknown) => [`${Number(val).toFixed(2)} V`, "Baterai"]}
-                            labelFormatter={(lbl) => `Pukul: ${lbl}`}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="v"
-                            stroke={c}
-                            strokeWidth={1.5}
-                            fill={`url(#g-${u.unit_id})`}
-                            isAnimationActive={chartIntro}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
+                    {/* Battery Voltage Trend vs Critical Threshold */}
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 num text-[11px]">
+                        <span className="font-medium text-muted-foreground">
+                          Tren Voltase Aki vs Batas {crit.toFixed(2)}V
+                        </span>
+                        <span className="text-muted-foreground">
+                          Rentang:{" "}
+                          <strong className="text-foreground">{chartMinV.toFixed(2)}V</strong>
+                          {" - "}
+                          <strong className="text-foreground">{chartMaxV.toFixed(2)}V</strong>
+                        </span>
+                      </div>
+                      <div
+                        className={cn(
+                          "fleet-chart -mx-1 touch-pan-y",
+                          isSingleCard ? "h-36 lg:h-44" : "h-32",
+                        )}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id={`g-${u.unit_id}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={c} stopOpacity={0.45} />
+                                <stop offset="100%" stopColor={c} stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis
+                              dataKey="t"
+                              tick={{
+                                fill: "var(--muted-foreground)",
+                                fontSize: 10,
+                                fontFamily: "JetBrains Mono",
+                              }}
+                              interval="preserveStartEnd"
+                              axisLine={{ stroke: "var(--chart-grid)" }}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              domain={[11.0, 14.8]}
+                              width={34}
+                              tick={{
+                                fill: "var(--muted-foreground)",
+                                fontSize: 10,
+                                fontFamily: "JetBrains Mono",
+                              }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <ReferenceLine y={crit} stroke="var(--crimson)" strokeDasharray="3 3" />
+                            <Tooltip
+                              contentStyle={{
+                                background: "var(--background)",
+                                border: "1px solid var(--border)",
+                                borderRadius: 2,
+                                fontFamily: "JetBrains Mono",
+                                fontSize: 11,
+                              }}
+                              formatter={(val: unknown) => [
+                                `${Number(val).toFixed(2)} V`,
+                                "Baterai",
+                              ]}
+                              labelFormatter={(lbl) => `Pukul: ${lbl}`}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="v"
+                              stroke={c}
+                              strokeWidth={1.5}
+                              fill={`url(#g-${u.unit_id})`}
+                              isAnimationActive={chartIntro}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
 
@@ -1127,7 +1193,7 @@ export function FleetModule() {
                     {/* Ringkasan Diagnostik & Jaringan + Pintasan Lintas Modul */}
                     <div
                       className={cn(
-                        "rounded-[2px] border p-2.5 num text-[10px] space-y-1",
+                        "rounded-[2px] border p-2.5 num text-[11px] space-y-1",
                         isCritical
                           ? "border-crimson/35 bg-background/85"
                           : "border-border bg-background/45",
@@ -1175,7 +1241,7 @@ export function FleetModule() {
                             selectUnit(u.unit_id);
                             setActiveModule("01");
                           }}
-                          className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
                           Topologi &amp; Probe (01)
                         </button>
@@ -1187,7 +1253,7 @@ export function FleetModule() {
                               selectUnit(u.unit_id);
                               setActiveModule("04");
                             }}
-                            className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[10px] font-semibold text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="num inline-flex min-h-[28px] cursor-pointer items-center rounded-[2px] border border-crimson/60 bg-crimson/15 px-2 py-0.5 text-[11px] font-semibold text-crimson transition-colors hover:bg-crimson/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             Diagnostik DTC (04)
                           </button>
@@ -1199,7 +1265,7 @@ export function FleetModule() {
                     {(unitTicket || isCritical || isWarning) && (
                       <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="label-hmi flex items-center gap-1.5 text-[10px] text-foreground">
+                          <span className="label-hmi flex items-center gap-1.5 text-[11px] text-foreground">
                             <Wrench
                               size={12}
                               strokeWidth={1.75}
@@ -1214,7 +1280,7 @@ export function FleetModule() {
                           </span>
                           <span
                             className={cn(
-                              "num inline-flex items-center gap-1 overflow-hidden rounded-[2px] border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider transition-colors duration-200",
+                              "num inline-flex items-center gap-1 overflow-hidden rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider transition-colors duration-200",
                               TICKET_BADGE_STYLE[unitTicket?.status ?? "OPEN"],
                             )}
                           >
@@ -1234,7 +1300,7 @@ export function FleetModule() {
                             </m.span>
                           </span>
                         </div>
-                        <div className="num text-[10px] leading-relaxed text-muted-foreground">
+                        <div className="num text-[11px] leading-relaxed text-muted-foreground">
                           <div>
                             PIC:{" "}
                             <span className="font-medium text-foreground">
@@ -1266,7 +1332,7 @@ export function FleetModule() {
                                 "Tiket diklaim teknisi; sedang dilakukan pemeriksaan di stock yard.",
                               );
                             }}
-                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <Wrench size={12} strokeWidth={1.75} aria-hidden="true" />
                             <span>Klaim Tiket</span>
@@ -1278,7 +1344,7 @@ export function FleetModule() {
                               e.stopPropagation();
                               setResolvingTicketUnitId(u.unit_id);
                             }}
-                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                            className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/10 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <ClipboardCheck size={12} strokeWidth={1.75} aria-hidden="true" />
                             <span>Tutup Tiket...</span>
@@ -1302,7 +1368,12 @@ export function FleetModule() {
                       }}
                       className="flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-amber/60 bg-amber/10 py-2 num text-[11px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <Flame size={14} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+                      <Thermometer
+                        size={14}
+                        strokeWidth={1.75}
+                        className="shrink-0"
+                        aria-hidden="true"
+                      />
                       <span>
                         {u.status_label === "Warm-Up Dispatched"
                           ? "Staf Telah Ditugaskan"
@@ -1318,7 +1389,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         openExportModal("EXCEL", u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[11px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Konfigurasi & Unduh Laporan Excel (.xls)"
                     >
                       <FileSpreadsheet
@@ -1335,7 +1406,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         openExportModal("CSV", u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[11px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       title="Konfigurasi & Unduh Log CSV"
                     >
                       <Download
@@ -1353,7 +1424,7 @@ export function FleetModule() {
                         void handleCopyDeepLink(u.unit_id);
                       }}
                       className={cn(
-                        "num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border px-1.5 py-2 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                        "num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border px-1.5 py-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                         isCopied
                           ? "border-foreground/60 bg-secondary text-foreground font-semibold"
                           : "border-border bg-secondary/40 text-foreground hover:border-foreground/60 hover:bg-secondary",
@@ -1378,7 +1449,7 @@ export function FleetModule() {
                         e.stopPropagation();
                         openPdiModal(u.unit_id);
                       }}
-                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[10px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-border bg-secondary/40 px-1.5 py-2 text-[11px] font-medium text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <FileCheck2
                         size={13}
@@ -1564,7 +1635,7 @@ function PdiCertificateModal({
 
   return (
     <m.div
-      className="pdi-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-xs"
+      className="pdi-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pdi-cert-title"
@@ -1603,7 +1674,7 @@ function PdiCertificateModal({
               className="print-only-logo h-12 w-12 shrink-0 rounded-[8px]"
             />
             <div className="min-w-0 flex-1">
-              <div className="num text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="num text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 ORION: SISTEM TELEMETRI &amp; DIGITAL TWIN DIPO STOCK YARD
               </div>
               <h2
@@ -1622,14 +1693,14 @@ function PdiCertificateModal({
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-center rounded-[2px] border border-border bg-background/60 p-2 text-center">
               <UnitQrCode value={deepLinkUrl} size={96} animateBuild />
-              <span className="num mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="num mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 PINDAI TAUTAN MOBILE UNIT
               </span>
               <button
                 type="button"
                 onClick={() => void handleCopyModalUrl()}
                 className={cn(
-                  "print-hidden num mt-1.5 inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "print-hidden num mt-1.5 inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   deepLinkCopied
                     ? "border-foreground/60 bg-secondary text-foreground"
                     : "border-border bg-secondary/50 text-foreground hover:border-foreground/60 hover:bg-secondary",
@@ -1673,14 +1744,14 @@ function PdiCertificateModal({
               <div className="num text-xs font-bold uppercase tracking-wider">
                 {isOverallPassed ? "PDI PASSED" : "PDI HOLD / ACTION REQUIRED"}
               </div>
-              <div className="num text-[10.5px] text-foreground/85 mt-0.5">
+              <div className="num text-[11px] text-foreground/85 mt-0.5">
                 {isOverallPassed
                   ? "Unit memenuhi standar kelistrikan dan memori ECU untuk serah terima pelanggan."
                   : "Unit membutuhkan tindakan pengisian baterai atau pemeriksaan diagnostik sebelum serah terima."}
               </div>
             </div>
           </div>
-          <div className="num text-right text-[10.5px]">
+          <div className="num text-right text-[11px]">
             <div className="text-muted-foreground">Laju Kuras &amp; Estimasi TTC</div>
             <div className="font-semibold text-foreground">{prediction.statusText}</div>
           </div>
@@ -1688,34 +1759,34 @@ function PdiCertificateModal({
 
         <div className="mt-4 grid grid-cols-2 gap-3 rounded-[2px] border border-border bg-background/50 p-3.5 sm:grid-cols-3">
           <div>
-            <div className="label-hmi text-[10px]">Model &amp; Trim</div>
+            <div className="label-hmi text-[11px]">Model &amp; Trim</div>
             <div className="num mt-0.5 text-xs font-semibold text-foreground">
               {unit.model} {unit.trim}
             </div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Nomor Rangka (VIN)</div>
+            <div className="label-hmi text-[11px]">Nomor Rangka (VIN)</div>
             <div className="num mt-0.5 text-xs font-semibold text-foreground">{unit.vin}</div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Lokasi Bay</div>
+            <div className="label-hmi text-[11px]">Lokasi Bay</div>
             <div className="num mt-0.5 text-xs font-semibold text-foreground">
               Bay {unit.bay} ({unit.color})
             </div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">ID Unit Telemetri</div>
+            <div className="label-hmi text-[11px]">ID Unit Telemetri</div>
             <div className="num mt-0.5 text-xs text-foreground">{unit.unit_id}</div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Waktu Inspeksi &amp; Sinkronisasi</div>
+            <div className="label-hmi text-[11px]">Waktu Inspeksi &amp; Sinkronisasi</div>
             <div className="num mt-0.5 text-xs text-foreground">{inspectedAt}</div>
-            <div className="num mt-0.5 text-[10px] text-muted-foreground">
+            <div className="num mt-0.5 text-[11px] text-muted-foreground">
               Sinkron Terakhir: {unit.last_seen || "Live Stream"} ({conn.badgeText})
             </div>
           </div>
           <div>
-            <div className="label-hmi text-[10px]">Wake Counter &amp; Jaringan</div>
+            <div className="label-hmi text-[11px]">Wake Counter &amp; Jaringan</div>
             <div className="num mt-0.5 text-xs text-foreground">
               Boot #{t.boot} · {t.rssi} dBm (
               {(t.sync_ssid || unit.sync_ssid || "").trim() || unit.net_zone || "YARD"})
@@ -1726,7 +1797,7 @@ function PdiCertificateModal({
         <div className="mt-4 overflow-x-auto border border-border">
           <table className="w-full border-collapse text-left num text-xs">
             <thead>
-              <tr className="border-b border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border bg-secondary/50 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="py-2.5 px-3 font-medium">Parameter Teknis</th>
                 <th className="py-2.5 px-3 font-medium">Hasil Ukur</th>
                 <th className="py-2.5 px-3 font-medium">Standar Target</th>
@@ -1744,7 +1815,7 @@ function PdiCertificateModal({
                   <td className="py-2.5 px-3 text-right">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        "inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 text-[11px] font-semibold uppercase",
                         item.passed
                           ? "border-emerald/40 bg-emerald/10 text-emerald"
                           : "border-crimson/50 bg-crimson/15 text-crimson",
@@ -1764,9 +1835,9 @@ function PdiCertificateModal({
           </table>
         </div>
 
-        <div className="mt-4 rounded-[2px] border border-border/80 bg-background/40 px-3.5 py-2.5 num text-[10px] leading-relaxed text-muted-foreground">
-          ORION Project (D4 TRPL IT Internship: Stock Yard Monitoring System). Independent telemetry
-          platform; not an official product of or affiliated with Mitsubishi Motors.
+        <div className="mt-4 rounded-[2px] border border-border/80 bg-background/40 px-3.5 py-2.5 num text-[11px] leading-relaxed text-muted-foreground">
+          Proyek ORION (Magang D4 TRPL TI: Sistem Pemantauan Stock Yard). Platform telemetri
+          independen; bukan produk resmi dari dan tidak berafiliasi dengan Mitsubishi Motors.
         </div>
 
         <div className="print-hidden mt-4 flex flex-wrap items-center justify-end gap-2.5 border-t border-border pt-4">
@@ -1837,7 +1908,7 @@ function TicketResolutionModal({
 
   return (
     <m.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ticket-resolve-title"
@@ -1878,47 +1949,55 @@ function TicketResolutionModal({
             type="button"
             onClick={onClose}
             aria-label="Tutup formulir"
-            className="inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center rounded-[2px] border border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+            className="inline-flex min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] cursor-pointer items-center justify-center rounded-[2px] border border-border text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
         <div className="mt-4 space-y-3.5 num text-xs">
           <div className="rounded-[2px] border border-border bg-background/50 p-3 flex items-center justify-between">
             <div>
-              <div className="label-hmi text-[10px]">Target Unit &amp; Lokasi</div>
+              <div className="label-hmi text-[11px]">Target Unit &amp; Lokasi</div>
               <div className="font-bold text-foreground mt-0.5">
                 {bay} · {model}
               </div>
             </div>
             <div className="text-right">
-              <div className="label-hmi text-[10px]">Unit ID</div>
+              <div className="label-hmi text-[11px]">Unit ID</div>
               <div className="text-muted-foreground mt-0.5">{unitId}</div>
             </div>
           </div>
 
           <div>
-            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+            <label
+              htmlFor="ticket-tech-name"
+              className="label-hmi block text-[11px] text-muted-foreground mb-1"
+            >
               Nama Teknisi Penanggung Jawab
             </label>
             <input
+              id="ticket-tech-name"
               type="text"
               value={techName}
               onChange={(e) => setTechName(e.target.value)}
-              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Contoh: Teknisi Shift Pagi"
             />
           </div>
 
           <div>
-            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+            <label
+              htmlFor="ticket-tech-action"
+              className="label-hmi block text-[11px] text-muted-foreground mb-1"
+            >
               Tindakan Perbaikan yang Dilakukan
             </label>
             <select
+              id="ticket-tech-action"
               value={techAction}
               onChange={(e) => setTechAction(e.target.value)}
-              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="min-h-[44px] w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="Pengisian Daya Baterai (Charger 2 Jam)">
                 Pengisian Daya Baterai (Charger 2 Jam)
@@ -1936,14 +2015,18 @@ function TicketResolutionModal({
           </div>
 
           <div>
-            <label className="label-hmi block text-[10px] text-muted-foreground mb-1">
+            <label
+              htmlFor="ticket-tech-notes"
+              className="label-hmi block text-[11px] text-muted-foreground mb-1"
+            >
               Catatan Handover &amp; Verifikasi Hasil
             </label>
             <textarea
+              id="ticket-tech-notes"
               value={techNotes}
               onChange={(e) => setTechNotes(e.target.value)}
               rows={3}
-              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="w-full rounded-[2px] border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Deskripsi hasil penanganan..."
             />
           </div>
@@ -2070,7 +2153,7 @@ function ExportConfigModal({
 
   return (
     <m.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="export-config-title"
@@ -2107,7 +2190,7 @@ function ExportConfigModal({
               >
                 Konfigurasi Ekspor Laporan Telemetri
               </h2>
-              <p className="num text-[10.5px] text-muted-foreground mt-0.5">
+              <p className="num text-[11px] text-muted-foreground mt-0.5">
                 Pilih format berkas, unit target, periode waktu (harian/bulanan/tahunan), dan
                 resolusi data.
               </p>
@@ -2126,7 +2209,7 @@ function ExportConfigModal({
         <div className="mt-4 space-y-4 num text-xs">
           {/* 1. Format File */}
           <div>
-            <div className="label-hmi text-[10px] mb-1.5">1. Format Dokumen</div>
+            <div className="label-hmi text-[11px] mb-1.5">1. Format Dokumen</div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -2141,7 +2224,7 @@ function ExportConfigModal({
                 <FileSpreadsheet size={15} className="shrink-0" aria-hidden="true" />
                 <div>
                   <div className="text-[11px]">Workbook Excel (.xls)</div>
-                  <div className="text-[9.5px] text-muted-foreground font-normal">
+                  <div className="text-[11px] text-muted-foreground font-normal">
                     3 Sheet, AutoFilter &amp; Header Terkunci
                   </div>
                 </div>
@@ -2159,7 +2242,7 @@ function ExportConfigModal({
                 <Download size={15} className="shrink-0" aria-hidden="true" />
                 <div>
                   <div className="text-[11px]">Data Tabel CSV (.csv)</div>
-                  <div className="text-[9.5px] text-muted-foreground font-normal">
+                  <div className="text-[11px] text-muted-foreground font-normal">
                     39 Kolom Penuh Standar RFC 4180
                   </div>
                 </div>
@@ -2169,7 +2252,7 @@ function ExportConfigModal({
 
           {/* 2. Cakupan Unit */}
           <div>
-            <div className="label-hmi text-[10px] mb-1.5">2. Cakupan Kendaraan (Unit Target)</div>
+            <div className="label-hmi text-[11px] mb-1.5">2. Cakupan Kendaraan (Unit Target)</div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
                 type="button"
@@ -2212,7 +2295,7 @@ function ExportConfigModal({
 
             {unitScope === "CUSTOM" && (
               <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5">
-                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60 text-[10px]">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60 text-[11px]">
                   <span className="text-muted-foreground">
                     Centang unit yang ingin dimasukkan ke laporan:
                   </span>
@@ -2240,7 +2323,7 @@ function ExportConfigModal({
                       <label
                         key={u.unit_id}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-[2px] border px-2.5 py-1.5 text-[10.5px]",
+                          "flex cursor-pointer items-center gap-2 rounded-[2px] border px-2.5 py-1.5 text-[11px]",
                           checked
                             ? "border-foreground/50 bg-secondary/70 text-foreground"
                             : "border-border/60 bg-background/40 text-muted-foreground",
@@ -2259,7 +2342,7 @@ function ExportConfigModal({
                   })}
                 </div>
                 {isCustomInvalid && (
-                  <div className="mt-1.5 text-[10px] text-crimson">
+                  <div className="mt-1.5 text-[11px] text-crimson">
                     Pilih minimal 1 unit kendaraan untuk melanjutkan ekspor.
                   </div>
                 )}
@@ -2269,7 +2352,7 @@ function ExportConfigModal({
 
           {/* 3. Periode Waktu Data */}
           <div>
-            <div className="label-hmi text-[10px] mb-1.5">3. Periode Waktu Data (WIB)</div>
+            <div className="label-hmi text-[11px] mb-1.5">3. Periode Waktu Data (WIB)</div>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {EXPORT_PERIOD_OPTIONS.map((opt) => (
                 <button
@@ -2277,7 +2360,7 @@ function ExportConfigModal({
                   type="button"
                   onClick={() => onChangePeriod(opt.id)}
                   className={cn(
-                    "min-h-[40px] cursor-pointer rounded-[2px] border px-2.5 py-1.5 text-[10.5px] transition-colors",
+                    "min-h-[40px] cursor-pointer rounded-[2px] border px-2.5 py-1.5 text-[11px] transition-colors",
                     period === opt.id
                       ? "border-foreground/70 bg-secondary text-foreground font-semibold"
                       : "border-border bg-background/50 text-muted-foreground hover:border-muted-foreground hover:text-foreground",
@@ -2290,7 +2373,7 @@ function ExportConfigModal({
 
             {period === "DAILY" && (
               <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-3">
-                <label className="text-[10.5px] text-muted-foreground" htmlFor="export-date-input">
+                <label className="text-[11px] text-muted-foreground" htmlFor="export-date-input">
                   Pilih Tanggal Harian:
                 </label>
                 <input
@@ -2305,10 +2388,7 @@ function ExportConfigModal({
 
             {period === "MONTHLY" && (
               <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-2.5">
-                <label
-                  className="text-[10.5px] text-muted-foreground"
-                  htmlFor="export-month-select"
-                >
+                <label className="text-[11px] text-muted-foreground" htmlFor="export-month-select">
                   Pilih Bulan &amp; Tahun:
                 </label>
                 <select
@@ -2341,7 +2421,7 @@ function ExportConfigModal({
 
             {period === "YEARLY" && (
               <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 flex flex-wrap items-center gap-3">
-                <label className="text-[10.5px] text-muted-foreground" htmlFor="export-year-select">
+                <label className="text-[11px] text-muted-foreground" htmlFor="export-year-select">
                   Pilih Tahun Laporan:
                 </label>
                 <select
@@ -2363,7 +2443,7 @@ function ExportConfigModal({
               <div className="mt-2 rounded-[2px] border border-border bg-background/60 p-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div>
                   <label
-                    className="block text-[10px] text-muted-foreground mb-1"
+                    className="block text-[11px] text-muted-foreground mb-1"
                     htmlFor="export-start-date"
                   >
                     Dari Tanggal
@@ -2378,7 +2458,7 @@ function ExportConfigModal({
                 </div>
                 <div>
                   <label
-                    className="block text-[10px] text-muted-foreground mb-1"
+                    className="block text-[11px] text-muted-foreground mb-1"
                     htmlFor="export-end-date"
                   >
                     Sampai Tanggal
@@ -2399,7 +2479,7 @@ function ExportConfigModal({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label
-                className="label-hmi block text-[10px] mb-1.5"
+                className="label-hmi block text-[11px] mb-1.5"
                 htmlFor="export-resolution-select"
               >
                 4. Resolusi Data (Granularitas)
@@ -2418,7 +2498,7 @@ function ExportConfigModal({
               </select>
             </div>
             <div>
-              <label className="label-hmi block text-[10px] mb-1.5" htmlFor="export-limit-select">
+              <label className="label-hmi block text-[11px] mb-1.5" htmlFor="export-limit-select">
                 Batas Maksimum Baris Log
               </label>
               <select
@@ -2436,7 +2516,7 @@ function ExportConfigModal({
           </div>
 
           {/* 5. Ringkasan Output & Nama Berkas */}
-          <div className="rounded-[2px] border border-border/80 bg-background/50 p-3 text-[10.5px] space-y-1">
+          <div className="rounded-[2px] border border-border/80 bg-background/50 p-3 text-[11px] space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-muted-foreground">Periode Terpilih:</span>
               <span className="font-semibold text-foreground">
