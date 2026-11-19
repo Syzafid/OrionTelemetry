@@ -151,10 +151,11 @@ try {
             break;
 
         // ----------------------------------------------------------------------
-        // ACTION 2: TAG_MOVEMENT (Modul 04 - Yard Presence Operational Tag)
+        // ACTION 2: TAG_MOVEMENT (Modul 05 - Yard Presence Operational Tag)
         // ----------------------------------------------------------------------
         case 'TAG_MOVEMENT':
-            $eventId = $payload['id'] ?? ($payload['evId'] ?? null);
+            $eventId  = $payload['id'] ?? ($payload['evId'] ?? null);
+            $pairedId = $payload['paired_id'] ?? null;
             $tag = isset($payload['tag']) && $payload['tag'] !== '' ? (string)$payload['tag'] : null;
 
             if (!$eventId) {
@@ -166,14 +167,21 @@ try {
                 ':tag' => $tag,
                 ':id'  => $eventId,
             ]);
+            if ($pairedId && $pairedId !== $eventId) {
+                $stmtTag->execute([
+                    ':tag' => $tag,
+                    ':id'  => $pairedId,
+                ]);
+            }
 
             recordSystemEvent($pdo, 'YARD-GATEWAY', 'MOVEMENT_TAG', 'INFO', "Movement event {$eventId} tagged as " . ($tag ?? 'UNTAGGED'));
 
             sendJson([
-                'status'   => 'OK',
-                'action'   => 'TAG_MOVEMENT',
-                'event_id' => $eventId,
-                'tag'      => $tag,
+                'status'    => 'OK',
+                'action'    => 'TAG_MOVEMENT',
+                'event_id'  => $eventId,
+                'paired_id' => $pairedId,
+                'tag'       => $tag,
             ]);
             break;
 

@@ -185,11 +185,43 @@ export const OPERATIONAL_TAGS: OperationalTag[] = [
 export interface MovementEvent {
   id: string;
   unit_id: string;
+  event_type?: "EXIT_YARD" | "ENTER_YARD" | string;
+  from_zone?: string;
+  to_zone?: string;
+  event_epoch?: number;
+  boot_id?: number;
+  seq_no?: number;
+  v_bat?: number;
+  rpm?: number;
+  speed_kmh?: number;
   departed: string;
   returned: string | null;
+  paired_return_time?: string | null;
   away_min: number | null;
+  durasi_di_luar_sec?: number | null;
+  masih_di_luar?: boolean;
+  clock_adjusted?: boolean;
   debounce_hits: number;
   tag: OperationalTag | null;
+  created_at?: string | null;
+}
+
+export interface MovementPair {
+  unit_id: string;
+  exit_id: string;
+  exit_epoch: number;
+  exit_time: string;
+  enter_id: string | null;
+  enter_epoch: number | null;
+  enter_time: string | null;
+  durasi_di_luar_sec: number;
+  masih_di_luar: boolean;
+  clock_adjusted?: boolean;
+  from_zone?: string;
+  to_zone?: string;
+  return_from_zone?: string | null;
+  debounce_hits?: number;
+  tag?: OperationalTag | null;
 }
 
 export interface PiggybackConfig {

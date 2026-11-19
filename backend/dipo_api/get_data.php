@@ -328,10 +328,31 @@ try {
         ];
     }
 
-    // 6. Query movement_events untuk sinkronisasi dua arah Modul 04 (termasuk transisi 4-zona)
-    // Task 1.2: Hitung durasi di luar (durasi_di_luar_sec) dan status "masih di luar" saat dibaca di get_data.php
+    // 6. Query movement_events untuk sinkronisasi dua arah Modul 05 (termasuk transisi 4-zona)
+    // Task 1.2: Hitung durasi di luar dengan guard lonjakan jam RTC->NTP & honor kolom returned historis
     $pairedMoves = [];
     $movementPairs = [];
+    $maxValidTripGapSec = 30 * 86400; // Lonjakan epoch > 30 hari menandakan jam RTC awal belum sinkron NTP
+
+    $computeSafeElapsed = static function (
+        int $startEpoch,
+        int $endEpoch,
+        ?string $startCreatedAt,
+        ?string $endCreatedAt,
+        int $fallbackEndTs
+    ) use ($maxValidTripGapSec): array {
+        $rawDelta = $endEpoch - $startEpoch;
+        if ($startEpoch > 0 && $endEpoch >= $startEpoch && $rawDelta <= $maxValidTripGapSec) {
+            return [$rawDelta, false];
+        }
+        $cStart = $startCreatedAt ? strtotime($startCreatedAt) : false;
+        $cEnd   = $endCreatedAt ? strtotime($endCreatedAt) : $fallbackEndTs;
+        if ($cStart !== false && $cEnd !== false && $cEnd >= $cStart) {
+            return [max(0, (int)($cEnd - $cStart)), true];
+        }
+        return [0, true];
+    };
+
     try {
         $stmtAllMoves = $pdo->query("
             SELECT * FROM `movement_events`
@@ -341,15 +362,59 @@ try {
         $pendingExitByUnit = [];
 
         foreach ($allMoves as $m) {
-            $uid   = (string)$m['unit_id'];
-            $type  = (string)($m['event_type'] ?? 'EXIT_YARD');
-            $epoch = isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0;
-            $id    = (string)$m['id'];
+            $uid       = (string)$m['unit_id'];
+            $type      = (string)($m['event_type'] ?? 'EXIT_YARD');
+            $epoch     = isset($m['event_epoch']) ? (int)$m['event_epoch'] : 0;
+            $id        = (string)$m['id'];
+            $fromZone  = (string)($m['from_zone'] ?? 'YARD');
+            $toZone    = (string)($m['to_zone'] ?? 'OFFLINE');
+            $debHits   = isset($m['debounce_hits']) ? (int)$m['debounce_hits'] : 3;
+            $tagVal    = !empty($m['tag']) ? (string)$m['tag'] : null;
+            $createdAt = !empty($m['created_at']) ? (string)$m['created_at'] : null;
 
             if ($type === 'EXIT_YARD') {
+                $hasExplicitReturned = !empty($m['returned']) && (string)$m['returned'] !== (string)$m['departed'];
+                if ($hasExplicitReturned) {
+                    $depTs = strtotime((string)$m['departed']);
+                    $retTs = strtotime((string)$m['returned']);
+                    $durasiSec = ($depTs !== false && $retTs !== false && $retTs >= $depTs)
+                        ? (int)($retTs - $depTs)
+                        : (isset($m['away_min']) && $m['away_min'] !== null ? max(0, (int)$m['away_min'] * 60) : 0);
+                    $movementPairs[] = [
+                        'unit_id'            => $uid,
+                        'exit_id'            => $id,
+                        'exit_epoch'         => $epoch,
+                        'exit_time'          => (string)$m['departed'],
+                        'enter_id'           => $id,
+                        'enter_epoch'        => ($retTs !== false ? (int)$retTs : ($epoch + $durasiSec)),
+                        'enter_time'         => (string)$m['returned'],
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => false,
+                        'clock_adjusted'     => false,
+                        'from_zone'          => $fromZone,
+                        'to_zone'            => $toZone,
+                        'return_from_zone'   => $toZone,
+                        'debounce_hits'      => $debHits,
+                        'tag'                => $tagVal,
+                    ];
+                    $pairedMoves[$id] = [
+                        'durasi_di_luar_sec' => $durasiSec,
+                        'masih_di_luar'      => false,
+                        'clock_adjusted'     => false,
+                        'paired_return_time' => (string)$m['returned'],
+                    ];
+                    continue;
+                }
+
                 if (isset($pendingExitByUnit[$uid])) {
                     $prevExit = $pendingExitByUnit[$uid];
-                    $durasiSec = max(0, $now - $prevExit['epoch']);
+                    [$durasiSec, $clkAdj] = $computeSafeElapsed(
+                        $prevExit['epoch'],
+                        $now,
+                        $prevExit['created_at'],
+                        null,
+                        $now
+                    );
                     $movementPairs[] = [
                         'unit_id'            => $uid,
                         'exit_id'            => $prevExit['id'],
@@ -360,21 +425,41 @@ try {
                         'enter_time'         => null,
                         'durasi_di_luar_sec' => $durasiSec,
                         'masih_di_luar'      => true,
+                        'clock_adjusted'     => $clkAdj,
+                        'from_zone'          => $prevExit['from_zone'],
+                        'to_zone'            => $prevExit['to_zone'],
+                        'return_from_zone'   => null,
+                        'debounce_hits'      => $prevExit['debounce_hits'],
+                        'tag'                => $prevExit['tag'],
                     ];
                     $pairedMoves[$prevExit['id']] = [
                         'durasi_di_luar_sec' => $durasiSec,
                         'masih_di_luar'      => true,
+                        'clock_adjusted'     => $clkAdj,
+                        'paired_return_time' => null,
                     ];
                 }
                 $pendingExitByUnit[$uid] = [
-                    'id'       => $id,
-                    'epoch'    => $epoch,
-                    'departed' => (string)$m['departed'],
+                    'id'            => $id,
+                    'epoch'         => $epoch,
+                    'departed'      => (string)$m['departed'],
+                    'created_at'    => $createdAt,
+                    'from_zone'     => $fromZone,
+                    'to_zone'       => $toZone,
+                    'debounce_hits' => $debHits,
+                    'tag'           => $tagVal,
                 ];
             } elseif ($type === 'ENTER_YARD') {
                 if (isset($pendingExitByUnit[$uid])) {
                     $prevExit = $pendingExitByUnit[$uid];
-                    $durasiSec = max(0, $epoch - $prevExit['epoch']);
+                    [$durasiSec, $clkAdj] = $computeSafeElapsed(
+                        $prevExit['epoch'],
+                        $epoch,
+                        $prevExit['created_at'],
+                        $createdAt,
+                        $now
+                    );
+                    $resolvedTag = $tagVal ?? $prevExit['tag'];
                     $movementPairs[] = [
                         'unit_id'            => $uid,
                         'exit_id'            => $prevExit['id'],
@@ -385,27 +470,45 @@ try {
                         'enter_time'         => (string)$m['departed'],
                         'durasi_di_luar_sec' => $durasiSec,
                         'masih_di_luar'      => false,
+                        'clock_adjusted'     => $clkAdj,
+                        'from_zone'          => $prevExit['from_zone'],
+                        'to_zone'            => $prevExit['to_zone'],
+                        'return_from_zone'   => $fromZone,
+                        'debounce_hits'      => $prevExit['debounce_hits'],
+                        'tag'                => $resolvedTag,
                     ];
                     $pairedMoves[$prevExit['id']] = [
                         'durasi_di_luar_sec' => $durasiSec,
                         'masih_di_luar'      => false,
+                        'clock_adjusted'     => $clkAdj,
+                        'paired_return_time' => (string)$m['departed'],
                     ];
                     $pairedMoves[$id] = [
                         'durasi_di_luar_sec' => $durasiSec,
                         'masih_di_luar'      => false,
+                        'clock_adjusted'     => $clkAdj,
+                        'paired_return_time' => (string)$m['departed'],
                     ];
                     unset($pendingExitByUnit[$uid]);
                 } else {
                     $pairedMoves[$id] = [
                         'durasi_di_luar_sec' => 0,
                         'masih_di_luar'      => false,
+                        'clock_adjusted'     => false,
+                        'paired_return_time' => (string)$m['departed'],
                     ];
                 }
             }
         }
 
         foreach ($pendingExitByUnit as $uid => $prevExit) {
-            $durasiSec = max(0, $now - $prevExit['epoch']);
+            [$durasiSec, $clkAdj] = $computeSafeElapsed(
+                $prevExit['epoch'],
+                $now,
+                $prevExit['created_at'],
+                null,
+                $now
+            );
             $movementPairs[] = [
                 'unit_id'            => $uid,
                 'exit_id'            => $prevExit['id'],
@@ -416,12 +519,29 @@ try {
                 'enter_time'         => null,
                 'durasi_di_luar_sec' => $durasiSec,
                 'masih_di_luar'      => true,
+                'clock_adjusted'     => $clkAdj,
+                'from_zone'          => $prevExit['from_zone'],
+                'to_zone'            => $prevExit['to_zone'],
+                'return_from_zone'   => null,
+                'debounce_hits'      => $prevExit['debounce_hits'],
+                'tag'                => $prevExit['tag'],
             ];
             $pairedMoves[$prevExit['id']] = [
                 'durasi_di_luar_sec' => $durasiSec,
                 'masih_di_luar'      => true,
+                'clock_adjusted'     => $clkAdj,
+                'paired_return_time' => null,
             ];
         }
+
+        usort($movementPairs, static function (array $a, array $b): int {
+            $tA = (int)($a['enter_epoch'] ?? $a['exit_epoch'] ?? 0);
+            $tB = (int)($b['enter_epoch'] ?? $b['exit_epoch'] ?? 0);
+            if ($tB !== $tA) {
+                return $tB <=> $tA;
+            }
+            return (int)($b['exit_epoch'] ?? 0) <=> (int)($a['exit_epoch'] ?? 0);
+        });
     } catch (Exception $e) {
         $movementPairs = [];
         $pairedMoves = [];
@@ -437,6 +557,8 @@ try {
         $id = (string)$m['id'];
         $durSec = isset($pairedMoves[$id]['durasi_di_luar_sec']) ? $pairedMoves[$id]['durasi_di_luar_sec'] : null;
         $masihDiLuar = isset($pairedMoves[$id]['masih_di_luar']) ? $pairedMoves[$id]['masih_di_luar'] : false;
+        $clkAdjusted = !empty($pairedMoves[$id]['clock_adjusted']);
+        $pairedRetTime = $pairedMoves[$id]['paired_return_time'] ?? null;
 
         $movementsList[] = [
             'id'                 => $id,
@@ -452,9 +574,11 @@ try {
             'speed_kmh'          => isset($m['speed_kmh']) ? (int)$m['speed_kmh'] : 0,
             'departed'           => (string)$m['departed'],
             'returned'           => $m['returned'] ? (string)$m['returned'] : null,
+            'paired_return_time' => $pairedRetTime,
             'away_min'           => $durSec !== null ? (int)round($durSec / 60) : ($m['away_min'] !== null ? (int)$m['away_min'] : null),
             'durasi_di_luar_sec' => $durSec,
             'masih_di_luar'      => $masihDiLuar,
+            'clock_adjusted'     => $clkAdjusted,
             'debounce_hits'      => (int)$m['debounce_hits'],
             'tag'                => $m['tag'] ? (string)$m['tag'] : null,
             'created_at'         => isset($m['created_at']) ? (string)$m['created_at'] : null,

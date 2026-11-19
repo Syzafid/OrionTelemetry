@@ -22,6 +22,7 @@ import {
   type SimState,
   type PiggybackConfig,
   type MovementEvent,
+  type MovementPair,
   type OperationalTag,
   type AuditLogEntry,
   type AuditSeverity,
@@ -130,6 +131,8 @@ interface Ctx {
   dispatchWarmup: (id: string) => void;
   history: Record<string, Array<VoltagePoint>>;
   movement: MovementEvent[];
+  movementPairs: MovementPair[];
+  massDisconnectGuard: boolean;
   auditLogs: AuditLogEntry[];
   tickets: MaintenanceTicket[];
   updateTicketStatus: (
@@ -138,7 +141,7 @@ interface Ctx {
     assignedTo?: string,
     handoverNote?: string,
   ) => void;
-  tagMovement: (evId: string, tag: OperationalTag) => void;
+  tagMovement: (evId: string, tag: OperationalTag, pairedId?: string) => void;
   pairUnit: (
     oldId: string,
     data: { vin: string; model: string; color: string; bay: string },
@@ -182,6 +185,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const [movement, setMovement] = useState<MovementEvent[]>(() =>
     MOVEMENT_LOG.map((m) => ({ ...m })),
   );
+  const [movementPairs, setMovementPairs] = useState<MovementPair[]>([]);
+  const [massDisconnectGuard, setMassDisconnectGuard] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() =>
     AUDIT_LOGS.map((a) => ({ ...a })),
   );
@@ -459,15 +464,30 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   );
 
   const tagMovement = useCallback(
-    (evId: string, tag: OperationalTag) => {
-      setMovement((m) => m.map((e) => (e.id === evId ? { ...e, tag } : e)));
+    (evId: string, tag: OperationalTag, pairedId?: string) => {
+      setMovement((m) =>
+        m.map((e) => (e.id === evId || (pairedId && e.id === pairedId) ? { ...e, tag } : e)),
+      );
+      setMovementPairs((pairs) =>
+        pairs.map((p) =>
+          p.exit_id === evId ||
+          p.enter_id === evId ||
+          (pairedId && (p.exit_id === pairedId || p.enter_id === pairedId))
+            ? { ...p, tag }
+            : p,
+        ),
+      );
       appendLocalAudit(
         "YARD-GATEWAY",
         "MOVEMENT_TAG",
         "INFO",
         `Movement event ${evId} tagged as ${tag}`,
       );
-      void sendMutation("TAG_MOVEMENT", { id: evId, tag });
+      void sendMutation("TAG_MOVEMENT", {
+        id: evId,
+        tag,
+        ...(pairedId ? { paired_id: pairedId } : {}),
+      });
     },
     [appendLocalAudit, sendMutation],
   );
@@ -622,6 +642,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const sectionHashesRef = useRef<{
     configs?: string;
     movement?: string;
+    movement_pairs?: string;
     history?: string;
     audit?: string;
     tickets?: string;
@@ -664,7 +685,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           }
         }
         const hasSectionChanged = (
-          key: "configs" | "movement" | "history" | "audit" | "tickets",
+          key: "configs" | "movement" | "movement_pairs" | "history" | "audit" | "tickets",
           data: unknown,
         ): boolean => {
           const nextHash = JSON.stringify(data);
@@ -672,6 +693,10 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           sectionHashesRef.current[key] = nextHash;
           return true;
         };
+
+        if (typeof obj["mass_disconnect_guard"] === "boolean") {
+          setMassDisconnectGuard(obj["mass_disconnect_guard"]);
+        }
 
         if (
           obj["configs"] &&
@@ -692,6 +717,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         }
         if (Array.isArray(obj["movement"]) && hasSectionChanged("movement", obj["movement"])) {
           setMovement(obj["movement"] as MovementEvent[]);
+        }
+        if (
+          Array.isArray(obj["movement_pairs"]) &&
+          hasSectionChanged("movement_pairs", obj["movement_pairs"])
+        ) {
+          setMovementPairs(obj["movement_pairs"] as MovementPair[]);
         }
         if (
           obj["history"] &&
@@ -773,6 +804,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     if (dataSource !== "LIVE_API") {
       setApiStatus("SANDBOX");
       setIsOfflineSnapshot(false);
+      setMassDisconnectGuard(false);
+      setMovementPairs([]);
       setTickets((prev) => (prev.length === 0 ? INITIAL_TICKETS : prev));
       setAuditLogs((prev) => (prev.length === 0 ? AUDIT_LOGS : prev));
       return;
@@ -853,6 +886,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       dispatchWarmup,
       history,
       movement,
+      movementPairs,
+      massDisconnectGuard,
       auditLogs,
       tickets,
       updateTicketStatus,
@@ -889,6 +924,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       dispatchWarmup,
       history,
       movement,
+      movementPairs,
+      massDisconnectGuard,
       auditLogs,
       tickets,
       updateTicketStatus,

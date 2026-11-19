@@ -349,7 +349,7 @@ html.is-fullscreen body::-webkit-scrollbar {
   .presence-details {
     flex: 1 1 0%;
     min-height: 0;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
+    grid-template-columns: minmax(310px, 0.92fr) minmax(0, 1.48fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 12px;
   }
