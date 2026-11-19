@@ -1077,7 +1077,7 @@ export function ConfigModule() {
                             Baterai:{" "}
                             <strong className="text-foreground">
                               {u.telemetry.v_bat <= 0 &&
-                              u.status_label.toLowerCase().includes("menunggu")
+                                u.status_label.toLowerCase().includes("menunggu")
                                 ? "Menunggu Paket"
                                 : `${fmtV(u.telemetry.v_bat)}V`}
                             </strong>
