@@ -96,7 +96,12 @@ export interface VehicleUnit {
 
 export interface UnitConnectionState {
   isOnline: boolean;
-  badgeText: "LIVE / ONLINE" | "LIVE / TECH HOTSPOT" | "OFFLINE / DEEP SLEEP" | "OFFLINE / OUT OF YARD" | string;
+  badgeText:
+    | "LIVE / ONLINE"
+    | "LIVE / TECH HOTSPOT"
+    | "OFFLINE / DEEP SLEEP"
+    | "OFFLINE / OUT OF YARD"
+    | string;
   lastSeenSec: number | null;
 }
 
@@ -108,9 +113,16 @@ export const LIVE_ONLINE_THRESHOLD_SEC = 6;
  * the backend get_data.php response as the authoritative source of truth.
  * In SIMULATOR mode, local time-based evaluation is retained.
  */
-export function getUnitConnectionState(u: VehicleUnit, isLiveApi: boolean = false): UnitConnectionState {
+export function getUnitConnectionState(
+  u: VehicleUnit,
+  isLiveApi: boolean = false,
+): UnitConnectionState {
   // Sesuai Spesifikasi Task 2.1 Bagian C: Pada mode live, backend adalah sumber kebenaran tunggal
-  if (isLiveApi && (u.online_status === "ONLINE" || u.online_status === "OFFLINE") && u.connection_badge) {
+  if (
+    isLiveApi &&
+    (u.online_status === "ONLINE" || u.online_status === "OFFLINE") &&
+    u.connection_badge
+  ) {
     return {
       isOnline: u.online_status === "ONLINE",
       badgeText: u.connection_badge,
@@ -119,9 +131,7 @@ export function getUnitConnectionState(u: VehicleUnit, isLiveApi: boolean = fals
   }
 
   // Mode SIMULATOR (logika evaluasi lokal):
-  const isTechHotspot =
-    u.net_zone === "TECH_HOTSPOT" ||
-    u.telemetry?.net_zone === "TECH_HOTSPOT";
+  const isTechHotspot = u.net_zone === "TECH_HOTSPOT" || u.telemetry?.net_zone === "TECH_HOTSPOT";
   const canBeOnline = u.in_yard || isTechHotspot;
 
   let isOnline: boolean;
@@ -151,6 +161,9 @@ export interface VoltagePoint {
   t: string;
   v: number;
   ts?: number;
+  rpm?: number;
+  temp_c?: number;
+  engine_on?: boolean;
 }
 
 export interface WarmupPoint {
@@ -162,7 +175,12 @@ export interface WarmupPoint {
 }
 
 export type OperationalTag = "Test Drive" | "PDI Workshop" | "Detailing" | "Customer Delivery";
-export const OPERATIONAL_TAGS: OperationalTag[] = ["Test Drive", "PDI Workshop", "Detailing", "Customer Delivery"];
+export const OPERATIONAL_TAGS: OperationalTag[] = [
+  "Test Drive",
+  "PDI Workshop",
+  "Detailing",
+  "Customer Delivery",
+];
 
 export interface MovementEvent {
   id: string;
@@ -235,11 +253,38 @@ export const UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 3,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-01", boot: 41, v_bat: 12.60, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -44, sleep_cfg: 300, active_ms: 1613, daily_mah: 5.95,
-      rtc_temp_c: 31.2, adc_raw_mv: 2262, shunt_sleep_ua: 410, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 74.5, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1420,
+      unit_id: "MITSUBISHI-STOCK-01",
+      boot: 41,
+      v_bat: 12.6,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -44,
+      sleep_cfg: 300,
+      active_ms: 1613,
+      daily_mah: 5.95,
+      rtc_temp_c: 31.2,
+      adc_raw_mv: 2262,
+      shunt_sleep_ua: 410,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 74.5,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1420,
     },
   },
   {
@@ -254,11 +299,38 @@ export const UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 6,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-02", boot: 112, v_bat: 12.18, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -52, sleep_cfg: 300, active_ms: 1488, daily_mah: 6.41,
-      rtc_temp_c: 32.0, adc_raw_mv: 2184, shunt_sleep_ua: 440, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 68.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1180,
+      unit_id: "MITSUBISHI-STOCK-02",
+      boot: 112,
+      v_bat: 12.18,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -52,
+      sleep_cfg: 300,
+      active_ms: 1488,
+      daily_mah: 6.41,
+      rtc_temp_c: 32.0,
+      adc_raw_mv: 2184,
+      shunt_sleep_ua: 440,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 68.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1180,
     },
   },
   {
@@ -273,11 +345,38 @@ export const UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 17,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-03", boot: 41, v_bat: 11.65, engine_on: false, crit_alert: true,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -48, sleep_cfg: 300, active_ms: 1702, daily_mah: 5.71,
-      rtc_temp_c: 33.4, adc_raw_mv: 2086, shunt_sleep_ua: 490, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 62.5, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 980,
+      unit_id: "MITSUBISHI-STOCK-03",
+      boot: 41,
+      v_bat: 11.65,
+      engine_on: false,
+      crit_alert: true,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -48,
+      sleep_cfg: 300,
+      active_ms: 1702,
+      daily_mah: 5.71,
+      rtc_temp_c: 33.4,
+      adc_raw_mv: 2086,
+      shunt_sleep_ua: 490,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 62.5,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 980,
     },
   },
 ];
@@ -300,11 +399,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 11,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-04", boot: 88, v_bat: 11.72, engine_on: false, crit_alert: true,
-      rpm: 0, temp_c: 0, dtc_cnt: 1, dtc: "P0133", rssi: -55, sleep_cfg: 300, active_ms: 1680, daily_mah: 6.82,
-      rtc_temp_c: 32.8, adc_raw_mv: 2099, shunt_sleep_ua: 520, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 71.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: true, ecu_v: 0, dist_clr_km: 1540,
+      unit_id: "MITSUBISHI-STOCK-04",
+      boot: 88,
+      v_bat: 11.72,
+      engine_on: false,
+      crit_alert: true,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 1,
+      dtc: "P0133",
+      rssi: -55,
+      sleep_cfg: 300,
+      active_ms: 1680,
+      daily_mah: 6.82,
+      rtc_temp_c: 32.8,
+      adc_raw_mv: 2099,
+      shunt_sleep_ua: 520,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 71.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: true,
+      ecu_v: 0,
+      dist_clr_km: 1540,
     },
   },
   {
@@ -319,11 +445,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 0,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-05", boot: 29, v_bat: 12.68, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -42, sleep_cfg: 600, active_ms: 1410, daily_mah: 4.85,
-      rtc_temp_c: 30.4, adc_raw_mv: 2277, shunt_sleep_ua: 380, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 84.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 850,
+      unit_id: "MITSUBISHI-STOCK-05",
+      boot: 29,
+      v_bat: 12.68,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -42,
+      sleep_cfg: 600,
+      active_ms: 1410,
+      daily_mah: 4.85,
+      rtc_temp_c: 30.4,
+      adc_raw_mv: 2277,
+      shunt_sleep_ua: 380,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 84.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 850,
     },
   },
   {
@@ -338,11 +491,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 0,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-06", boot: 64, v_bat: 14.18, engine_on: true, crit_alert: false,
-      rpm: 860, temp_c: 84, dtc_cnt: 0, dtc: "NONE", rssi: -41, sleep_cfg: 300, active_ms: 245000, daily_mah: 5.40,
-      rtc_temp_c: 36.2, adc_raw_mv: 2554, shunt_sleep_ua: 0, can_ok: true,
-      speed_kmh: 0, iat_c: 35, map_kpa: 34, load_pct: 22.4, tps_pct: 14.5, ign_deg: 12.5, maf_gs: 3.45, run_time_s: 245,
-      fuel_pct: 78.0, fuel_rate_lh: 1.14, o2_v: 0.65, stft_pct: 1.2, mil_on: false, ecu_v: 14.12, dist_clr_km: 1640,
+      unit_id: "MITSUBISHI-STOCK-06",
+      boot: 64,
+      v_bat: 14.18,
+      engine_on: true,
+      crit_alert: false,
+      rpm: 860,
+      temp_c: 84,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -41,
+      sleep_cfg: 300,
+      active_ms: 245000,
+      daily_mah: 5.4,
+      rtc_temp_c: 36.2,
+      adc_raw_mv: 2554,
+      shunt_sleep_ua: 0,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 35,
+      map_kpa: 34,
+      load_pct: 22.4,
+      tps_pct: 14.5,
+      ign_deg: 12.5,
+      maf_gs: 3.45,
+      run_time_s: 245,
+      fuel_pct: 78.0,
+      fuel_rate_lh: 1.14,
+      o2_v: 0.65,
+      stft_pct: 1.2,
+      mil_on: false,
+      ecu_v: 14.12,
+      dist_clr_km: 1640,
     },
   },
   {
@@ -357,11 +537,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 4,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-07", boot: 95, v_bat: 12.12, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -58, sleep_cfg: 300, active_ms: 1530, daily_mah: 6.55,
-      rtc_temp_c: 32.1, adc_raw_mv: 2173, shunt_sleep_ua: 455, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 66.5, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1310,
+      unit_id: "MITSUBISHI-STOCK-07",
+      boot: 95,
+      v_bat: 12.12,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -58,
+      sleep_cfg: 300,
+      active_ms: 1530,
+      daily_mah: 6.55,
+      rtc_temp_c: 32.1,
+      adc_raw_mv: 2173,
+      shunt_sleep_ua: 455,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 66.5,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1310,
     },
   },
   {
@@ -376,11 +583,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: false,
     buffer_used: 34,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-08", boot: 53, v_bat: 12.48, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -127, sleep_cfg: 300, active_ms: 1590, daily_mah: 5.80,
-      rtc_temp_c: 33.9, adc_raw_mv: 2240, shunt_sleep_ua: 415, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 73.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 2140,
+      unit_id: "MITSUBISHI-STOCK-08",
+      boot: 53,
+      v_bat: 12.48,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -127,
+      sleep_cfg: 300,
+      active_ms: 1590,
+      daily_mah: 5.8,
+      rtc_temp_c: 33.9,
+      adc_raw_mv: 2240,
+      shunt_sleep_ua: 415,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 73.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 2140,
     },
   },
   {
@@ -395,11 +629,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 1,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-09", boot: 37, v_bat: 12.64, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -49, sleep_cfg: 600, active_ms: 1475, daily_mah: 5.12,
-      rtc_temp_c: 31.0, adc_raw_mv: 2269, shunt_sleep_ua: 395, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 80.5, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1090,
+      unit_id: "MITSUBISHI-STOCK-09",
+      boot: 37,
+      v_bat: 12.64,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -49,
+      sleep_cfg: 600,
+      active_ms: 1475,
+      daily_mah: 5.12,
+      rtc_temp_c: 31.0,
+      adc_raw_mv: 2269,
+      shunt_sleep_ua: 395,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 80.5,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1090,
     },
   },
   {
@@ -414,11 +675,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 26,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-10", boot: 119, v_bat: 11.58, engine_on: false, crit_alert: true,
-      rpm: 0, temp_c: 0, dtc_cnt: 1, dtc: "P0115", rssi: -63, sleep_cfg: 300, active_ms: 1740, daily_mah: 7.15,
-      rtc_temp_c: 33.7, adc_raw_mv: 2073, shunt_sleep_ua: 540, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 64.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: true, ecu_v: 0, dist_clr_km: 1755,
+      unit_id: "MITSUBISHI-STOCK-10",
+      boot: 119,
+      v_bat: 11.58,
+      engine_on: false,
+      crit_alert: true,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 1,
+      dtc: "P0115",
+      rssi: -63,
+      sleep_cfg: 300,
+      active_ms: 1740,
+      daily_mah: 7.15,
+      rtc_temp_c: 33.7,
+      adc_raw_mv: 2073,
+      shunt_sleep_ua: 540,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 64.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: true,
+      ecu_v: 0,
+      dist_clr_km: 1755,
     },
   },
   {
@@ -433,11 +721,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: true,
     buffer_used: 8,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-11", boot: 77, v_bat: 12.06, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -59, sleep_cfg: 300, active_ms: 1560, daily_mah: 6.68,
-      rtc_temp_c: 31.8, adc_raw_mv: 2162, shunt_sleep_ua: 465, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 69.5, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1280,
+      unit_id: "MITSUBISHI-STOCK-11",
+      boot: 77,
+      v_bat: 12.06,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -59,
+      sleep_cfg: 300,
+      active_ms: 1560,
+      daily_mah: 6.68,
+      rtc_temp_c: 31.8,
+      adc_raw_mv: 2162,
+      shunt_sleep_ua: 465,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 69.5,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1280,
     },
   },
   {
@@ -452,11 +767,38 @@ export const EXPANDED_YARD_UNITS: VehicleUnit[] = [
     in_yard: false,
     buffer_used: 14,
     telemetry: {
-      unit_id: "MITSUBISHI-STOCK-12", boot: 46, v_bat: 12.54, engine_on: false, crit_alert: false,
-      rpm: 0, temp_c: 0, dtc_cnt: 0, dtc: "NONE", rssi: -127, sleep_cfg: 300, active_ms: 1505, daily_mah: 5.32,
-      rtc_temp_c: 32.5, adc_raw_mv: 2251, shunt_sleep_ua: 405, can_ok: true,
-      speed_kmh: 0, iat_c: 0, map_kpa: 0, load_pct: 0, tps_pct: 0, ign_deg: 0, maf_gs: 0, run_time_s: 0,
-      fuel_pct: 76.0, fuel_rate_lh: 0, o2_v: 0, stft_pct: 0, mil_on: false, ecu_v: 0, dist_clr_km: 1920,
+      unit_id: "MITSUBISHI-STOCK-12",
+      boot: 46,
+      v_bat: 12.54,
+      engine_on: false,
+      crit_alert: false,
+      rpm: 0,
+      temp_c: 0,
+      dtc_cnt: 0,
+      dtc: "NONE",
+      rssi: -127,
+      sleep_cfg: 300,
+      active_ms: 1505,
+      daily_mah: 5.32,
+      rtc_temp_c: 32.5,
+      adc_raw_mv: 2251,
+      shunt_sleep_ua: 405,
+      can_ok: true,
+      speed_kmh: 0,
+      iat_c: 0,
+      map_kpa: 0,
+      load_pct: 0,
+      tps_pct: 0,
+      ign_deg: 0,
+      maf_gs: 0,
+      run_time_s: 0,
+      fuel_pct: 76.0,
+      fuel_rate_lh: 0,
+      o2_v: 0,
+      stft_pct: 0,
+      mil_on: false,
+      ecu_v: 0,
+      dist_clr_km: 1920,
     },
   },
 ];
@@ -471,11 +813,7 @@ export function voltageHistory(endV: number, warm = false): VoltagePoint[] {
   const pts: VoltagePoint[] = [];
   const baseTs = 1793600000;
   const isHealthyStandby = !warm && endV >= 12.55;
-  const start = warm
-    ? 12.35
-    : isHealthyStandby
-      ? endV + 0.03
-      : Math.min(12.74, endV + 0.58);
+  const start = warm ? 12.35 : isHealthyStandby ? endV + 0.03 : Math.min(12.74, endV + 0.58);
 
   for (let h = 0; h <= 24; h++) {
     const k = h / 24;
@@ -502,17 +840,78 @@ export const WARMUP_SESSION: WarmupPoint[] = Array.from({ length: 16 }, (_, i) =
   const rpm = i === 0 ? 0 : i < 3 ? 1450 - i * 150 : 850 + Math.round(Math.sin(i) * 25);
   const temp = Math.round(29 + 53 * (1 - Math.exp(-i / 5)));
   const v = i === 0 ? 12.41 : 14.0 + Math.min(0.18, i * 0.02);
-  return { t: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`, rpm, temp, v: +v.toFixed(2) };
+  return {
+    t: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`,
+    rpm,
+    temp,
+    v: +v.toFixed(2),
+  };
 });
 
 export const MOVEMENT_LOG: MovementEvent[] = [
-  { id: "EV-0421", unit_id: "MITSUBISHI-STOCK-08", departed: "2026-10-15 11:15:22", returned: null, away_min: null, debounce_hits: 3, tag: "Test Drive" },
-  { id: "EV-0420", unit_id: "MITSUBISHI-STOCK-12", departed: "2026-10-15 10:55:10", returned: null, away_min: null, debounce_hits: 3, tag: "PDI Workshop" },
-  { id: "EV-0419", unit_id: "MITSUBISHI-STOCK-03", departed: "2026-10-15 10:42:08", returned: "2026-10-15 11:08:40", away_min: 26, debounce_hits: 3, tag: "Test Drive" },
-  { id: "EV-0418", unit_id: "MITSUBISHI-STOCK-01", departed: "2026-10-14 15:10:51", returned: "2026-10-14 16:02:17", away_min: 51, debounce_hits: 3, tag: "PDI Workshop" },
-  { id: "EV-0417", unit_id: "MITSUBISHI-STOCK-02", departed: "2026-10-14 09:05:33", returned: "2026-10-14 11:47:02", away_min: 161, debounce_hits: 3, tag: "Detailing" },
-  { id: "EV-0416", unit_id: "MITSUBISHI-STOCK-03", departed: "2026-10-13 13:21:40", returned: "2026-10-13 13:58:12", away_min: 36, debounce_hits: 3, tag: null },
-  { id: "EV-0415", unit_id: "MITSUBISHI-STOCK-01", departed: "2026-10-12 08:30:00", returned: "2026-10-12 10:15:44", away_min: 105, debounce_hits: 3, tag: "Customer Delivery" },
+  {
+    id: "EV-0421",
+    unit_id: "MITSUBISHI-STOCK-08",
+    departed: "2026-10-15 11:15:22",
+    returned: null,
+    away_min: null,
+    debounce_hits: 3,
+    tag: "Test Drive",
+  },
+  {
+    id: "EV-0420",
+    unit_id: "MITSUBISHI-STOCK-12",
+    departed: "2026-10-15 10:55:10",
+    returned: null,
+    away_min: null,
+    debounce_hits: 3,
+    tag: "PDI Workshop",
+  },
+  {
+    id: "EV-0419",
+    unit_id: "MITSUBISHI-STOCK-03",
+    departed: "2026-10-15 10:42:08",
+    returned: "2026-10-15 11:08:40",
+    away_min: 26,
+    debounce_hits: 3,
+    tag: "Test Drive",
+  },
+  {
+    id: "EV-0418",
+    unit_id: "MITSUBISHI-STOCK-01",
+    departed: "2026-10-14 15:10:51",
+    returned: "2026-10-14 16:02:17",
+    away_min: 51,
+    debounce_hits: 3,
+    tag: "PDI Workshop",
+  },
+  {
+    id: "EV-0417",
+    unit_id: "MITSUBISHI-STOCK-02",
+    departed: "2026-10-14 09:05:33",
+    returned: "2026-10-14 11:47:02",
+    away_min: 161,
+    debounce_hits: 3,
+    tag: "Detailing",
+  },
+  {
+    id: "EV-0416",
+    unit_id: "MITSUBISHI-STOCK-03",
+    departed: "2026-10-13 13:21:40",
+    returned: "2026-10-13 13:58:12",
+    away_min: 36,
+    debounce_hits: 3,
+    tag: null,
+  },
+  {
+    id: "EV-0415",
+    unit_id: "MITSUBISHI-STOCK-01",
+    departed: "2026-10-12 08:30:00",
+    returned: "2026-10-12 10:15:44",
+    away_min: 105,
+    debounce_hits: 3,
+    tag: "Customer Delivery",
+  },
 ];
 
 export const AUDIT_LOGS: AuditLogEntry[] = [
@@ -559,7 +958,8 @@ export const INITIAL_TICKETS: MaintenanceTicket[] = [
     issue_summary: "Critical Battery Drain (11.65V < 11.80V SOP Threshold)",
     status: "IN_PROGRESS",
     assigned_to: "R. Pratama (Shift A)",
-    handover_note: "Queued 10-min alternator warm-up; re-verify shunt sleep current after cool-down.",
+    handover_note:
+      "Queued 10-min alternator warm-up; re-verify shunt sleep current after cool-down.",
     updated_at: "2026-11-05 08:30:00",
   },
   {
@@ -635,7 +1035,8 @@ export function applyTicketTransition(
   }
 
   const nextId = tickets.reduce((max, t) => Math.max(max, t.id), 0) + 1;
-  const suffix = unit.unit_id.replace(/[^0-9]/g, "").padStart(2, "0") || String(nextId).padStart(2, "0");
+  const suffix =
+    unit.unit_id.replace(/[^0-9]/g, "").padStart(2, "0") || String(nextId).padStart(2, "0");
   const newTicket: MaintenanceTicket = {
     id: nextId,
     ticket_code: `TKT-04${suffix}`,
@@ -659,37 +1060,188 @@ export function applyTicketTransition(
 }
 
 export const WIRING: WiringNode[] = [
-  { id: "W-01", wire: "OBD PIN 16 (+12V)", path: "1A Fuse -> B2 (Male) -> 1N5819 (C2-G2) + SMBJ15A TVS (F4-F17)", signal: "+12V (Protected)", status: "OK", reading: "12.25 V" },
-  { id: "W-02", wire: "OBD PIN 4+5 (GND)", path: "G17 (Female Poka-Yoke) -> Row 17 & Col W Common GND Busbar", signal: "Main Ground", status: "OK", reading: "0.00 Ω" },
-  { id: "W-03", wire: "BUCK MP1584 (3.30V)", path: "G3 (IN+) / D16 (IN-) -> Off-Board MP1584 -> I6 (OUT+) + 220µF/100nF (H11/I11) -> X3", signal: "3.3V System", status: "OK", reading: "3.30 V" },
-  { id: "W-04", wire: "GPIO27 (ADC TRIG)", path: "X5 -> R_BASE 10k (N12) + R_PD 100k (N17) -> 2N3904 (L10-N10) -> AO3401A #1 (L4-N4-M2) + Zener 10V (K6-N6)", signal: "D27 Trigger", status: "OK", reading: "PULSED 40ms" },
-  { id: "W-05", wire: "GPIO34 (ADC1_CH6)", path: "M2 -> R1 300k (P1-P4) + R2 68k (P5-P8) + C_ADC 100nF (Q6) -> X6 Node M", signal: "Battery Sense", status: "OK", reading: "2262 mV" },
-  { id: "W-06", wire: "GPIO26 (CAN GATE)", path: "X7 -> R_GS2 100k (S6-S9) + AO3401A #2 (S3-S5-U4) -> U8/V8 (10µF/100nF) -> X8", signal: "3.3V CAN", status: "OK", reading: "GATED / 3.3V" },
-  { id: "W-07", wire: "GPIO5 / GPIO4 (TWAI)", path: "ESP32 D5 (TX->CTX) & D4 (RX<-CRX) -> WCMCU-230 SN65HVD230 -> OBD Pin 6/14", signal: "CAN 500 kbps", status: "OK", reading: "500 kbps" },
-  { id: "W-08", wire: "GPIO21 / GPIO22 (I2C)", path: "ESP32 D21 (SDA) & D22 (SCL) -> ZS-042 DS3231SN RTC (0x68) + CR2032", signal: "I2C RTC", status: "OK", reading: "31.2 °C" },
+  {
+    id: "W-01",
+    wire: "OBD PIN 16 (+12V)",
+    path: "1A Fuse -> B2 (Male) -> 1N5819 (C2-G2) + SMBJ15A TVS (F4-F17)",
+    signal: "+12V (Protected)",
+    status: "OK",
+    reading: "12.25 V",
+  },
+  {
+    id: "W-02",
+    wire: "OBD PIN 4+5 (GND)",
+    path: "G17 (Female Poka-Yoke) -> Row 17 & Col W Common GND Busbar",
+    signal: "Main Ground",
+    status: "OK",
+    reading: "0.00 Ω",
+  },
+  {
+    id: "W-03",
+    wire: "BUCK MP1584 (3.30V)",
+    path: "G3 (IN+) / D16 (IN-) -> Off-Board MP1584 -> I6 (OUT+) + 220µF/100nF (H11/I11) -> X3",
+    signal: "3.3V System",
+    status: "OK",
+    reading: "3.30 V",
+  },
+  {
+    id: "W-04",
+    wire: "GPIO27 (ADC TRIG)",
+    path: "X5 -> R_BASE 10k (N12) + R_PD 100k (N17) -> 2N3904 (L10-N10) -> AO3401A #1 (L4-N4-M2) + Zener 10V (K6-N6)",
+    signal: "D27 Trigger",
+    status: "OK",
+    reading: "PULSED 40ms",
+  },
+  {
+    id: "W-05",
+    wire: "GPIO34 (ADC1_CH6)",
+    path: "M2 -> R1 300k (P1-P4) + R2 68k (P5-P8) + C_ADC 100nF (Q6) -> X6 Node M",
+    signal: "Battery Sense",
+    status: "OK",
+    reading: "2262 mV",
+  },
+  {
+    id: "W-06",
+    wire: "GPIO26 (CAN GATE)",
+    path: "X7 -> R_GS2 100k (S6-S9) + AO3401A #2 (S3-S5-U4) -> U8/V8 (10µF/100nF) -> X8",
+    signal: "3.3V CAN",
+    status: "OK",
+    reading: "GATED / 3.3V",
+  },
+  {
+    id: "W-07",
+    wire: "GPIO5 / GPIO4 (TWAI)",
+    path: "ESP32 D5 (TX->CTX) & D4 (RX<-CRX) -> WCMCU-230 SN65HVD230 -> OBD Pin 6/14",
+    signal: "CAN 500 kbps",
+    status: "OK",
+    reading: "500 kbps",
+  },
+  {
+    id: "W-08",
+    wire: "GPIO21 / GPIO22 (I2C)",
+    path: "ESP32 D21 (SDA) & D22 (SCL) -> ZS-042 DS3231SN RTC (0x68) + CR2032",
+    signal: "I2C RTC",
+    status: "OK",
+    reading: "31.2 °C",
+  },
 ];
 
-export const DTC_LIBRARY: Record<string, { title: string; system: string; detail: string }> = {
+export interface DtcLibraryEntry {
+  title: string;
+  system: string;
+  detail: string;
+  sopSteps: string[];
+}
+
+export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
   P0102: {
     title: "MASS OR VOLUME AIR FLOW 'A' CIRCUIT LOW INPUT",
-    system: "Powertrain (MAF Sensor - Mode 03 Read-Only)",
-    detail: "ECM detected MAF sensor signal frequency/voltage below minimum threshold (< 0.2 V). Inspect intake air ducting and MAF harness connector.",
+    system: "Powertrain (Sensor MAF, Mode 03 Read-Only)",
+    detail:
+      "ECM mendeteksi frekuensi/tegangan sinyal sensor MAF di bawah ambang minimum (< 0.2 V).",
+    sopSteps: [
+      "Periksa kerapatan konektor soket sensor MAF pada kotak filter udara.",
+      "Cek kebersihan elemen hot-wire MAF dan pastikan saluran intake tidak bocor.",
+      "Uji tegangan suplai 5V referensi dan ground sensor saat kontak ON.",
+    ],
   },
   P0115: {
     title: "ENGINE COOLANT TEMPERATURE CIRCUIT MALFUNCTION",
-    system: "Powertrain (ECT Sensor)",
-    detail: "ECM detected ECT sensor voltage outside 0.1 V - 4.8 V window for > 2 s. Inspect sensor connector and harness.",
+    system: "Powertrain (Sensor ECT, Mode 03 Read-Only)",
+    detail:
+      "ECM mendeteksi tegangan sensor suhu air radiator (ECT) di luar rentang kerja 0.1 V - 4.8 V selama > 2 detik.",
+    sopSteps: [
+      "Periksa konektor 2-pin sensor ECT di rumah termostat terhadap korosi atau pin longgar.",
+      "Bandingkan nilai PID 0105 (Coolant Temp) terhadap suhu RTC mesin dingin.",
+      "Verifikasi kabel sinyal ke pin ECM tidak short ke ground atau putus.",
+    ],
   },
   P0133: {
     title: "O2 SENSOR CIRCUIT SLOW RESPONSE (BANK 1 SENSOR 1)",
-    system: "Fuel & Emission Control (Upstream O2)",
-    detail: "Heated oxygen sensor switching time exceeded threshold during closed-loop warm-up. Check exhaust manifold leak and sensor heater supply.",
+    system: "Kontrol Emisi & BBM (Sensor O2 Upstream)",
+    detail:
+      "Waktu switching sensor oksigen upstream melebihi ambang batas selama fase closed-loop warm-up.",
+    sopSteps: [
+      "Periksa sekring pemanas sensor O2 (heater circuit) dan hambatan elemen pemanas.",
+      "Cek kebocoran pada sambungan exhaust manifold sebelum sensor O2 Bank 1.",
+      "Pantau pembacaan PID 0114 (0.1V - 0.9V) dan STFT (PID 0106) saat mesin idle 85°C.",
+    ],
+  },
+  P0562: {
+    title: "SYSTEM VOLTAGE LOW (TEGANGAN SISTEM RENDAH)",
+    system: "Kelistrikan & Pengisian (Aki / Alternator)",
+    detail:
+      "ECM mencatat tegangan suplai sistem turun di bawah batas minimum operasi (< 10.5V saat cranking/run).",
+    sopSteps: [
+      "Ukur tegangan istirahat aki 12V dan verifikasi sel baterai serta kekencangan klem terminal.",
+      "Jadwalkan pemanasan 10 menit di Menu 03 untuk memastikan output pengisian alternator >= 13.50V.",
+      "Audit nilai arus bocor (shunt_sleep_ua) dan kondisi beban aksesoris tambahan.",
+    ],
+  },
+  P0171: {
+    title: "SYSTEM TOO LEAN (BANK 1)",
+    system: "Kontrol Emisi & Injeksi BBM",
+    detail:
+      "Koreksi Short-Term/Long-Term Fuel Trim menambah injeksi secara persisten akibat rasio udara berlebih.",
+    sopSteps: [
+      "Periksa selang vakum intake manifold dan gasket throttle body terhadap kebocoran udara.",
+      "Cek tekanan rel bahan bakar serta kebersihan filter BBM dan nosel injektor.",
+      "Verifikasi pembacaan MAF (PID 0110) dan STFT (PID 0106) saat mesin stasioner.",
+    ],
+  },
+  P0300: {
+    title: "RANDOM / MULTIPLE CYLINDER MISFIRE DETECTED",
+    system: "Pengapian & Pembakaran Silinder",
+    detail:
+      "ECM mendeteksi ketidakteraturan kecepatan poros engkol (misfire) pada lebih dari satu silinder.",
+    sopSteps: [
+      "Inspeksi kondisi busi, koil pengapian, dan soket harness di seluruh silinder.",
+      "Pastikan level dan kualitas bahan bakar di tangki mencukupi serta tekanan injeksi stabil.",
+      "Ukur kompresi silinder apabila misfire tetap terjadi saat mesin pada suhu kerja.",
+    ],
+  },
+  P0420: {
+    title: "CATALYST SYSTEM EFFICIENCY BELOW THRESHOLD (BANK 1)",
+    system: "Sistem Emisi & Catalytic Converter",
+    detail:
+      "Perbandingan osilasi sensor O2 downstream terlalu mendekati sensor upstream saat kondisi jelajah.",
+    sopSteps: [
+      "Pastikan tidak ada kebocoran knalpot antara exhaust manifold dan catalytic converter.",
+      "Evaluasi respons sensor O2 upstream & downstream dengan data closed-loop (PID 0114).",
+      "Periksa histori misfire atau pembakaran kaya yang berpotensi merusak katalis.",
+    ],
+  },
+  P0234: {
+    title: "TURBOCHARGER / SUPERCHARGER OVERBOOST CONDITION",
+    system: "Induksi Paksa Diesel (4N15 / 4N14 Turbo)",
+    detail:
+      "Tekanan boost intake manifold (MAP PID 010B) melebihi target tekanan yang ditetapkan ECM.",
+    sopSteps: [
+      "Periksa selang vakum aktuator VGT / wastegate turbocharger dari retakan atau lepas.",
+      "Uji pergerakan linkage vane turbocharger agar tidak macet akibat deposit karbon.",
+      "Verifikasi akurasi sensor MAP (PID 010B) pada posisi kunci ON mesin mati (~100 kPa).",
+    ],
+  },
+  U0100: {
+    title: "LOST COMMUNICATION WITH ECM / PCM 'A'",
+    system: "Jaringan CAN Bus ISO 15765-4 (500 kbps)",
+    detail: "Tidak ada frame balasan dari ID arbitrasi 0x7E8 meskipun transceiver CAN aktif.",
+    sopSteps: [
+      "Pastikan sakelar kontak berada di posisi ON (beberapa ECU memutus CAN saat Key Off).",
+      "Periksa kontinuitas pin 6 (CAN-H) & pin 14 (CAN-L) konektor J1962 serta status SN65HVD230.",
+      "Cek kestabilan suplai 3.3V CAN Gate (GPIO26) dan terminasi bus 60 Ohm pada tab Kelistrikan.",
+    ],
   },
 };
 
 export const DEFAULT_CONFIG = (unit_id: string): PiggybackConfig => ({
-  unit_id, sleep_cfg: 300, fast_poll_s: 10, crit_v: 11.8, debounce_cnt: 3,
-  cal_slope: 0.005412, cal_offset: 0.358,
+  unit_id,
+  sleep_cfg: 300,
+  fast_poll_s: 10,
+  crit_v: 11.8,
+  debounce_cnt: 3,
+  cal_slope: 0.005412,
+  cal_offset: 0.358,
 });
 
 /** Applies a simulator state to a unit's telemetry, including the v1.5.0 Read-Only OBD-II hardware fields. */
@@ -720,12 +1272,23 @@ export function applySimState(u: VehicleUnit, s: SimState): VehicleUnit {
 
   switch (s) {
     case "STANDBY":
-      Object.assign(t, { v_bat: 12.60, engine_on: false, crit_alert: false, rpm: 0, temp_c: 0, rssi: -44, adc_raw_mv: 2262, rtc_temp_c: 31.2, shunt_sleep_ua: 410, ...obdOfflineReset });
+      Object.assign(t, {
+        v_bat: 12.6,
+        engine_on: false,
+        crit_alert: false,
+        rpm: 0,
+        temp_c: 0,
+        rssi: -44,
+        adc_raw_mv: 2262,
+        rtc_temp_c: 31.2,
+        shunt_sleep_ua: 410,
+        ...obdOfflineReset,
+      });
       label = "Standby (Deep Sleep)";
       break;
     case "WARMUP":
       Object.assign(t, {
-        v_bat: 14.20,
+        v_bat: 14.2,
         engine_on: true,
         crit_alert: false,
         rpm: 850,
@@ -753,14 +1316,43 @@ export function applySimState(u: VehicleUnit, s: SimState): VehicleUnit {
       label = "Engine Warm-up Active";
       break;
     case "CRITICAL":
-      Object.assign(t, { v_bat: 11.60, engine_on: false, crit_alert: true, rpm: 0, temp_c: 0, rssi: -48, adc_raw_mv: 2077, rtc_temp_c: 30.5, shunt_sleep_ua: 480, ...obdOfflineReset });
+      Object.assign(t, {
+        v_bat: 11.6,
+        engine_on: false,
+        crit_alert: true,
+        rpm: 0,
+        temp_c: 0,
+        rssi: -48,
+        adc_raw_mv: 2077,
+        rtc_temp_c: 30.5,
+        shunt_sleep_ua: 480,
+        ...obdOfflineReset,
+      });
       label = "Critical Battery Drain";
       break;
     case "DEPARTED":
-      Object.assign(t, { v_bat: 12.50, engine_on: false, crit_alert: false, rpm: 0, temp_c: 0, rssi: -127, adc_raw_mv: 2244, rtc_temp_c: 34.0, shunt_sleep_ua: 410, ...obdOfflineReset });
+      Object.assign(t, {
+        v_bat: 12.5,
+        engine_on: false,
+        crit_alert: false,
+        rpm: 0,
+        temp_c: 0,
+        rssi: -127,
+        adc_raw_mv: 2244,
+        rtc_temp_c: 34.0,
+        shunt_sleep_ua: 410,
+        ...obdOfflineReset,
+      });
       label = "Out of Yard (Test Drive)";
       in_yard = false;
       break;
   }
-  return { ...u, state: s, status_label: label, in_yard, telemetry: t, buffer_used: s === "DEPARTED" ? Math.max(u.buffer_used, 17) : u.buffer_used };
+  return {
+    ...u,
+    state: s,
+    status_label: label,
+    in_yard,
+    telemetry: t,
+    buffer_used: s === "DEPARTED" ? Math.max(u.buffer_used, 17) : u.buffer_used,
+  };
 }

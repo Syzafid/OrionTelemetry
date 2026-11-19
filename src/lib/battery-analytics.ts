@@ -7,6 +7,9 @@ export interface BatteryHistoryPoint {
   t: string;
   v: number;
   ts?: number;
+  rpm?: number;
+  temp_c?: number;
+  engine_on?: boolean;
 }
 
 export interface BatteryPrediction {

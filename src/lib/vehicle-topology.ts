@@ -10,6 +10,10 @@ export interface VehicleElectricalProfile {
   idleRpmRange: string;
   cutInRpm: string;
   chassisLabel: string;
+  fuelTankLiters: number;
+  fuelType: "Bensin" | "Diesel";
+  rpmMax: number;
+  rpmRedline: number;
 }
 
 /**
@@ -18,6 +22,7 @@ export interface VehicleElectricalProfile {
 export function getVehicleElectricalProfile(model: string): VehicleElectricalProfile {
   const upper = model.toUpperCase();
   if (upper.includes("XFORCE") || upper.includes("XPANDER")) {
+    const isXforce = upper.includes("XFORCE");
     return {
       engineCode: "1.5L 4A91 MIVEC DOHC",
       batterySpec: "Aki 12V 55Ah (55B24L)",
@@ -27,6 +32,10 @@ export function getVehicleElectricalProfile(model: string): VehicleElectricalPro
       idleRpmRange: "650 - 750 RPM (Idle)",
       cutInRpm: "600 RPM",
       chassisLabel: "MPV / Compact SUV Unibody",
+      fuelTankLiters: isXforce ? 42 : 45,
+      fuelType: "Bensin",
+      rpmMax: 7000,
+      rpmRedline: 6000,
     };
   }
   if (upper.includes("L300")) {
@@ -39,8 +48,13 @@ export function getVehicleElectricalProfile(model: string): VehicleElectricalPro
       idleRpmRange: "700 - 800 RPM (Idle)",
       cutInRpm: "650 RPM",
       chassisLabel: "Cab-Over Ladder Frame",
+      fuelTankLiters: 47,
+      fuelType: "Diesel",
+      rpmMax: 5000,
+      rpmRedline: 4200,
     };
   }
+  const isTriton = upper.includes("TRITON");
   return {
     engineCode: "2.4L 4N15 MIVEC / 2.5L 4D56 Diesel",
     batterySpec: "Aki 12V 70Ah (80D26L)",
@@ -50,6 +64,10 @@ export function getVehicleElectricalProfile(model: string): VehicleElectricalPro
     idleRpmRange: "700 - 800 RPM (Idle)",
     cutInRpm: "650 RPM",
     chassisLabel: "Ladder Frame Chassis",
+    fuelTankLiters: isTriton ? 75 : 68,
+    fuelType: "Diesel",
+    rpmMax: 5000,
+    rpmRedline: 4200,
   };
 }
 

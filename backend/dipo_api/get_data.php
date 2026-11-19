@@ -119,9 +119,12 @@ try {
             }
             $lastTs = $ts;
             $points[] = [
-                't'  => (string)$r['t'],
-                'v'  => (float)$r['v_bat'],
-                'ts' => $ts,
+                't'         => (string)$r['t'],
+                'v'         => (float)$r['v_bat'],
+                'ts'        => $ts,
+                'rpm'       => isset($r['rpm']) ? (int)$r['rpm'] : 0,
+                'temp_c'    => isset($r['temp_c']) ? (int)$r['temp_c'] : 0,
+                'engine_on' => !empty($r['engine_on']),
             ];
         }
         $historyMap[$uid] = $points;

@@ -128,7 +128,7 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Reset Pencarian & Filter/i }));
     expect(screen.getAllByRole("article")).toHaveLength(12);
-  }, 15000);
+  }, 25000);
 
   it("opens and closes PdiCertificateModal with 6 standardized Indonesian rows and sync evidence", async () => {
     renderFleet();

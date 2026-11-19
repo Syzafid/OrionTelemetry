@@ -27,6 +27,7 @@ import {
   type AuditSeverity,
   type MaintenanceTicket,
   type TicketStatus,
+  type VoltagePoint,
 } from "@/data/mockTelemetry";
 import { resolveSafeSelectedUnitId } from "@/lib/fleet-filter";
 import { applyRemoteUpdate } from "@/lib/telemetry-sync";
@@ -127,7 +128,7 @@ interface Ctx {
   flushBuffer: (id: string) => void;
   simulateBurstSync: (id: string) => void;
   dispatchWarmup: (id: string) => void;
-  history: Record<string, Array<{ t: string; v: number; ts?: number }>>;
+  history: Record<string, Array<VoltagePoint>>;
   movement: MovementEvent[];
   auditLogs: AuditLogEntry[];
   tickets: MaintenanceTicket[];
@@ -177,9 +178,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const [configs, setConfigs] = useState<Record<string, PiggybackConfig>>(() =>
     Object.fromEntries(EXPANDED_YARD_UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)])),
   );
-  const [history, setHistory] = useState<
-    Record<string, Array<{ t: string; v: number; ts?: number }>>
-  >({});
+  const [history, setHistory] = useState<Record<string, Array<VoltagePoint>>>({});
   const [movement, setMovement] = useState<MovementEvent[]>(() =>
     MOVEMENT_LOG.map((m) => ({ ...m })),
   );
@@ -700,9 +699,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           !Array.isArray(obj["history"]) &&
           hasSectionChanged("history", obj["history"])
         ) {
-          setHistory(
-            obj["history"] as Record<string, Array<{ t: string; v: number; ts?: number }>>,
-          );
+          setHistory(obj["history"] as Record<string, Array<VoltagePoint>>);
         }
         if (Array.isArray(obj["audit_logs"]) && hasSectionChanged("audit", obj["audit_logs"])) {
           setAuditLogs(obj["audit_logs"] as AuditLogEntry[]);

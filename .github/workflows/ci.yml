@@ -27,26 +27,29 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: ESLint check (Menu 01, 02 & 03 modules and tests)
+      - name: ESLint check (Menu 01, 02, 03 & 04 modules and tests)
         run: |
           npx eslint --max-warnings 0 \
             src/lib/vehicle-topology.ts \
             src/lib/battery-analytics.ts \
             src/lib/fleet-filter.ts \
             src/lib/excel-export.ts \
+            src/lib/obd-diagnostics.ts \
             src/components/hmi/ShowroomModule.tsx \
             src/components/hmi/VehicleTopologyMap.tsx \
             src/components/hmi/ComponentNodeInspector.tsx \
             src/components/hmi/FleetModule.tsx \
             src/components/hmi/WarmupQueueModule.tsx \
+            src/components/hmi/DiagnosticsModule.tsx \
             src/components/hmi/CommandPaletteModal.tsx \
             src/test/battery-analytics.test.ts \
             src/test/menu01-topology.test.tsx \
             src/test/menu02-fleet.test.tsx \
-            src/test/menu03-warmup.test.tsx
+            src/test/menu03-warmup.test.tsx \
+            src/test/menu04-diagnostics.test.tsx
           npx eslint --quiet src/context/TelemetryContext.tsx
 
-      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01, 02 & 03)
+      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01, 02, 03 & 04)
         run: |
           node -e '
             const fs = require("node:fs");
@@ -55,17 +58,20 @@ jobs:
               "src/lib/battery-analytics.ts",
               "src/lib/fleet-filter.ts",
               "src/lib/excel-export.ts",
+              "src/lib/obd-diagnostics.ts",
               "src/context/TelemetryContext.tsx",
               "src/components/hmi/ShowroomModule.tsx",
               "src/components/hmi/VehicleTopologyMap.tsx",
               "src/components/hmi/ComponentNodeInspector.tsx",
               "src/components/hmi/FleetModule.tsx",
               "src/components/hmi/WarmupQueueModule.tsx",
+              "src/components/hmi/DiagnosticsModule.tsx",
               "src/components/hmi/CommandPaletteModal.tsx",
               "src/test/battery-analytics.test.ts",
               "src/test/menu01-topology.test.tsx",
               "src/test/menu02-fleet.test.tsx",
               "src/test/menu03-warmup.test.tsx",
+              "src/test/menu04-diagnostics.test.tsx",
               "src/styles.css"
             ];
             for (const f of files) {

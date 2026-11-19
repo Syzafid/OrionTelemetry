@@ -106,21 +106,26 @@ describe("Menu 03 WarmupQueueModule (UI, Telemetry Honesty & Workflow)", () => {
   });
 
   it("syncs stopwatch to OBD-II run_time_s (03:00 for 180s) on WARMUP and logs session when turned OFF", () => {
-    renderWarmup();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_795_000_000_000);
+    try {
+      renderWarmup();
 
-    fireEvent.click(screen.getByRole("button", { name: /Simulasikan Kontak Nyala \(ON\)/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Simulasikan Kontak Nyala \(ON\)/i }));
 
-    expect(screen.getByText("03:00")).toBeInTheDocument();
-    expect(screen.getByText(/Alternator OK \(14\.20V\)/i)).toBeInTheDocument();
-    expect(screen.getByText("30%")).toBeInTheDocument();
+      expect(screen.getByText("03:00")).toBeInTheDocument();
+      expect(screen.getByText(/Alternator OK \(14\.20V\)/i)).toBeInTheDocument();
+      expect(screen.getByText("30%")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Simulasikan Matikan Kunci \(OFF\)/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Simulasikan Matikan Kunci \(OFF\)/i }));
 
-    const logPanel = screen.getByRole("region", {
-      name: /Riwayat Sesi & Penugasan Pemanasan Mesin/i,
-    });
-    expect(within(logPanel).getByText("03:00")).toBeInTheDocument();
-    expect(within(logPanel).getByText("14.20V")).toBeInTheDocument();
+      const logPanel = screen.getByRole("region", {
+        name: /Riwayat Sesi & Penugasan Pemanasan Mesin/i,
+      });
+      expect(within(logPanel).getByText("03:00")).toBeInTheDocument();
+      expect(within(logPanel).getByText("14.20V")).toBeInTheDocument();
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("eliminates simulator dummy logs in LIVE_API mode and renders real audit dispatch logs cleanly", async () => {
