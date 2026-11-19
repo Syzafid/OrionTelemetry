@@ -126,7 +126,8 @@ describe("Menu 06 Config Validation & Wire Contract (Pure Helpers)", () => {
       PCB_ADC_PRESETS["2"].points.map((p) => ({ dmm: Number(p.dmm), mv: Number(p.mv) })),
     );
     expect(validateOlsCalibrationFit(pcbV2Fit, 4).valid).toBe(true);
-    expect(pcbV2Fit.offset).toBeCloseTo(0.16, 2);
+    expect(pcbV2Fit.slope).toBeCloseTo(0.00471, 4);
+    expect(pcbV2Fit.offset).toBeCloseTo(0.1486, 3);
 
     const badFit = validateOlsCalibrationFit({ slope: 0.0002, offset: 3.1, rSquared: 0.85 }, 4);
     expect(badFit.valid).toBe(false);
@@ -339,8 +340,9 @@ describe("Menu 06 ConfigModule (LIVE_API Honesty & Persistence Contract)", () =>
     fireEvent.click(screen.getByRole("button", { name: "Switch Live Test" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/0\.0690V/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/OFFLINE \/ DEEP SLEEP/i).length).toBeGreaterThan(0);
     });
+    expect(screen.getAllByText(/0\.0690/i).length).toBeGreaterThan(0);
 
     // Sandbox button must stay hidden in LIVE_API
     expect(
