@@ -46,13 +46,16 @@ jobs:
             src/components/hmi/PresenceModule.tsx \
             src/components/hmi/ConfigModule.tsx \
             src/components/hmi/CommandPaletteModal.tsx \
+            src/components/hmi/TopNav.tsx \
+            src/routes/index.tsx \
             src/test/battery-analytics.test.ts \
             src/test/menu01-topology.test.tsx \
             src/test/menu02-fleet.test.tsx \
             src/test/menu03-warmup.test.tsx \
             src/test/menu04-diagnostics.test.tsx \
             src/test/menu05-presence.test.tsx \
-            src/test/menu06-config.test.tsx
+            src/test/menu06-config.test.tsx \
+            src/test/live-integration.test.tsx
           npx eslint --quiet src/context/TelemetryContext.tsx
 
       - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01, 02, 03, 04, 05 & 06)
@@ -77,6 +80,8 @@ jobs:
               "src/components/hmi/PresenceModule.tsx",
               "src/components/hmi/ConfigModule.tsx",
               "src/components/hmi/CommandPaletteModal.tsx",
+              "src/components/hmi/TopNav.tsx",
+              "src/routes/index.tsx",
               "src/test/battery-analytics.test.ts",
               "src/test/menu01-topology.test.tsx",
               "src/test/menu02-fleet.test.tsx",
@@ -84,6 +89,7 @@ jobs:
               "src/test/menu04-diagnostics.test.tsx",
               "src/test/menu05-presence.test.tsx",
               "src/test/menu06-config.test.tsx",
+              "src/test/live-integration.test.tsx",
               "src/styles.css"
             ];
             for (const f of files) {

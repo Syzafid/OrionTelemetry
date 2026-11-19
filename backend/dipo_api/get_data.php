@@ -230,13 +230,13 @@ try {
                 'ign_deg'         => $hasVehLiveSeq && isset($v['ign_deg']) ? (float)$v['ign_deg'] : (float)($log['ign_deg'] ?? 0.0),
                 'maf_gs'          => $hasVehLiveSeq && isset($v['maf_gs']) ? (float)$v['maf_gs'] : (float)($log['maf_gs'] ?? 0.0),
                 'run_time_s'      => $hasVehLiveSeq && isset($v['run_time_s']) ? (int)$v['run_time_s'] : (int)($log['run_time_s'] ?? 0),
-                'fuel_pct'        => $hasVehLiveSeq && isset($v['fuel_pct']) ? (float)$v['fuel_pct'] : (float)($log['fuel_pct'] ?? 74.5),
+                'fuel_pct'        => $hasVehLiveSeq && isset($v['fuel_pct']) ? (float)$v['fuel_pct'] : (float)($log['fuel_pct'] ?? 0.0),
                 'fuel_rate_lh'    => $hasVehLiveSeq && isset($v['fuel_rate_lh']) ? (float)$v['fuel_rate_lh'] : (float)($log['fuel_rate_lh'] ?? 0.0),
                 'o2_v'            => $hasVehLiveSeq && isset($v['o2_v']) ? (float)$v['o2_v'] : (float)($log['o2_v'] ?? 0.0),
                 'stft_pct'        => $hasVehLiveSeq && isset($v['stft_pct']) ? (float)$v['stft_pct'] : (float)($log['stft_pct'] ?? 0.0),
                 'mil_on'          => $hasVehLiveSeq && isset($v['mil_on']) ? (bool)$v['mil_on'] : !empty($log['mil_on']),
                 'ecu_v'           => $hasVehLiveSeq && isset($v['ecu_v']) ? (float)$v['ecu_v'] : (float)($log['ecu_v'] ?? 0.0),
-                'dist_clr_km'     => $hasVehLiveSeq && isset($v['dist_clr_km']) ? (int)$v['dist_clr_km'] : (int)($log['dist_clr_km'] ?? 1420),
+                'dist_clr_km'     => $hasVehLiveSeq && isset($v['dist_clr_km']) ? (int)$v['dist_clr_km'] : (int)($log['dist_clr_km'] ?? 0),
             ];
         } else {
             // Fallback nominal jika belum ada log masuk
@@ -272,13 +272,13 @@ try {
                 'ign_deg'         => 0.0,
                 'maf_gs'          => 0.0,
                 'run_time_s'      => 0,
-                'fuel_pct'        => 74.5,
+                'fuel_pct'        => 0.0,
                 'fuel_rate_lh'    => 0.0,
                 'o2_v'            => 0.0,
                 'stft_pct'        => 0.0,
                 'mil_on'          => false,
                 'ecu_v'           => 0.0,
-                'dist_clr_km'     => 1420,
+                'dist_clr_km'     => 0,
             ];
         }
 

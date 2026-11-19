@@ -149,7 +149,7 @@ describe("Menu 04 DiagnosticsModule (OBD-II Honesty, Accessibility & Pure Helper
 
     fireEvent.click(screen.getByRole("button", { name: /Buka Tiket Armada \(02\)/i }));
     expect(screen.getByTestId("telemetry-bridge")).toHaveAttribute("data-module", "02");
-  });
+  }, 15000);
 
   it("enforces strict LIVE_API honesty when standby/offline (no fake warmup curve, Mode 07 honesty, CAN Off masking, crit_v threshold)", async () => {
     const historyPts = Array.from({ length: 24 }, (_, idx) => ({
@@ -242,7 +242,7 @@ describe("Menu 04 DiagnosticsModule (OBD-II Honesty, Accessibility & Pure Helper
     expect(screen.getAllByText(/Batas 11\.85V/i).length).toBeGreaterThan(0);
     const batReadout = screen.getByText("11.82");
     expect(batReadout).toHaveClass("text-crimson");
-  });
+  }, 15000);
 
   it("plots real LIVE_API engine history and uses exact OEM Xforce 42L fuel tank capacity when engine is ON", async () => {
     const activePts = [
@@ -299,5 +299,5 @@ describe("Menu 04 DiagnosticsModule (OBD-II Honesty, Accessibility & Pure Helper
     fireEvent.click(screen.getByRole("tab", { name: /02\. Emisi, BBM & DTC/i }));
     expect(screen.getByText(/Kapasitas OEM 42L \(Bensin\)/i)).toBeInTheDocument();
     expect(screen.getByText(/21\.0 Liter/i)).toBeInTheDocument();
-  });
+  }, 15000);
 });

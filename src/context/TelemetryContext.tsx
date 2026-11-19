@@ -868,15 +868,25 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   }, [poll]);
 
   useEffect(() => {
+    sectionHashesRef.current = {};
+
     if (dataSource !== "LIVE_API") {
       setApiStatus("SANDBOX");
       setIsOfflineSnapshot(false);
       setMassDisconnectGuard(false);
       setMovementPairs([]);
-      setTickets((prev) => (prev.length === 0 ? INITIAL_TICKETS : prev));
-      setAuditLogs((prev) => (prev.length === 0 ? AUDIT_LOGS : prev));
+      setMovement((prev) => (prev.length === 0 ? MOVEMENT_LOG.map((m) => ({ ...m })) : prev));
+      setTickets((prev) => (prev.length === 0 ? INITIAL_TICKETS.map((t) => ({ ...t })) : prev));
+      setAuditLogs((prev) => (prev.length === 0 ? AUDIT_LOGS.map((a) => ({ ...a })) : prev));
       return;
     }
+
+    setTickets([]);
+    setAuditLogs([]);
+    setMovement([]);
+    setMovementPairs([]);
+    setHistory({});
+    setMassDisconnectGuard(false);
 
     void poll();
 

@@ -105,7 +105,7 @@ function ensureTelemetrySchema(PDO $pdo, bool $force = false): void {
         $stmtSlopeCol = $pdo->query("SHOW COLUMNS FROM `node_configs` LIKE 'cal_slope'");
         $slopeColInfo = $stmtSlopeCol->fetch();
         if ($slopeColInfo && stripos((string)$slopeColInfo['Type'], 'decimal(10,6)') !== false) {
-            $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.3580");
+            $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.0690");
         }
         ensureObd2ReadOnlyColumns($pdo, $force);
         ensureNetZoneAndMovementSchema($pdo, $force);

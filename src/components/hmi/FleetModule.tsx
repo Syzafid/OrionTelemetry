@@ -212,10 +212,8 @@ export function FleetModule() {
   const [copiedUnitId, setCopiedUnitId] = useState<string | null>(null);
   const [resolvingTicketUnitId, setResolvingTicketUnitId] = useState<string | null>(null);
   const [techAction, setTechAction] = useState("Pengisian Daya Baterai (Charger 2 Jam)");
-  const [techName, setTechName] = useState("Teknisi Shift Pagi");
-  const [techNotes, setTechNotes] = useState(
-    "Tegangan baterai berhasil dinaikkan ke kondisi aman (> 12.40V) dan siap verifikasi PDI.",
-  );
+  const [techName, setTechName] = useState("");
+  const [techNotes, setTechNotes] = useState("");
 
   // Reset deck page and scroll track to start whenever filter, search, or sort changes
   useEffect(() => {
@@ -1465,11 +1463,14 @@ export function FleetModule() {
             techNotes={techNotes}
             setTechNotes={setTechNotes}
             onConfirm={() => {
+              const noteBody = techNotes.trim()
+                ? `[TINDAKAN: ${techAction}] ${techNotes.trim()}`
+                : `[TINDAKAN: ${techAction}]`;
               updateTicketStatus(
                 resolvingTicketUnitId,
                 "RESOLVED",
-                techName,
-                `[TINDAKAN: ${techAction}] ${techNotes}`,
+                techName.trim() || undefined,
+                noteBody,
               );
               setResolvingTicketUnitId(null);
             }}

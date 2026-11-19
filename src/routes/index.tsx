@@ -1,5 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Cable, CheckCircle2, Cpu, Database, Radio, Server, ShieldCheck, Wifi, Zap } from "lucide-react";
+import {
+  Cable,
+  CheckCircle2,
+  Cpu,
+  Database,
+  Radio,
+  Server,
+  ShieldCheck,
+  Wifi,
+  Zap,
+} from "lucide-react";
 import { OrionLogo } from "@/components/hmi/OrionLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,7 +25,10 @@ export const Route = createFileRoute("/")({
           "ORION Telemetry Platform: Pengawasan voltase baterai 12V, parameter OBD-II CAN bus, antrean prioritas pemanasan mesin, dan pelacakan fisik stock yard real-time.",
       },
       { property: "og:title", content: "ORION: Sistem Telemetri & Digital Twin Stok Kendaraan" },
-      { property: "og:description", content: "Battery voltage, OBD-II data and yard presence for every stock unit." },
+      {
+        property: "og:description",
+        content: "Battery voltage, OBD-II data and yard presence for every stock unit.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -44,7 +57,8 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     pinout: "Pin 16 (12V BATT), Pin 4/5 (GND), Pin 6/14 (CAN)",
     protocol: "SAE J1962 / ISO 15031",
     signals: ["12V Baterai Mentah (11.0V - 14.4V)", "CAN-H & CAN-L Diferensial"],
-    description: "Mengambil daya langsung dari aki kendaraan tanpa memotong kabel asli. Dilengkapi dioda 1N5819 proteksi polaritas terbalik dan TVS 15V peredam lonjakan induktif alternator.",
+    description:
+      "Mengambil daya langsung dari aki kendaraan tanpa memotong kabel asli. Dilengkapi dioda 1N5819 proteksi polaritas terbalik dan TVS 15V peredam lonjakan induktif alternator.",
     Icon: Cable,
   },
   {
@@ -53,9 +67,10 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     domain: "ANALOG FRONT-END",
     hardware: "AO3401A P-MOSFET + SN65HVD230 + MP1584 Buck",
     pinout: "GPIO27 (ADC Switch), GPIO26 (CAN Gate), ADC Pin 34",
-    protocol: "Voltage Divider R1/R2 (100kΩ / 20kΩ)",
+    protocol: "Voltage Divider R1/R2 (PCB v1.0 300k/68k · v2.0 100k/27k)",
     signals: ["Pulsa Settling 40ms", "Arus Tidur Shunt < 500 µA", "Regulasi 3.3V Locked"],
-    description: "Sirkuit pembagi tegangan diputus secara fisik via transistor high-side saat ESP32 tidur. Diberi pulsa 40ms saat sampling ADC untuk memastikan tidak ada pengurasan aki selama parkir.",
+    description:
+      "Sirkuit pembagi tegangan diputus secara fisik via transistor high-side saat ESP32 tidur. Diberi pulsa 40ms saat sampling ADC untuk memastikan tidak ada pengurasan aki selama parkir.",
     Icon: Zap,
   },
   {
@@ -66,7 +81,8 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     pinout: "I2C SDA (GPIO21) / SCL (GPIO22), CAN TX/RX",
     protocol: "ISO 15765-4 CAN (11-bit / 500 kbps)",
     signals: ["PID 010C RPM Mesin", "PID 0105 Suhu Coolant", "20 Snapshot Offline Buffer"],
-    description: "Membaca data putaran mesin dan suhu coolant saat kontak kendaraan aktif. Jika Wi-Fi blind-spot terjadi, 20 snapshot log telemetri disimpan aman di memori non-volatile RTC.",
+    description:
+      "Membaca data putaran mesin dan suhu coolant saat kontak kendaraan aktif. Jika Wi-Fi blind-spot terjadi, 20 snapshot log telemetri disimpan aman di memori non-volatile RTC.",
     Icon: Cpu,
   },
   {
@@ -77,7 +93,8 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     pinout: "AP Gateway (AP-GUDANG-01, Channel 11)",
     protocol: "WPA2-PSK Enterprise / HTTP JSON Payload",
     signals: ["RSSI -40 dBm s/d -85 dBm", "Heartbeat 300s (Fast Poll 10s)"],
-    description: "Node bangun dari deep-sleep setiap 5-30 menit untuk mengirimkan paket heartbeat JSON ke AP gudang. Mendukung mekanisme debounce 3 kali miss sebelum status keluar divalidasi.",
+    description:
+      "Node bangun dari deep-sleep setiap 5-30 menit untuk mengirimkan paket heartbeat JSON ke AP gudang. Mendukung mekanisme debounce 3 kali miss sebelum status keluar divalidasi.",
     Icon: Wifi,
   },
   {
@@ -88,7 +105,8 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     pinout: "Endpoint simpan_data.php & get_data.php",
     protocol: "Two-Way JSON REST Synchronization",
     signals: ["Topologi Kelistrikan & Transduser", "Antrean Pemanasan Mesin", "Remote Config ACK"],
-    description: "Server mencatat riwayat telemetri ke database relasional dan memperbarui skema topologi sasis, memetakan unit ke bay parkir fisik, serta memicu peringatan jika voltase aki < 11.80 V.",
+    description:
+      "Server mencatat riwayat telemetri ke database relasional dan memperbarui skema topologi sasis, memetakan unit ke bay parkir fisik, serta memicu peringatan jika voltase aki < 11.80 V.",
     Icon: Server,
   },
 ];
@@ -115,7 +133,8 @@ const BATTERY_SOP_MATRIX: BatterySopTier[] = [
     sampleModel: "Pajero Sport Dakar 4x4",
     sampleVoltage: "12.60 V",
     shuntCurrent: "410 µA",
-    sopProcedure: "Standby pasif. Pemeriksaan berkala 14 hari. Siap serah terima PDI tanpa perlu pemanasan alternator.",
+    sopProcedure:
+      "Standby pasif. Pemeriksaan berkala 14 hari. Siap serah terima PDI tanpa perlu pemanasan alternator.",
   },
   {
     level: "Tier 2: Pre-Alert",
@@ -126,7 +145,8 @@ const BATTERY_SOP_MATRIX: BatterySopTier[] = [
     sampleModel: "Xforce Ultimate CVT",
     sampleVoltage: "12.18 V",
     shuntCurrent: "440 µA",
-    sopProcedure: "Status kuning pada konsol. Masuk antrean pemanasan mesin preventif dalam tenggat 48 jam ke depan.",
+    sopProcedure:
+      "Status kuning pada konsol. Masuk antrean pemanasan mesin preventif dalam tenggat 48 jam ke depan.",
   },
   {
     level: "Tier 3: Kritis",
@@ -137,15 +157,16 @@ const BATTERY_SOP_MATRIX: BatterySopTier[] = [
     sampleModel: "Xpander Cross Elite",
     sampleVoltage: "11.65 V",
     shuntCurrent: "490 µA",
-    sopProcedure: "Alarm merah aktif otomatis. Wajib dispatch staf untuk pemanasan mesin via alternator 13.5V minimal 15 menit.",
+    sopProcedure:
+      "Alarm merah aktif otomatis. Wajib dispatch staf untuk pemanasan mesin via alternator 13.5V minimal 15 menit.",
   },
 ];
 
 const EDGE_FAILSAFE_SPECS = [
   {
     param: "Buffer Memori Offline",
-    val: "20 Snapshot",
-    sub: "DS3231SN RTC RAM",
+    val: "2.020 Slot",
+    sub: "20 RTC SRAM + 2.000 LittleFS",
     desc: "Menyimpan paket telemetri saat kendaraan di blind-spot Wi-Fi gudang agar riwayat log tidak hilang.",
   },
   {
@@ -162,7 +183,10 @@ const EDGE_FAILSAFE_SPECS = [
   },
 ];
 
-const SOP_TONE_STYLES: Record<"emerald" | "amber" | "crimson", { text: string; led: string; badge: string }> = {
+const SOP_TONE_STYLES: Record<
+  "emerald" | "amber" | "crimson",
+  { text: string; led: string; badge: string }
+> = {
   emerald: {
     text: "text-emerald",
     led: "text-emerald",
@@ -206,16 +230,24 @@ function Landing() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-xs text-muted-foreground">
-            <a href="#alur" className="transition-colors hover:text-foreground">Alur Sistem</a>
-            <a href="#metrik" className="transition-colors hover:text-foreground">Ambang Batas</a>
-            <a href="#operasional" className="transition-colors hover:text-foreground">Operasional</a>
+            <a href="#alur" className="transition-colors hover:text-foreground">
+              Alur Sistem
+            </a>
+            <a href="#metrik" className="transition-colors hover:text-foreground">
+              Ambang Batas
+            </a>
+            <a href="#operasional" className="transition-colors hover:text-foreground">
+              Operasional
+            </a>
           </nav>
 
           <div className="flex items-center gap-3">
-            <Button asChild size="sm" className="h-8 px-3.5 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors">
-              <Link to="/dashboard">
-                Buka Konsol HMI
-              </Link>
+            <Button
+              asChild
+              size="sm"
+              className="h-8 px-3.5 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors"
+            >
+              <Link to="/dashboard">Buka Konsol HMI</Link>
             </Button>
           </div>
         </div>
@@ -242,7 +274,8 @@ function Landing() {
           </h1>
 
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
-            Pengawasan voltase baterai 12V, pembacaan parameter OBD-II CAN bus, antrean prioritas pemanasan mesin, dan pelacakan unit fisik stock yard secara real-time.
+            Pengawasan voltase baterai 12V, pembacaan parameter OBD-II CAN bus, antrean prioritas
+            pemanasan mesin, dan pelacakan unit fisik stock yard secara real-time.
           </p>
 
           {/* Structured Industrial Technical Specification Strip */}
@@ -263,20 +296,23 @@ function Landing() {
 
           {/* Varied CTAs: Primary launch action + Secondary signal pipeline anchor + Fleet status pill */}
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Button asChild className="h-11 px-6 font-medium bg-foreground hover:bg-foreground/90 text-background shadow-lg transition-all rounded-[2px]">
-              <Link to="/dashboard">
-                Luncurkan Workbench HMI
-              </Link>
+            <Button
+              asChild
+              className="h-11 px-6 font-medium bg-foreground hover:bg-foreground/90 text-background shadow-lg transition-all rounded-[2px]"
+            >
+              <Link to="/dashboard">Luncurkan Workbench HMI</Link>
             </Button>
-            <Button asChild variant="outline" className="h-11 px-5 font-medium border-border/80 bg-card/60 backdrop-blur text-foreground hover:bg-card rounded-[2px] transition-colors">
-              <a href="#alur">
-                Periksa Alur Sinyal
-              </a>
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 px-5 font-medium border-border/80 bg-card/60 backdrop-blur text-foreground hover:bg-card rounded-[2px] transition-colors"
+            >
+              <a href="#alur">Periksa Alur Sinyal</a>
             </Button>
             <div className="flex items-center gap-2 panel px-3.5 py-2.5">
               <span className="led text-emerald" />
-              <span className="num text-xs text-foreground font-medium">3 Unit Terhubung</span>
-              <span className="text-xs text-muted-foreground">(Bay A-01, A-04, B-02)</span>
+              <span className="num text-xs text-foreground font-medium">Live MySQL API</span>
+              <span className="text-xs text-muted-foreground">· Two-Tier 2.020 Slot</span>
             </div>
           </div>
         </div>
@@ -287,12 +323,15 @@ function Landing() {
         <div className="mx-auto max-w-6xl px-5">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-border">
             <div className="max-w-2xl">
-              <span className="label-hmi text-muted-foreground">Arsitektur Instrumentasi &amp; Sinyal</span>
+              <span className="label-hmi text-muted-foreground">
+                Arsitektur Instrumentasi &amp; Sinyal
+              </span>
               <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl text-foreground">
                 Diagram Alur Sinyal Hardware Industri
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Arsitektur transmisi data end-to-end dari konektor fisik OBD-II kendaraan di stock yard hingga HMI Topologi Sasis pada konsol server gudang.
+                Arsitektur transmisi data end-to-end dari konektor fisik OBD-II kendaraan di stock
+                yard hingga HMI Topologi Sasis pada konsol server gudang.
               </p>
             </div>
             {/* Pipeline Stage Summary Pill */}
@@ -333,7 +372,14 @@ function Landing() {
 
                     {/* Stage Title & Icon */}
                     <div className="mt-3.5 flex items-center gap-2">
-                      <div className={cn("rounded-sm p-1.5 border shrink-0", isCoreUnit ? "bg-foreground/10 border-foreground/40 text-foreground" : "bg-card border-border text-foreground")}>
+                      <div
+                        className={cn(
+                          "rounded-sm p-1.5 border shrink-0",
+                          isCoreUnit
+                            ? "bg-foreground/10 border-foreground/40 text-foreground"
+                            : "bg-card border-border text-foreground",
+                        )}
+                      >
                         <Icon size={14} />
                       </div>
                       <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-foreground leading-snug">
@@ -343,10 +389,16 @@ function Landing() {
 
                     {/* Hardware & Pinout Callout */}
                     <div className="mt-3 rounded-[2px] bg-card/60 border border-hairline p-2 text-[10px] space-y-1">
-                      <div className="num font-medium text-foreground/90 truncate" title={p.hardware}>
+                      <div
+                        className="num font-medium text-foreground/90 truncate"
+                        title={p.hardware}
+                      >
                         {p.hardware}
                       </div>
-                      <div className="num text-muted-foreground text-[9px] truncate" title={p.pinout}>
+                      <div
+                        className="num text-muted-foreground text-[9px] truncate"
+                        title={p.pinout}
+                      >
                         {p.pinout}
                       </div>
                     </div>
@@ -354,7 +406,10 @@ function Landing() {
                     {/* Signals Bullet List */}
                     <div className="mt-3 space-y-1">
                       {p.signals.map((sig) => (
-                        <div key={sig} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <div
+                          key={sig}
+                          className="flex items-center gap-1.5 text-[10px] text-muted-foreground"
+                        >
                           <span className="h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
                           <span className="truncate">{sig}</span>
                         </div>
@@ -371,7 +426,9 @@ function Landing() {
                   <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-[10px]">
                     <span className="num text-muted-foreground">{p.protocol}</span>
                     {idx < HARDWARE_PIPELINE.length - 1 && (
-                      <span className="hidden lg:inline-block text-muted-foreground/40 font-mono">→</span>
+                      <span className="hidden lg:inline-block text-muted-foreground/40 font-mono">
+                        →
+                      </span>
                     )}
                   </div>
                 </div>
@@ -412,7 +469,9 @@ function Landing() {
                 Matriks Ambang Batas Baterai &amp; Toleransi Yard
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Klasifikasi status kesehatan aki 12V berdasarkan SOP PDI Dipo Stock Yard, disandingkan langsung dengan data armada riil di lapangan dan spesifikasi fail-safe modul piggyback.
+                Klasifikasi status kesehatan aki 12V berdasarkan SOP PDI Dipo Stock Yard,
+                disandingkan langsung dengan data armada riil di lapangan dan spesifikasi fail-safe
+                modul piggyback.
               </p>
             </div>
             <div className="panel px-3.5 py-2.5 bg-card/40 flex items-center gap-2 num text-[11px] text-muted-foreground shrink-0">
@@ -446,7 +505,9 @@ function Landing() {
                           <span className="font-display text-xs font-semibold uppercase tracking-wider text-foreground">
                             {row.level}
                           </span>
-                          <span className={`text-[10px] num font-medium px-1.5 py-0.5 rounded-[2px] border ${styles.badge}`}>
+                          <span
+                            className={`text-[10px] num font-medium px-1.5 py-0.5 rounded-[2px] border ${styles.badge}`}
+                          >
                             {row.statusText}
                           </span>
                         </div>
@@ -462,12 +523,17 @@ function Landing() {
                         Armada Lapangan:
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="num font-semibold text-foreground text-xs">{row.sampleBay}</span>
+                        <span className="num font-semibold text-foreground text-xs">
+                          {row.sampleBay}
+                        </span>
                         <span className="text-muted-foreground text-xs">/</span>
-                        <span className="text-xs text-foreground/90 font-medium truncate">{row.sampleModel}</span>
+                        <span className="text-xs text-foreground/90 font-medium truncate">
+                          {row.sampleModel}
+                        </span>
                       </div>
                       <div className="num text-[11px] text-muted-foreground mt-0.5">
-                        Voltase Terukur: <span className={`font-semibold ${styles.text}`}>{row.sampleVoltage}</span>
+                        Voltase Terukur:{" "}
+                        <span className={`font-semibold ${styles.text}`}>{row.sampleVoltage}</span>
                       </div>
                     </div>
 
@@ -527,7 +593,9 @@ function Landing() {
               Integrasi Operasional Pengawas Lapangan &amp; PDI
             </h2>
             <p className="mt-3.5 text-sm leading-relaxed text-muted-foreground">
-              Memastikan setiap unit Mitsubishi siap kirim ke konsumen tanpa kendala baterai drop. Menghubungkan node fisik dengan skema topologi kelistrikan &amp; transduser, diagnostik OBD-II, dan antrean pemanasan terstruktur.
+              Memastikan setiap unit Mitsubishi siap kirim ke konsumen tanpa kendala baterai drop.
+              Menghubungkan node fisik dengan skema topologi kelistrikan &amp; transduser,
+              diagnostik OBD-II, dan antrean pemanasan terstruktur.
             </p>
 
             <div className="mt-6 space-y-3">
@@ -554,15 +622,17 @@ function Landing() {
                   Akses Konsol Pengawasan Armada
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Buka workbench interaktif untuk memeriksa skema topologi kelistrikan kendaraan, antrean pemanasan, log riwayat baterai 24 jam, dan konfigurasi node.
+                  Buka workbench interaktif untuk memeriksa skema topologi kelistrikan kendaraan,
+                  antrean pemanasan, log riwayat baterai 24 jam, dan konfigurasi node.
                 </p>
               </div>
 
               <div className="space-y-3 pt-2">
-                <Button asChild className="h-11 w-full justify-center px-5 text-xs font-semibold uppercase tracking-wider bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors">
-                  <Link to="/dashboard">
-                    Masuk ke HMI Workspace
-                  </Link>
+                <Button
+                  asChild
+                  className="h-11 w-full justify-center px-5 text-xs font-semibold uppercase tracking-wider bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors"
+                >
+                  <Link to="/dashboard">Masuk ke HMI Workspace</Link>
                 </Button>
                 <p className="num text-center text-[11px] text-muted-foreground">
                   Kompatibel dengan MySQL Live API &amp; Simulator Sandbox.
@@ -589,13 +659,18 @@ function Landing() {
             <div className="flex flex-wrap items-center gap-4 text-[11px]">
               <span>Stock Yard Operations &amp; PDI Telemetry</span>
               <span className="hidden sm:inline-block text-border">/</span>
-              <a href="#alur" className="hover:text-foreground transition-colors">Arsitektur</a>
+              <a href="#alur" className="hover:text-foreground transition-colors">
+                Arsitektur
+              </a>
               <span className="hidden sm:inline-block text-border">/</span>
-              <Link to="/dashboard" className="hover:text-foreground transition-colors">Workspace</Link>
+              <Link to="/dashboard" className="hover:text-foreground transition-colors">
+                Workspace
+              </Link>
             </div>
           </div>
           <p className="border-t border-border/50 pt-3 text-center sm:text-left num text-[10.5px] text-muted-foreground/75">
-            ORION Project (D4 TRPL IT Internship: Stock Yard Monitoring System). Independent telemetry platform; not an official product of or affiliated with Mitsubishi Motors.
+            ORION Project (D4 TRPL IT Internship: Stock Yard Monitoring System). Independent
+            telemetry platform; not an official product of or affiliated with Mitsubishi Motors.
           </p>
         </div>
       </footer>

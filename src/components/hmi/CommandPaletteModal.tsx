@@ -121,10 +121,13 @@ export function CommandPaletteModal({
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }, [dataSource, apiStatus, apiUrl, units, configs, history, tickets, auditLogs]);
 
+  const isLiveApi = dataSource === "LIVE_API";
+
   const items = useMemo<PaletteItem[]>(() => {
     const q = query.trim().toLowerCase();
+    const visibleUnits = isLiveApi ? units : allUnits;
 
-    const unitItems: PaletteItem[] = allUnits
+    const unitItems: PaletteItem[] = visibleUnits
       .filter((u) => matchesFleetSearch(u, q))
       .map((u) => {
         const crit = configs[u.unit_id]?.crit_v ?? 11.8;
@@ -157,18 +160,22 @@ export function CommandPaletteModal({
           onClose();
         },
       })),
-      {
-        id: "act-scale",
-        group: "ACTIONS",
-        title: `Toggle Fleet Scale (${fleetScale === 3 ? "Switch to 12 Units Yard" : "Switch to 3 Core Units"})`,
-        subtitle: `Currently showing ${fleetScale} units`,
-        badge: `${fleetScale} -> ${fleetScale === 3 ? 12 : 3}`,
-        tone: "dim",
-        onSelect: () => {
-          setFleetScale(fleetScale === 3 ? 12 : 3);
-          onClose();
-        },
-      },
+      ...(!isLiveApi
+        ? [
+            {
+              id: "act-scale",
+              group: "ACTIONS" as const,
+              title: `Toggle Fleet Scale (${fleetScale === 3 ? "Switch to 12 Units Yard" : "Switch to 3 Core Units"})`,
+              subtitle: `Currently showing ${fleetScale} units`,
+              badge: `${fleetScale} -> ${fleetScale === 3 ? 12 : 3}`,
+              tone: "dim" as const,
+              onSelect: () => {
+                setFleetScale(fleetScale === 3 ? 12 : 3);
+                onClose();
+              },
+            },
+          ]
+        : []),
       {
         id: "act-excel",
         group: "ACTIONS",
@@ -195,19 +202,24 @@ export function CommandPaletteModal({
           onClose();
         },
       },
-      {
-        id: "act-burst",
-        group: "ACTIONS",
-        title: `Trigger Burst Sync Simulation (${selected.bay})`,
-        subtitle: "Simulate 28 offline records (20 RTC SRAM + 8 LittleFS) & open Presence Log",
-        badge: "+28 RECS",
-        tone: "amber",
-        onSelect: () => {
-          simulateBurstSync(selected.unit_id);
-          setActiveModule("05");
-          onClose();
-        },
-      },
+      ...(!isLiveApi
+        ? [
+            {
+              id: "act-burst",
+              group: "ACTIONS" as const,
+              title: `Trigger Burst Sync Simulation (${selected.bay})`,
+              subtitle:
+                "Simulate 28 offline records (20 RTC SRAM + 8 LittleFS) & open Presence Log",
+              badge: "+28 RECS",
+              tone: "amber" as const,
+              onSelect: () => {
+                simulateBurstSync(selected.unit_id);
+                setActiveModule("05");
+                onClose();
+              },
+            },
+          ]
+        : []),
     ];
 
     const actionItems = q
@@ -221,7 +233,9 @@ export function CommandPaletteModal({
 
     return [...unitItems, ...actionItems];
   }, [
+    isLiveApi,
     query,
+    units,
     allUnits,
     configs,
     selectUnit,

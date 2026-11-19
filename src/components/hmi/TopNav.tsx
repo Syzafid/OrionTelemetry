@@ -91,7 +91,7 @@ export function TopNav() {
   const lastChimeRef = useRef<number>(0);
 
   const hasCriticalCondition = units.some((u) => {
-    const critV = configs[u.unit_id]?.crit_v ?? 11.80;
+    const critV = configs[u.unit_id]?.crit_v ?? 11.8;
     return u.telemetry.crit_alert || u.telemetry.v_bat < critV || u.telemetry.dtc_cnt > 0;
   });
 
@@ -133,7 +133,12 @@ export function TopNav() {
         const target = e.target as HTMLElement | null;
         if (target) {
           const tag = target.tagName;
-          if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) {
+          if (
+            tag === "INPUT" ||
+            tag === "TEXTAREA" ||
+            tag === "SELECT" ||
+            target.isContentEditable
+          ) {
             return;
           }
         }
@@ -159,7 +164,11 @@ export function TopNav() {
 
   const live = dataSource === "LIVE_API";
   const statusTone = !live ? "dim" : apiStatus === "CONNECTED" ? "emerald" : "amber";
-  const statusClass = !live ? "text-muted-foreground" : apiStatus === "CONNECTED" ? "text-emerald" : "text-amber";
+  const statusClass = !live
+    ? "text-muted-foreground"
+    : apiStatus === "CONNECTED"
+      ? "text-emerald"
+      : "text-amber";
 
   const inYardUnits = units.filter((u) => u.in_yard);
   const activeOnlineUnits = units.filter((u) => getUnitConnectionState(u, live).isOnline);
@@ -168,7 +177,9 @@ export function TopNav() {
   const rssiSource = inYardUnits.length > 0 ? inYardUnits : units;
   const avgRssi =
     rssiSource.length > 0
-      ? Math.round(rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length)
+      ? Math.round(
+          rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length,
+        )
       : null;
 
   const apTone: "emerald" | "amber" | "crimson" =
@@ -223,25 +234,44 @@ export function TopNav() {
               title="Buka Global Command Palette (Ctrl+K / Cmd+K)"
               className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-3 sm:text-[11px]"
             >
-              <Command size={13} strokeWidth={1.75} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+              <Command
+                size={13}
+                strokeWidth={1.75}
+                className="shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <span className="hidden md:inline">Command (Ctrl+K)</span>
               <span className="inline md:hidden">Ctrl+K</span>
             </button>
 
             <div className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 sm:gap-2 sm:px-3">
-              <Radio size={13} strokeWidth={1.5} className={cn("shrink-0", apToneClass)} aria-hidden="true" />
+              <Radio
+                size={13}
+                strokeWidth={1.5}
+                className={cn("shrink-0", apToneClass)}
+                aria-hidden="true"
+              />
               <span className="num text-[11px] text-foreground hidden xl:inline">{apLabel}</span>
-              <span className="num text-[10px] text-foreground inline xl:hidden">{apLabelMobile}</span>
+              <span className="num text-[10px] text-foreground inline xl:hidden">
+                {apLabelMobile}
+              </span>
               <Led tone={apTone} pulse={onlineCount === 0} />
             </div>
 
-            {/* Global Fleet Total Units Indicator */}
+            {/* Global Fleet Presence Summary Indicator */}
             <div
               className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 num text-[10px] uppercase tracking-wider text-muted-foreground sm:px-3 sm:text-[11px]"
-              title={`Total ${units.length} unit kendaraan aktif pada mode tampilan saat ini`}
+              title={`Unit di area yard: ${inYardUnits.length} dari ${totalCount} unit terdaftar`}
             >
-              <Layers size={13} strokeWidth={1.75} className="shrink-0 text-foreground" aria-hidden="true" />
-              <span>{units.length} Units Yard</span>
+              <Layers
+                size={13}
+                strokeWidth={1.75}
+                className="shrink-0 text-foreground"
+                aria-hidden="true"
+              />
+              <span>
+                {inYardUnits.length}/{totalCount} di Yard
+              </span>
             </div>
 
             <button
@@ -287,11 +317,7 @@ export function TopNav() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: DURATION.quick, ease: EASE_STANDARD }}
               >
-                {live
-                  ? isOfflineSnapshot
-                    ? "OFFLINE CACHE"
-                    : "LIVE API"
-                  : "SIM SANDBOX"}
+                {live ? (isOfflineSnapshot ? "OFFLINE CACHE" : "LIVE API") : "SIM SANDBOX"}
               </m.span>
             </button>
 
@@ -362,10 +388,14 @@ export function TopNav() {
                   onClick={() => setActiveModule(mod.id)}
                   className={cn(
                     "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[12px] font-medium tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-4 sm:py-3 md:px-5",
-                    on ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card/50 hover:text-foreground",
+                    on
+                      ? "bg-card text-foreground"
+                      : "text-muted-foreground hover:bg-card/50 hover:text-foreground",
                   )}
                 >
-                  <span className={cn("num font-semibold", on ? "text-foreground" : "text-dim")}>{mod.id}</span>
+                  <span className={cn("num font-semibold", on ? "text-foreground" : "text-dim")}>
+                    {mod.id}
+                  </span>
                   <span>{mod.label}</span>
                   {on && (
                     <m.span

@@ -351,7 +351,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                       )}
                     >
                       <Led tone={uConn.isOnline ? "emerald" : "dim"} />
-                      {uConn.isOnline ? "LIVE / ONLINE" : "OFFLINE / SLEEP"}
+                      {uConn.badgeText}
                     </span>
                   </div>
                   <div className="mt-1 font-display text-sm font-semibold uppercase tracking-widest">
@@ -428,8 +428,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             />
             <Stat
               label="Burst Queue"
-              value={selected.buffer_used > 0 ? `${selected.buffer_used} Recs` : "LIVE (0)"}
-              tone={selected.buffer_used > 0 ? "amber" : "emerald"}
+              value={
+                selected.buffer_used > 0
+                  ? `${selected.buffer_used} Recs`
+                  : conn.isOnline
+                    ? "LIVE (0)"
+                    : "KOSONG (0)"
+              }
+              tone={selected.buffer_used > 0 ? "amber" : conn.isOnline ? "emerald" : "dim"}
             />
           </div>
           <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5 num text-[10px] text-muted-foreground">

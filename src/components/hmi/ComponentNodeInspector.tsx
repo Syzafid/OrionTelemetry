@@ -429,8 +429,18 @@ export function ComponentNodeInspector({
 
   const effectiveHistory = useMemo<VoltagePoint[]>(() => {
     if (historyPoints && historyPoints.length > 0) return historyPoints;
+    if (isLiveApi) {
+      const label = unit.last_seen ? unit.last_seen.slice(11, 16) : "LIVE";
+      return [
+        {
+          t: label,
+          v: t.v_bat,
+          ...(typeof t.ts_epoch === "number" ? { ts: t.ts_epoch } : {}),
+        },
+      ];
+    }
     return voltageHistory(t.v_bat, t.engine_on);
-  }, [historyPoints, t.v_bat, t.engine_on]);
+  }, [historyPoints, isLiveApi, unit.last_seen, t.v_bat, t.ts_epoch, t.engine_on]);
 
   const { minHistV, maxHistV } = useMemo(() => {
     if (effectiveHistory.length === 0) return { minHistV: t.v_bat, maxHistV: t.v_bat };

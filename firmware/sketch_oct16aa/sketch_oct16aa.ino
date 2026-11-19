@@ -1335,8 +1335,8 @@ void sampleBatteryAndCan(TelemetryItem &pkt) {
       pkt.ecu_v        = 0.0f;
     }
 
-    pkt.fuel_pct    = 74.5f;
-    pkt.dist_clr_km = 1420;
+    pkt.fuel_pct    = (pkt.engine_on == 1) ? 74.5f : 0.0f;
+    pkt.dist_clr_km = (pkt.engine_on == 1) ? 1420 : 0;
     pkt.mil_on      = simDtcActive ? 1 : 0;
     pkt.dtc_cnt     = simDtcActive ? 1 : 0;
     strncpy(pkt.dtc, simDtcActive ? "P0133" : "NONE", sizeof(pkt.dtc));
