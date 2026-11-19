@@ -112,6 +112,11 @@ export function resolveUpdateEndpointUrl(url: string): string {
   }
 }
 
+export interface MutationResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface Ctx {
   activeModule: ModuleId;
   setActiveModule: (m: ModuleId) => void;
@@ -124,7 +129,7 @@ interface Ctx {
   selectUnit: (id: string) => void;
   simulate: (s: SimState) => void;
   configs: Record<string, PiggybackConfig>;
-  updateConfig: (id: string, patch: Partial<PiggybackConfig>) => void;
+  updateConfig: (id: string, patch: Partial<PiggybackConfig>) => Promise<MutationResult>;
   injectDtc: (id: string, code: string | null) => void;
   flushBuffer: (id: string) => void;
   simulateBurstSync: (id: string) => void;
@@ -140,12 +145,12 @@ interface Ctx {
     status: TicketStatus,
     assignedTo?: string,
     handoverNote?: string,
-  ) => void;
+  ) => Promise<MutationResult>;
   tagMovement: (evId: string, tag: OperationalTag, pairedId?: string) => void;
   pairUnit: (
     oldId: string,
     data: { vin: string; model: string; color: string; bay: string },
-  ) => void;
+  ) => Promise<MutationResult>;
   registerUnit: (data: {
     unit_id: string;
     vin: string;
@@ -155,7 +160,10 @@ interface Ctx {
     bay: string;
     crit_v?: number;
     sleep_cfg?: number;
-  }) => void;
+    pcb_version?: "1" | "2";
+    cal_slope?: number;
+    cal_offset?: number;
+  }) => Promise<MutationResult>;
   unpairUnit: (id: string) => void;
   unpaired: string[];
   dataSource: DataSource;
@@ -292,18 +300,32 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   );
 
   const sendMutation = useCallback(
-    async (action: string, data: Record<string, unknown>) => {
-      if (dataSource !== "LIVE_API") return;
+    async (action: string, data: Record<string, unknown>): Promise<MutationResult> => {
+      if (dataSource !== "LIVE_API") return { ok: true };
       try {
         const targetUrl = resolveUpdateEndpointUrl(apiUrl);
-        await fetch(targetUrl, {
+        const res = await fetch(targetUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ action, ...data }),
         });
+        if (!res.ok) {
+          let errMsg = `HTTP ${res.status}`;
+          try {
+            const errJson = (await res.json()) as { message?: string; error?: string };
+            errMsg = errJson.message || errJson.error || errMsg;
+          } catch {
+            // Keep HTTP status fallback
+          }
+          return { ok: false, error: errMsg };
+        }
         void pollRef.current?.();
-      } catch {
-        // Silent fallback for background sync to avoid breaking UI
+        return { ok: true };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : "Gagal menghubungi endpoint server.",
+        };
       }
     },
     [dataSource, apiUrl],
@@ -332,8 +354,26 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   );
 
   const updateConfig = useCallback(
-    (id: string, patch: Partial<PiggybackConfig>) => {
-      setConfigs((c) => ({ ...c, [id]: { ...(c[id] ?? DEFAULT_CONFIG(id)), ...patch } }));
+    (id: string, patch: Partial<PiggybackConfig>): Promise<MutationResult> => {
+      const stagesNvsAck =
+        patch.crit_v !== undefined ||
+        patch.sleep_cfg !== undefined ||
+        patch.cal_slope !== undefined ||
+        patch.cal_offset !== undefined;
+      const nextPending = patch.pending_ack !== undefined ? patch.pending_ack : stagesNvsAck;
+
+      setConfigs((c) => {
+        const current = c[id] ?? DEFAULT_CONFIG(id);
+        return {
+          ...c,
+          [id]: {
+            ...current,
+            ...patch,
+            pending_ack: nextPending || Boolean(current.pending_ack),
+          },
+        };
+      });
+
       if (patch.sleep_cfg)
         patchUnit(id, (u) => ({
           ...u,
@@ -344,7 +384,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           id,
           "ADC_CALIBRATION",
           "INFO",
-          `ADC OLS calibration updated (slope=${patch.cal_slope ?? "unchanged"}, offset=${patch.cal_offset ?? "unchanged"})`,
+          `ADC OLS calibration staged (slope=${patch.cal_slope ?? "unchanged"}, offset=${patch.cal_offset ?? "unchanged"}, pending_ack=1)`,
         );
       } else {
         appendLocalAudit(
@@ -356,7 +396,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
             .join(", ")})`,
         );
       }
-      void sendMutation("UPDATE_CONFIG", { unit_id: id, ...patch });
+      return sendMutation("UPDATE_CONFIG", { unit_id: id, ...patch });
     },
     [patchUnit, appendLocalAudit, sendMutation],
   );
@@ -437,26 +477,31 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   );
 
   const updateTicketStatus = useCallback(
-    (unitId: string, status: TicketStatus, assignedTo?: string, handoverNote?: string) => {
+    (
+      unitId: string,
+      status: TicketStatus,
+      assignedTo?: string,
+      handoverNote?: string,
+    ): Promise<MutationResult> => {
       const targetUnit = allUnits.find((u) => u.unit_id === unitId) ?? allUnits[0]!;
       setTickets((prev) =>
         applyTicketTransition(prev, targetUnit, status, assignedTo, handoverNote),
       );
       const sev: AuditSeverity =
         status === "RESOLVED" ? "INFO" : status === "IN_PROGRESS" ? "WARN" : "CRITICAL";
-      const assigneeText = assignedTo?.trim() || "On-Duty Technician";
+      const assigneeText = assignedTo?.trim() || "Field Tech";
       appendLocalAudit(
         unitId,
         "TICKET_HANDOVER",
         sev,
         `Maintenance ticket set to ${status} (Assignee: ${assigneeText})${handoverNote ? ` - ${handoverNote}` : ""}`,
       );
-      void sendMutation("UPDATE_TICKET", {
+      return sendMutation("UPDATE_TICKET", {
         unit_id: unitId,
         bay: targetUnit.bay,
         issue_summary: targetUnit.status_label,
         status,
-        assigned_to: assignedTo,
+        assigned_to: assigneeText,
         handover_note: handoverNote,
       });
     },
@@ -506,7 +551,10 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   );
 
   const pairUnit = useCallback(
-    (oldId: string, d: { vin: string; model: string; color: string; bay: string }) => {
+    (
+      oldId: string,
+      d: { vin: string; model: string; color: string; bay: string },
+    ): Promise<MutationResult> => {
       patchUnit(oldId, (u) => {
         const parts = d.model.toUpperCase().split(" ");
         return {
@@ -527,7 +575,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         "INFO",
         `Node paired to VIN ${d.vin.toUpperCase()} (${d.model.toUpperCase()}, Bay ${d.bay.toUpperCase()})`,
       );
-      void sendMutation("PAIR_UNIT", { unit_id: oldId, ...d });
+      return sendMutation("PAIR_UNIT", { unit_id: oldId, ...d });
     },
     [patchUnit, appendLocalAudit, sendMutation],
   );
@@ -542,12 +590,21 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       bay: string;
       crit_v?: number;
       sleep_cfg?: number;
-    }) => {
+      pcb_version?: "1" | "2";
+      cal_slope?: number;
+      cal_offset?: number;
+    }): Promise<MutationResult> => {
       const newId = d.unit_id.trim().toUpperCase();
       const newBay = d.bay.trim().toUpperCase();
       const newVin = d.vin.trim().toUpperCase();
       const newModel = d.model.trim().toUpperCase();
       const newTrim = (d.trim?.trim() || "STANDARD").toUpperCase();
+      const pcbVer = d.pcb_version === "2" ? "2" : "1";
+      const resolvedSlope = d.cal_slope ?? (pcbVer === "2" ? 0.0047037 : 0.0054118);
+      const resolvedOffset = d.cal_offset ?? (pcbVer === "2" ? 0.16 : 0.069);
+      const resolvedCritV = d.crit_v ?? 11.8;
+      const resolvedSleep = d.sleep_cfg || 300;
+      const isLiveMode = dataSource === "LIVE_API";
 
       setLiveUnitIds((prev) => (prev.includes(newId) ? prev : [...prev, newId]));
 
@@ -560,45 +617,46 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           trim: newTrim,
           vin: newVin,
           color: d.color,
-          status_label: "Registered (Standby)",
+          status_label: "Terdaftar (Menunggu Paket Pertama)",
           state: "STANDBY",
           in_yard: true,
-          online_status: "ONLINE",
+          online_status: isLiveMode ? "OFFLINE" : "ONLINE",
+          connection_badge: isLiveMode ? "OFFLINE / MENUNGGU PAKET" : "SANDBOX",
           buffer_used: 0,
           telemetry: {
             unit_id: newId,
-            v_bat: 12.6,
-            adc_raw_mv: 2260,
+            v_bat: isLiveMode ? 0 : 12.6,
+            adc_raw_mv: isLiveMode ? 0 : 2205,
             rtc_temp_c: 30.0,
             shunt_sleep_ua: 380,
             can_ok: true,
             engine_on: false,
             crit_alert: false,
             rpm: 0,
-            temp_c: 32,
+            temp_c: 0,
             dtc_cnt: 0,
             dtc: "NONE",
-            rssi: -65,
-            sleep_cfg: d.sleep_cfg || 300,
+            rssi: isLiveMode ? -127 : -65,
+            sleep_cfg: resolvedSleep,
             active_ms: 0,
             daily_mah: 0,
-            seq: 1,
+            seq: 0,
             boot: 1,
             ts_epoch: Math.floor(Date.now() / 1000),
             speed_kmh: 0,
-            iat_c: 30,
-            map_kpa: 101,
+            iat_c: 0,
+            map_kpa: 0,
             load_pct: 0,
             tps_pct: 0,
-            ign_deg: 5,
+            ign_deg: 0,
             maf_gs: 0,
             run_time_s: 0,
-            fuel_pct: 100,
+            fuel_pct: 0,
             fuel_rate_lh: 0,
-            o2_v: 0.45,
+            o2_v: 0,
             stft_pct: 0,
             mil_on: false,
-            ecu_v: 12.6,
+            ecu_v: 0,
             dist_clr_km: 0,
           },
         };
@@ -610,28 +668,37 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         return [...prev, newUnit];
       });
 
-      if (d.crit_v) {
-        setConfigs((c) => ({
-          ...c,
-          [newId]: {
-            ...(c[newId] ?? DEFAULT_CONFIG(newId)),
-            crit_v: d.crit_v!,
-            sleep_cfg: d.sleep_cfg || 300,
-          },
-        }));
-      }
+      setConfigs((c) => ({
+        ...c,
+        [newId]: {
+          ...(c[newId] ?? DEFAULT_CONFIG(newId)),
+          crit_v: resolvedCritV,
+          sleep_cfg: resolvedSleep,
+          cal_slope: resolvedSlope,
+          cal_offset: resolvedOffset,
+          pending_ack: true,
+        },
+      }));
 
       appendLocalAudit(
         newId,
         "NODE_REGISTERED",
         "INFO",
-        `New node ${newId} registered and paired to ${newModel} ${newTrim} (VIN: ${newVin}, Bay: ${newBay})`,
+        `New node ${newId} registered and paired to ${newModel} ${newTrim} (VIN: ${newVin}, Bay: ${newBay}, PCB v${pcbVer})`,
       );
 
-      void sendMutation("REGISTER_UNIT", { ...d, unit_id: newId });
       setSelectedId(newId);
+      return sendMutation("REGISTER_UNIT", {
+        ...d,
+        unit_id: newId,
+        crit_v: resolvedCritV,
+        sleep_cfg: resolvedSleep,
+        pcb_version: pcbVer,
+        cal_slope: resolvedSlope,
+        cal_offset: resolvedOffset,
+      });
     },
-    [appendLocalAudit, sendMutation],
+    [appendLocalAudit, dataSource, sendMutation],
   );
 
   const selected = units.find((u) => u.unit_id === safeSelectedId) ?? units[0]!;

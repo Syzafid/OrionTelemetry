@@ -233,6 +233,7 @@ export interface PiggybackConfig {
   /** SOP C.1 linear regression: V_bat = adc_raw_mv * cal_slope + cal_offset */
   cal_slope: number;
   cal_offset: number;
+  pending_ack?: boolean;
 }
 
 export type AuditSeverity = "INFO" | "WARN" | "CRITICAL";
@@ -976,7 +977,7 @@ export const AUDIT_LOGS: AuditLogEntry[] = [
     unit_id: "MITSUBISHI-STOCK-01",
     event_type: "ADC_CALIBRATION",
     severity: "INFO",
-    message: "SOP C.1 4-point OLS calibration applied (slope=0.005412, offset=0.358)",
+    message: "SOP C.1 4-point OLS calibration applied (slope=0.005412, offset=0.069)",
     created_at: "2026-11-04 11:00:00",
   },
 ];
@@ -1273,7 +1274,8 @@ export const DEFAULT_CONFIG = (unit_id: string): PiggybackConfig => ({
   crit_v: 11.8,
   debounce_cnt: 3,
   cal_slope: 0.005412,
-  cal_offset: 0.358,
+  cal_offset: 0.069,
+  pending_ack: false,
 });
 
 /** Applies a simulator state to a unit's telemetry, including the v1.5.0 Read-Only OBD-II hardware fields. */

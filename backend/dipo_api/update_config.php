@@ -26,6 +26,13 @@ if (!$action) {
 }
 
 /**
+ * Helper to invalidate get_data.php 1.5s micro-cache immediately after mutations.
+ */
+function invalidateOrionDataCache(): void {
+    @unlink(sys_get_temp_dir() . '/orion_get_data_cache.json');
+}
+
+/**
  * Helper to insert an immutable operational audit trail row into system_events.
  */
 function recordSystemEvent(PDO $pdo, string $unitId, string $eventType, string $severity, string $message): void {
@@ -76,7 +83,7 @@ try {
                     if (!$stmtAckCol->fetch()) {
                         $pdo->exec("ALTER TABLE `node_configs` ADD COLUMN `pending_ack` TINYINT(1) NOT NULL DEFAULT 0 AFTER `cal_offset`");
                     }
-                    $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.3580");
+                    $pdo->exec("ALTER TABLE `node_configs` MODIFY COLUMN `cal_slope` DECIMAL(10,7) NOT NULL DEFAULT 0.0054120, MODIFY COLUMN `cal_offset` DECIMAL(6,4) NOT NULL DEFAULT 0.0690");
                 }
             } catch (Exception $ignored) {
                 // Non-blocking schema check
@@ -91,15 +98,27 @@ try {
                 ? parseSleepCfgSeconds($payload['sleep_cfg'], $defaultSleep)
                 : $defaultSleep;
 
-            $fastPollS   = isset($payload['fast_poll_s']) ? (int)$payload['fast_poll_s'] : ($cur ? (int)$cur['fast_poll_s'] : 10);
+            $fastPollRaw = isset($payload['fast_poll_s']) ? (int)$payload['fast_poll_s'] : ($cur ? (int)$cur['fast_poll_s'] : 10);
+            $fastPollS   = max(5, min(300, $fastPollRaw));
             $critV       = isset($payload['crit_v']) ? (float)$payload['crit_v'] : ($cur ? (float)$cur['crit_v'] : 11.80);
-            $debounceCnt = isset($payload['debounce_cnt']) ? (int)$payload['debounce_cnt'] : ($cur ? (int)$cur['debounce_cnt'] : 3);
+            $debounceRaw = isset($payload['debounce_cnt']) ? (int)$payload['debounce_cnt'] : ($cur ? (int)$cur['debounce_cnt'] : 3);
+            $debounceCnt = max(1, min(10, $debounceRaw));
             $calSlope    = isset($payload['cal_slope'])
                 ? (float)$payload['cal_slope']
                 : (isset($payload['slope_m']) ? (float)$payload['slope_m'] : ($cur ? (float)$cur['cal_slope'] : 0.005412));
             $calOffset   = isset($payload['cal_offset'])
                 ? (float)$payload['cal_offset']
                 : (isset($payload['offset_c']) ? (float)$payload['offset_c'] : ($cur ? (float)$cur['cal_offset'] : 0.069));
+
+            if (!is_finite($critV) || $critV <= 5.0 || $critV >= 16.0) {
+                sendJson(['error' => 'INVALID_CRIT_V', 'message' => 'crit_v must be between 5.0V and 16.0V.'], 400);
+            }
+            if (!is_finite($calSlope) || $calSlope <= 0.001 || $calSlope >= 0.02) {
+                sendJson(['error' => 'INVALID_CAL_SLOPE', 'message' => 'cal_slope must be between 0.001 and 0.02.'], 400);
+            }
+            if (!is_finite($calOffset) || $calOffset <= -2.0 || $calOffset >= 2.0) {
+                sendJson(['error' => 'INVALID_CAL_OFFSET', 'message' => 'cal_offset must be between -2.0V and 2.0V.'], 400);
+            }
 
             $sqlUpsert = "
                 INSERT INTO `node_configs` (`unit_id`, `sleep_cfg`, `fast_poll_s`, `crit_v`, `debounce_cnt`, `cal_slope`, `cal_offset`, `pending_ack`)
@@ -133,6 +152,7 @@ try {
                 recordSystemEvent($pdo, (string)$unitId, 'CONFIG_UPDATE', 'INFO', $auditMsg);
             }
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'  => 'OK',
                 'action'  => 'UPDATE_CONFIG',
@@ -176,6 +196,7 @@ try {
 
             recordSystemEvent($pdo, 'YARD-GATEWAY', 'MOVEMENT_TAG', 'INFO', "Movement event {$eventId} tagged as " . ($tag ?? 'UNTAGGED'));
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'    => 'OK',
                 'action'    => 'TAG_MOVEMENT',
@@ -196,24 +217,46 @@ try {
             }
 
             $vin = strtoupper(trim($payload['vin'] ?? ''));
-            $modelRaw = trim($payload['model'] ?? 'MITSUBISHI NEW');
+            $modelRaw = strtoupper(trim($payload['model'] ?? 'MITSUBISHI NEW'));
+            $trimExplicit = strtoupper(trim((string)($payload['trim'] ?? '')));
             $color = trim($payload['color'] ?? 'White Diamond');
             $bay = strtoupper(trim($payload['bay'] ?? 'A-01'));
-            $critV = floatval($payload['crit_v'] ?? 11.80);
-            $sleepCfg = intval($payload['sleep_cfg'] ?? 300);
+            $critVRaw = isset($payload['crit_v']) ? (float)$payload['crit_v'] : 11.80;
+            $critV = (is_finite($critVRaw) && $critVRaw > 5.0 && $critVRaw < 16.0) ? $critVRaw : 11.80;
+            $sleepCfg = isset($payload['sleep_cfg'])
+                ? parseSleepCfgSeconds($payload['sleep_cfg'], 300)
+                : 300;
 
-            $parts = explode(' ', strtoupper($modelRaw));
-            $model = count($parts) >= 2 ? implode(' ', array_slice($parts, 0, 2)) : ($modelRaw ?: 'NEW MODEL');
-            $trim = count($parts) > 2 ? implode(' ', array_slice($parts, 2)) : ($payload['trim'] ?? 'NEW ARRIVAL');
+            $pcbVersion = (string)($payload['pcb_version'] ?? '1');
+            $defaultSlope  = ($pcbVersion === '2') ? 0.0047037 : 0.0054118;
+            $defaultOffset = ($pcbVersion === '2') ? 0.1600    : 0.0690;
 
-            // 1. Insert or update vehicles record
+            $calSlope = isset($payload['cal_slope']) ? (float)$payload['cal_slope'] : $defaultSlope;
+            if (!is_finite($calSlope) || $calSlope <= 0.001 || $calSlope >= 0.02) {
+                $calSlope = $defaultSlope;
+            }
+            $calOffset = isset($payload['cal_offset']) ? (float)$payload['cal_offset'] : $defaultOffset;
+            if (!is_finite($calOffset) || $calOffset <= -2.0 || $calOffset >= 2.0) {
+                $calOffset = $defaultOffset;
+            }
+
+            if ($trimExplicit !== '') {
+                $model = $modelRaw !== '' ? $modelRaw : 'NEW MODEL';
+                $trim  = $trimExplicit;
+            } else {
+                $parts = explode(' ', $modelRaw);
+                $model = count($parts) >= 2 ? implode(' ', array_slice($parts, 0, 2)) : ($modelRaw ?: 'NEW MODEL');
+                $trim  = count($parts) > 2 ? implode(' ', array_slice($parts, 2)) : 'NEW ARRIVAL';
+            }
+
+            // 1. Insert or update vehicles record (never fabricate ONLINE / 12.60V before first ESP32 packet)
             $stmtVeh = $pdo->prepare("
                 INSERT INTO `vehicles` (
                     `unit_id`, `bay`, `model`, `trim`, `vin`, `color`,
                     `v_bat`, `status_label`, `state`, `in_yard`, `online_status`, `last_seen`
                 ) VALUES (
                     :uid, :bay, :model, :trim, :vin, :color,
-                    12.60, 'Registered (Standby)', 'STANDBY', 1, 'ONLINE', NOW()
+                    0.00, 'Terdaftar (Menunggu Paket Pertama)', 'STANDBY', 1, 'OFFLINE', NULL
                 )
                 ON DUPLICATE KEY UPDATE
                     `bay` = VALUES(`bay`),
@@ -232,27 +275,32 @@ try {
                 ':color' => $color,
             ]);
 
-            // 2. Insert or update node_configs record with pending ACK for NVS sync
+            // 2. Insert or update node_configs record with resolved PCB calibration & pending_ack = 1
             $stmtCfg = $pdo->prepare("
                 INSERT INTO `node_configs` (
                     `unit_id`, `crit_v`, `sleep_cfg`, `cal_slope`, `cal_offset`, `pending_ack`
                 ) VALUES (
-                    :uid, :crit_v, :sleep_cfg, 0.0054120, 0.3580, 1
+                    :uid, :crit_v, :sleep_cfg, :cal_slope, :cal_offset, 1
                 )
                 ON DUPLICATE KEY UPDATE
-                    `crit_v` = VALUES(`crit_v`),
-                    `sleep_cfg` = VALUES(`sleep_cfg`),
+                    `crit_v`      = VALUES(`crit_v`),
+                    `sleep_cfg`   = VALUES(`sleep_cfg`),
+                    `cal_slope`   = VALUES(`cal_slope`),
+                    `cal_offset`  = VALUES(`cal_offset`),
                     `pending_ack` = 1,
-                    `updated_at` = NOW()
+                    `updated_at`  = NOW()
             ");
             $stmtCfg->execute([
-                ':uid'       => $unitId,
-                ':crit_v'    => $critV,
-                ':sleep_cfg' => $sleepCfg,
+                ':uid'        => $unitId,
+                ':crit_v'     => $critV,
+                ':sleep_cfg'  => $sleepCfg,
+                ':cal_slope'  => $calSlope,
+                ':cal_offset' => $calOffset,
             ]);
 
-            recordSystemEvent($pdo, (string)$unitId, 'NODE_REGISTERED', 'INFO', "Node {$unitId} registered & paired to {$model} {$trim} (VIN: {$vin}, Bay: {$bay})");
+            recordSystemEvent($pdo, (string)$unitId, 'NODE_REGISTERED', 'INFO', "Node {$unitId} registered & paired to {$model} {$trim} (VIN: {$vin}, Bay: {$bay}, PCB v{$pcbVersion})");
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'  => 'OK',
                 'action'  => $action,
@@ -263,6 +311,14 @@ try {
                     'trim'  => $trim,
                     'color' => $color,
                     'bay'   => $bay,
+                ],
+                'config'  => [
+                    'unit_id'     => $unitId,
+                    'crit_v'      => $critV,
+                    'sleep_cfg'   => $sleepCfg,
+                    'cal_slope'   => $calSlope,
+                    'cal_offset'  => $calOffset,
+                    'pending_ack' => true,
                 ],
                 'message' => "Node {$unitId} successfully onboarded and registered."
             ]);
@@ -282,6 +338,7 @@ try {
 
             recordSystemEvent($pdo, (string)$unitId, 'BUFFER_FLUSH', 'INFO', 'Operator cleared offline sync badge and acknowledged burst buffer');
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'      => 'OK',
                 'action'      => 'FLUSH_BUFFER',
@@ -304,6 +361,7 @@ try {
 
             recordSystemEvent($pdo, (string)$unitId, 'WARMUP_DISPATCH', 'WARN', 'Operator dispatched staff for 10-min engine alternator warm-up');
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'       => 'OK',
                 'action'       => 'DISPATCH_WARMUP',
@@ -343,18 +401,22 @@ try {
             $assignedTo = trim((string)($payload['assigned_to'] ?? 'Field Tech'));
             $handoverNote = trim((string)($payload['handover_note'] ?? ''));
 
-            // Lookup vehicle bay if creating a new ticket
+            // Lookup vehicle bay & fallback issue summary if creating/updating a ticket
             $stmtVeh = $pdo->prepare("SELECT `bay`, `status_label` FROM `vehicles` WHERE `unit_id` = :uid");
             $stmtVeh->execute([':uid' => $unitId]);
             $vehRow = $stmtVeh->fetch();
             $bay = $vehRow ? (string)$vehRow['bay'] : 'A-01';
-            $issueSummary = $vehRow ? (string)$vehRow['status_label'] : 'Scheduled PDI & battery verification';
+            $explicitIssue = trim((string)($payload['issue_summary'] ?? ''));
+            $issueSummary = $explicitIssue !== ''
+                ? substr($explicitIssue, 0, 128)
+                : ($vehRow ? (string)$vehRow['status_label'] : 'Verifikasi PDI & kesehatan baterai');
             $ticketCode = 'TKT-' . substr(preg_replace('/[^0-9]/', '', (string)$unitId) ?: '0400', -2) . '99';
 
             $stmtTicket = $pdo->prepare("
                 INSERT INTO `maintenance_tickets` (`ticket_code`, `unit_id`, `bay`, `issue_summary`, `status`, `assigned_to`, `handover_note`)
                 VALUES (:tcode, :uid, :bay, :issue, :status, :assigned, :note)
                 ON DUPLICATE KEY UPDATE
+                    `issue_summary` = VALUES(`issue_summary`),
                     `status`        = VALUES(`status`),
                     `assigned_to`   = VALUES(`assigned_to`),
                     `handover_note` = VALUES(`handover_note`),
@@ -374,12 +436,14 @@ try {
             $auditMessage = sprintf('Shift ticket %s (%s): %s', $status, $assignedTo, $handoverNote ?: 'Status updated');
             recordSystemEvent($pdo, (string)$unitId, 'TICKET_HANDOVER', $auditSeverity, $auditMessage);
 
+            invalidateOrionDataCache();
             sendJson([
                 'status'  => 'OK',
                 'action'  => 'UPDATE_TICKET',
                 'unit_id' => $unitId,
                 'ticket'  => [
                     'unit_id'       => $unitId,
+                    'issue_summary' => $issueSummary,
                     'status'        => $status,
                     'assigned_to'   => $assignedTo,
                     'handover_note' => $handoverNote,
