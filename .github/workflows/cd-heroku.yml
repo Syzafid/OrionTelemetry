@@ -47,20 +47,30 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
-          ASKPASS_SCRIPT="$(mktemp)"
-          chmod 700 "$ASKPASS_SCRIPT"
-          cat <<'EOF' > "$ASKPASS_SCRIPT"
-          #!/usr/bin/env sh
-          case "$1" in
-            *Username*|*username*) echo "heroku" ;;
-            *Password*|*password*) printf '%s\n' "$HEROKU_API_KEY" ;;
-          esac
-          EOF
-          GIT_ASKPASS="$ASKPASS_SCRIPT" GIT_TERMINAL_PROMPT=0 \
-            git push --force https://git.heroku.com/orion-telemetry-prod.git HEAD:refs/heads/main
-          STATUS=$?
-          rm -f "$ASKPASS_SCRIPT"
-          exit $STATUS
+          CLEAN_KEY="$(printf '%s' "$HEROKU_API_KEY" | tr -d '\r\n[:space:]')"
+          if [ -z "$CLEAN_KEY" ]; then
+            echo "FAIL: HEROKU_API_KEY is empty after trimming whitespace."
+            exit 1
+          fi
+
+          API_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/vnd.heroku+json; version=3" \
+            -H "Authorization: Bearer $CLEAN_KEY" \
+            "https://api.heroku.com/apps/orion-telemetry-prod")
+          echo "Heroku Platform API auth check -> HTTP $API_STATUS"
+          if [ "$API_STATUS" != "200" ]; then
+            echo "FAIL: HEROKU_API_KEY rejected by Heroku Platform API (HTTP $API_STATUS)."
+            echo "Verify GitHub Secret HEROKU_API_KEY contains your regenerated Heroku API Key (Account Settings -> API Key -> Reveal, or output of 'heroku authorizations:create')."
+            exit 1
+          fi
+
+          AUTH_B64="$(printf 'heroku:%s' "$CLEAN_KEY" | base64 | tr -d '\r\n')"
+          echo "::add-mask::$AUTH_B64"
+
+          GIT_TERMINAL_PROMPT=0 git \
+            -c credential.helper= \
+            -c "http.https://git.heroku.com/.extraheader=Authorization: Basic $AUTH_B64" \
+            push --force https://git.heroku.com/orion-telemetry-prod.git HEAD:refs/heads/main
 
       - name: Verify live production routes, API health, and closed exposures
         if: steps.check_secret.outputs.deployed == 'true'
