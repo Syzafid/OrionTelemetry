@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Repository hygiene & allowlist check
+        run: npm run check:hygiene
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

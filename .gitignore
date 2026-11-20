@@ -43,3 +43,58 @@ roadmap.md
 *.njsproj
 *.sln
 *.sw?
+
+# Scratch, temporary & backup files/folders
+scratch/
+tmp/
+temp/
+sandbox/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.old
+
+# Test reports, build caches & PHP vendor
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+.cache/
+.eslintcache
+*.tsbuildinfo
+vendor/
+
+# Archives & local database dumps
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+
+# Secrets, private keys & netrc credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+.netrc
+_netrc
+*.secret
+*.secrets
+
+# OS junk & local AI workspace directories
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+NOTES.md
+TODO.local.md
+.cursor/
+.gemini/
