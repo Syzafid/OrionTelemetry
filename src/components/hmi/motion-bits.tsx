@@ -108,4 +108,3 @@ export function useChartIntroOnly(settleMs = DURATION_MS.ceremony + 500): boolea
   }, [settleMs]);
   return active;
 }
-

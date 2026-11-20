@@ -111,7 +111,10 @@ describe("ORION Motion Upgrade (motion.dev + anime.js)", () => {
     const { container } = render(
       <div>
         <ResolveCheck animateIn={false} />
-        <UnitQrCode value="http://localhost:8080/dashboard?unit=MITSUBISHI-STOCK-01&module=fleet" animateBuild />
+        <UnitQrCode
+          value="http://localhost:8080/dashboard?unit=MITSUBISHI-STOCK-01&module=fleet"
+          animateBuild
+        />
       </div>,
     );
 
@@ -174,4 +177,3 @@ describe("ORION Motion Upgrade (motion.dev + anime.js)", () => {
     }
   });
 });
-

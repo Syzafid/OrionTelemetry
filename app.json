@@ -14,8 +14,8 @@
   ],
   "env": {
     "CORS_ALLOWED_ORIGIN": {
-      "description": "Allowed origin for dashboard CORS headers (use * or https://oriontelemetry.tech).",
-      "value": "https://oriontelemetry.tech"
+      "description": "Allowed origin for dashboard CORS headers (use * or https://www.oriontelemetry.tech).",
+      "value": "https://www.oriontelemetry.tech"
     }
   }
 }

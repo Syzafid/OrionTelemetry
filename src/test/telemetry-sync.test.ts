@@ -7,7 +7,11 @@ const TARGET = "MITSUBISHI-STOCK-02";
 
 describe("applyRemoteUpdate (live API merge)", () => {
   it("merges a flat payload into the matching unit", () => {
-    const units = applyRemoteUpdate(clone(), { unit_id: TARGET, v_bat: 11.95, rtc_temp_c: 33.1 }, UNITS[0]!.unit_id);
+    const units = applyRemoteUpdate(
+      clone(),
+      { unit_id: TARGET, v_bat: 11.95, rtc_temp_c: 33.1 },
+      UNITS[0]!.unit_id,
+    );
     const t = units.find((u) => u.unit_id === TARGET)!.telemetry;
     expect(t.v_bat).toBe(11.95);
     expect(t.rtc_temp_c).toBe(33.1);
@@ -22,7 +26,11 @@ describe("applyRemoteUpdate (live API merge)", () => {
   });
 
   it("merges a wrapped payload object", () => {
-    const units = applyRemoteUpdate(clone(), { payload: { unit_id: TARGET, adc_raw_mv: 2200 } }, UNITS[0]!.unit_id);
+    const units = applyRemoteUpdate(
+      clone(),
+      { payload: { unit_id: TARGET, adc_raw_mv: 2200 } },
+      UNITS[0]!.unit_id,
+    );
     expect(units.find((u) => u.unit_id === TARGET)!.telemetry.adc_raw_mv).toBe(2200);
   });
 
@@ -42,7 +50,11 @@ describe("applyRemoteUpdate (live API merge)", () => {
     const before = clone();
     const units = applyRemoteUpdate(
       before,
-      { unit_id: TARGET, v_bat: "12.6" as unknown as number, engine_on: "yes" as unknown as boolean },
+      {
+        unit_id: TARGET,
+        v_bat: "12.6" as unknown as number,
+        engine_on: "yes" as unknown as boolean,
+      },
       UNITS[0]!.unit_id,
     );
     expect(units).toEqual(before);
@@ -50,7 +62,9 @@ describe("applyRemoteUpdate (live API merge)", () => {
 
   it("ignores unknown unit_id and returns the same array reference", () => {
     const before = clone();
-    expect(applyRemoteUpdate(before, { unit_id: "NOPE", v_bat: 10 }, UNITS[0]!.unit_id)).toBe(before);
+    expect(applyRemoteUpdate(before, { unit_id: "NOPE", v_bat: 10 }, UNITS[0]!.unit_id)).toBe(
+      before,
+    );
   });
 
   it("returns the same reference for garbage input", () => {
@@ -106,9 +120,24 @@ describe("applyRemoteUpdate (live API merge)", () => {
   it("computes LIVE / ONLINE when last_seen_sec <= 6 and OFFLINE / DEEP SLEEP when > 6", () => {
     const base = clone()[0]!;
     const liveUnit = { ...base, in_yard: true, last_seen_sec: 4, online_status: "ONLINE" as const };
-    const boundaryLiveUnit = { ...base, in_yard: true, last_seen_sec: 6, online_status: "ONLINE" as const };
-    const offlineAtSevenUnit = { ...base, in_yard: true, last_seen_sec: 7, online_status: "OFFLINE" as const };
-    const staleUnit = { ...base, in_yard: true, last_seen_sec: 18, online_status: "OFFLINE" as const };
+    const boundaryLiveUnit = {
+      ...base,
+      in_yard: true,
+      last_seen_sec: 6,
+      online_status: "ONLINE" as const,
+    };
+    const offlineAtSevenUnit = {
+      ...base,
+      in_yard: true,
+      last_seen_sec: 7,
+      online_status: "OFFLINE" as const,
+    };
+    const staleUnit = {
+      ...base,
+      in_yard: true,
+      last_seen_sec: 18,
+      online_status: "OFFLINE" as const,
+    };
 
     expect(getUnitConnectionState(liveUnit)).toEqual({
       isOnline: true,

@@ -4,7 +4,7 @@
   "type": "project",
   "license": "proprietary",
   "require": {
-    "php": "^8.1 || ^8.2 || ^8.3",
+    "php": "^8.1 || ^8.2 || ^8.3 || ^8.4 || ^8.5",
     "ext-pdo": "*",
     "ext-pdo_mysql": "*",
     "ext-json": "*",
@@ -12,7 +12,7 @@
   },
   "scripts": {
     "compile": [
-      "mkdir -p .output/public/dipo_api && cp -r backend/dipo_api/. .output/public/dipo_api/ && rm -f .output/public/dipo_api/.env"
+      "rm -rf .output/public/dipo_api && mkdir -p .output/public/dipo_api && cp backend/dipo_api/db.php backend/dipo_api/get_data.php backend/dipo_api/get_live_status.php backend/dipo_api/simpan_data.php backend/dipo_api/update_config.php backend/dipo_api/export_csv.php backend/dipo_api/export_excel.php .output/public/dipo_api/"
     ]
   }
 }

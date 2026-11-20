@@ -107,7 +107,12 @@ function isFinderCell(r: number, c: number): boolean {
   return inTopLeft || inTopRight || inBottomLeft;
 }
 
-export function UnitQrCode({ value, size = 112, className, animateBuild = false }: UnitQrCodeProps) {
+export function UnitQrCode({
+  value,
+  size = 112,
+  className,
+  animateBuild = false,
+}: UnitQrCodeProps) {
   const matrix = useMemo(() => generateDeterministicQrMatrix(value), [value]);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -166,4 +171,3 @@ export function UnitQrCode({ value, size = 112, className, animateBuild = false 
     </svg>
   );
 }
-

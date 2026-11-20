@@ -19,7 +19,7 @@ describe("olsCalibration (SOP C.1)", () => {
   it("recovers V_bat within 10 mV at every calibration point", () => {
     const { slope, offset } = olsCalibration(FOUR_POINT);
     for (const p of FOUR_POINT) {
-      expect(Math.abs((p.mv * slope + offset) - p.dmm)).toBeLessThan(0.01);
+      expect(Math.abs(p.mv * slope + offset - p.dmm)).toBeLessThan(0.01);
     }
   });
 

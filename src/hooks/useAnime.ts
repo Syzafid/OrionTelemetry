@@ -62,4 +62,3 @@ export function useAnime<T extends Element>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
 }
-

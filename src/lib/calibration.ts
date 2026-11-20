@@ -23,7 +23,9 @@ export function olsCalibration(points: CalPoint[]): CalResult {
   if (n < 2) return { slope: 0, offset: 0, rSquared: 0 };
   const mx = valid.reduce((s, p) => s + p.mv, 0) / n;
   const my = valid.reduce((s, p) => s + p.dmm, 0) / n;
-  let sxy = 0, sxx = 0, syy = 0;
+  let sxy = 0,
+    sxx = 0,
+    syy = 0;
   for (const p of valid) {
     const dx = p.mv - mx;
     const dy = p.dmm - my;

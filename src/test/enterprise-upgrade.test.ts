@@ -11,16 +11,16 @@ import { parseDeepLinkParams } from "../context/TelemetryContext";
 
 describe("Enterprise Upgrade #1: Battery Thermal Compensation & Arrhenius Penalty", () => {
   const sampleHistory = [
-    { t: "00:00", v: 12.40 },
+    { t: "00:00", v: 12.4 },
     { t: "04:00", v: 12.35 },
-    { t: "08:00", v: 12.30 },
+    { t: "08:00", v: 12.3 },
     { t: "12:00", v: 12.25 },
-    { t: "16:00", v: 12.20 },
+    { t: "16:00", v: 12.2 },
     { t: "20:00", v: 12.15 },
   ];
 
   it("returns neutral thermal compensation at 25°C reference temperature", () => {
-    const pred25 = computeBatteryPrediction(sampleHistory, 12.15, 11.80, false, 25);
+    const pred25 = computeBatteryPrediction(sampleHistory, 12.15, 11.8, false, 25);
     expect(pred25.compensatedV25).toBe(12.15);
     expect(pred25.tempCompensatedSocPct).toBe(50);
     expect(pred25.thermalFactor).toBe(1.0);
@@ -28,8 +28,8 @@ describe("Enterprise Upgrade #1: Battery Thermal Compensation & Arrhenius Penalt
   });
 
   it("applies -0.018 V/°C OCV correction and Arrhenius self-discharge penalty when rtcTempC > 30°C", () => {
-    const pred25 = computeBatteryPrediction(sampleHistory, 12.15, 11.80, false, 25);
-    const pred35 = computeBatteryPrediction(sampleHistory, 12.15, 11.80, false, 35);
+    const pred25 = computeBatteryPrediction(sampleHistory, 12.15, 11.8, false, 25);
+    const pred35 = computeBatteryPrediction(sampleHistory, 12.15, 11.8, false, 35);
 
     // At 35°C (+10°C above 25°C): compensatedV25 = 12.15 + 0.018 * (25 - 35) = 12.15 - 0.18 = 11.97V
     expect(pred35.compensatedV25).toBe(11.97);
@@ -50,9 +50,9 @@ describe("Enterprise Upgrade #1: Battery Thermal Compensation & Arrhenius Penalt
       const pred = computeBatteryPrediction(
         hist,
         u.telemetry.v_bat,
-        11.80,
+        11.8,
         u.telemetry.engine_on,
-        u.telemetry.rtc_temp_c
+        u.telemetry.rtc_temp_c,
       );
       expect(pred.tempCompensatedSocPct).toBeGreaterThanOrEqual(0);
       expect(pred.tempCompensatedSocPct).toBeLessThanOrEqual(100);
@@ -120,7 +120,7 @@ describe("Enterprise Upgrade #3: Shift Handover & Maintenance Ticket State Machi
       stock04Unit,
       "IN_PROGRESS",
       "B. Santoso (Shift B)",
-      "Portable charger connected at Bay A-02"
+      "Portable charger connected at Bay A-02",
     );
     const stock04InProg = claimed.find((t) => t.unit_id === "MITSUBISHI-STOCK-04");
     expect(stock04InProg?.status).toBe("IN_PROGRESS");
@@ -132,7 +132,7 @@ describe("Enterprise Upgrade #3: Shift Handover & Maintenance Ticket State Machi
       stock04Unit,
       "RESOLVED",
       "B. Santoso (Shift B)",
-      "Alternator warm-up completed, resting voltage 12.62V"
+      "Alternator warm-up completed, resting voltage 12.62V",
     );
     const stock04Resolved = resolved.find((t) => t.unit_id === "MITSUBISHI-STOCK-04");
     expect(stock04Resolved?.status).toBe("RESOLVED");
@@ -146,7 +146,7 @@ describe("Enterprise Upgrade #3: Shift Handover & Maintenance Ticket State Machi
       stock07Unit,
       "IN_PROGRESS",
       "H. Wijaya (PDI)",
-      "Preventive top-up charge initiated"
+      "Preventive top-up charge initiated",
     );
     const created = updated.find((t) => t.unit_id === "MITSUBISHI-STOCK-07");
     expect(created).toBeDefined();

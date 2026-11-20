@@ -1,0 +1,115 @@
+name: ORION CD Heroku Production
+
+on:
+  workflow_run:
+    workflows: ["ORION CI Verification"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-heroku-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-heroku:
+    name: Deploy to Heroku (orion-telemetry-prod)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    steps:
+      - name: Check HEROKU_API_KEY secret availability
+        id: check_secret
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          if [ -z "${HEROKU_API_KEY:-}" ]; then
+            echo "HEROKU_API_KEY secret is not configured in GitHub Repository Secrets. Skipping automated Heroku deployment."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout verified commit with full git history
+        if: steps.check_secret.outputs.deployed == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Push verified commit to Heroku remote
+        if: steps.check_secret.outputs.deployed == 'true'
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          ASKPASS_SCRIPT="$(mktemp)"
+          chmod 700 "$ASKPASS_SCRIPT"
+          cat <<'EOF' > "$ASKPASS_SCRIPT"
+          #!/usr/bin/env sh
+          case "$1" in
+            *Username*|*username*) echo "heroku" ;;
+            *Password*|*password*) printf '%s\n' "$HEROKU_API_KEY" ;;
+          esac
+          EOF
+          GIT_ASKPASS="$ASKPASS_SCRIPT" GIT_TERMINAL_PROMPT=0 \
+            git push --force https://git.heroku.com/orion-telemetry-prod.git HEAD:refs/heads/main
+          STATUS=$?
+          rm -f "$ASKPASS_SCRIPT"
+          exit $STATUS
+
+      - name: Verify live production routes, API health, and closed exposures
+        if: steps.check_secret.outputs.deployed == 'true'
+        run: |
+          sleep 8
+
+          check_http_200() {
+            local url="$1"
+            local code
+            code=$(curl -sS -L -o /dev/null -w "%{http_code}" "$url")
+            echo "$url -> HTTP $code"
+            if [ "$code" != "200" ]; then
+              echo "FAIL: Expected HTTP 200 from $url, got $code"
+              exit 1
+            fi
+          }
+
+          check_blocked() {
+            local url="$1"
+            local code
+            code=$(curl -sS -o /dev/null -w "%{http_code}" "$url")
+            echo "$url -> HTTP $code"
+            if [ "$code" != "403" ] && [ "$code" != "404" ]; then
+              echo "FAIL: Expected HTTP 403 or 404 from $url, got $code"
+              exit 1
+            fi
+          }
+
+          check_http_200 "https://www.oriontelemetry.tech/"
+          check_http_200 "https://www.oriontelemetry.tech/dashboard"
+
+          BODY_FILE="$(mktemp)"
+          API_CODE=$(curl -sS -o "$BODY_FILE" -w "%{http_code}" "https://www.oriontelemetry.tech/dipo_api/get_data.php?nocache=1")
+          echo "https://www.oriontelemetry.tech/dipo_api/get_data.php?nocache=1 -> HTTP $API_CODE"
+          if [ "$API_CODE" != "200" ]; then
+            rm -f "$BODY_FILE"
+            exit 1
+          fi
+          node -e '
+            const fs = require("node:fs");
+            const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (data.status !== "OK") {
+              throw new Error(`Expected status === "OK", got ${JSON.stringify(data.status)}`);
+            }
+            console.log("API live status verified: OK");
+          ' "$BODY_FILE"
+          rm -f "$BODY_FILE"
+
+          check_blocked "https://www.oriontelemetry.tech/dipo_api/migrate.php"
+          check_blocked "https://www.oriontelemetry.tech/dipo_api/schema.sql"
+          check_blocked "https://www.oriontelemetry.tech/dipo_api/schema_production.sql"
+          check_blocked "https://www.oriontelemetry.tech/dipo_api/db.php"

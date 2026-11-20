@@ -16,9 +16,7 @@ import {
 } from "@/lib/fleet-filter";
 
 function buildDefaultConfigs(): Record<string, PiggybackConfig> {
-  return Object.fromEntries(
-    EXPANDED_YARD_UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)]),
-  );
+  return Object.fromEntries(EXPANDED_YARD_UNITS.map((u) => [u.unit_id, DEFAULT_CONFIG(u.unit_id)]));
 }
 
 function buildDefaultHistoryMap(): Record<string, Array<BatteryHistoryPoint>> {

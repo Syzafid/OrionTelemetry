@@ -6,6 +6,17 @@
 
 date_default_timezone_set('Asia/Jakarta');
 
+if (
+    PHP_SAPI !== 'cli' &&
+    isset($_SERVER['SCRIPT_FILENAME']) &&
+    realpath((string) $_SERVER['SCRIPT_FILENAME']) === realpath(__FILE__)
+) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['status' => 'ERROR', 'message' => 'FORBIDDEN']);
+    exit;
+}
+
 if (!function_exists('orionEnv')) {
     /**
      * Reads configuration from .env file (cached per request), $_ENV, $_SERVER, or getenv().
@@ -72,8 +83,13 @@ $allowedOrigin = '*';
 if ($configuredOrigin === '*' || $configuredOrigin === '') {
     $allowedOrigin = '*';
 } elseif ($originClean !== '') {
-    $parsedHost = parse_url($originClean, PHP_URL_HOST) ?? '';
-    if ($parsedHost === 'localhost' || $parsedHost === '127.0.0.1' || str_ends_with($parsedHost, 'oriontelemetry.tech')) {
+    $parsedHost = strtolower((string) (parse_url($originClean, PHP_URL_HOST) ?? ''));
+    if (
+        $parsedHost === 'localhost' ||
+        $parsedHost === '127.0.0.1' ||
+        $parsedHost === 'oriontelemetry.tech' ||
+        str_ends_with($parsedHost, '.oriontelemetry.tech')
+    ) {
         $allowedOrigin = $originClean;
     } else {
         $allowedOrigin = $configuredOrigin;
@@ -334,8 +350,18 @@ if (!function_exists('ensureOrionDatabaseInitialized')) {
             return ['migrated' => false, 'reason' => 'schema_present'];
         }
 
-        $schemaFile = __DIR__ . '/schema_production.sql';
-        if (!is_file($schemaFile) || !is_readable($schemaFile)) {
+        $schemaCandidates = [
+            __DIR__ . '/schema_production.sql',
+            dirname(__DIR__, 3) . '/backend/dipo_api/schema_production.sql',
+        ];
+        $schemaFile = null;
+        foreach ($schemaCandidates as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                $schemaFile = $candidate;
+                break;
+            }
+        }
+        if ($schemaFile === null) {
             return ['migrated' => false, 'reason' => 'missing_schema_production_sql'];
         }
 

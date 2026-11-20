@@ -14,6 +14,16 @@
 /** @var PDO $pdo */
 $pdo = require __DIR__ . '/db.php';
 
+if (PHP_SAPI !== 'cli') {
+    $expectedToken = function_exists('orionEnv') ? orionEnv('MIGRATE_AUTH_TOKEN', '') : '';
+    $providedToken = (string) ($_SERVER['HTTP_X_MIGRATE_TOKEN'] ?? '');
+    if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+        http_response_code(403);
+        echo json_encode(['status' => 'ERROR', 'message' => 'FORBIDDEN']);
+        exit;
+    }
+}
+
 try {
     // 1. Initialize schema and ensure only MITSUBISHI-STOCK-01 is seeded
     $initResult = ensureOrionDatabaseInitialized($pdo, true);

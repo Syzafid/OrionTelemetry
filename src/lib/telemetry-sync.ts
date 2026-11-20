@@ -1,10 +1,35 @@
 import type { TelemetryPayload, VehicleUnit } from "@/data/mockTelemetry";
 
 const NUM_KEYS = [
-  "seq", "boot", "ts_epoch", "v_bat", "rpm", "temp_c", "dtc_cnt", "rssi",
-  "sleep_cfg", "active_ms", "daily_mah", "rtc_temp_c", "adc_raw_mv", "shunt_sleep_ua",
-  "speed_kmh", "iat_c", "map_kpa", "load_pct", "tps_pct", "ign_deg", "maf_gs", "run_time_s",
-  "fuel_pct", "fuel_rate_lh", "o2_v", "stft_pct", "ecu_v", "dist_clr_km", "zone_exit_epoch",
+  "seq",
+  "boot",
+  "ts_epoch",
+  "v_bat",
+  "rpm",
+  "temp_c",
+  "dtc_cnt",
+  "rssi",
+  "sleep_cfg",
+  "active_ms",
+  "daily_mah",
+  "rtc_temp_c",
+  "adc_raw_mv",
+  "shunt_sleep_ua",
+  "speed_kmh",
+  "iat_c",
+  "map_kpa",
+  "load_pct",
+  "tps_pct",
+  "ign_deg",
+  "maf_gs",
+  "run_time_s",
+  "fuel_pct",
+  "fuel_rate_lh",
+  "o2_v",
+  "stft_pct",
+  "ecu_v",
+  "dist_clr_km",
+  "zone_exit_epoch",
 ] as const;
 const BOOL_KEYS = ["engine_on", "crit_alert", "can_ok", "mil_on"] as const;
 const STR_KEYS = ["dtc", "net_zone", "sync_ssid"] as const;
@@ -68,7 +93,9 @@ function mergeUnit(u: VehicleUnit, patch: PayloadPatch): VehicleUnit {
 
 function mergeUnitRecord(u: VehicleUnit, rec: Record<string, unknown>): VehicleUnit {
   const telemetry = asRecord(rec["telemetry"]);
-  const nextTelemetry = telemetry ? mergeTelemetry(u.telemetry, pickFields(telemetry)) : u.telemetry;
+  const nextTelemetry = telemetry
+    ? mergeTelemetry(u.telemetry, pickFields(telemetry))
+    : u.telemetry;
 
   const rawBuffer = rec["buffer_used"];
   const sanitizedBuffer =
@@ -108,7 +135,11 @@ function mergeUnitRecord(u: VehicleUnit, rec: Record<string, unknown>): VehicleU
  * Payloads without unit_id fall back to fallbackId; unknown unit_id values are ignored.
  * Returns the original array reference (and unchanged unit references) when nothing changed.
  */
-export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId: string): VehicleUnit[] {
+export function applyRemoteUpdate(
+  units: VehicleUnit[],
+  raw: unknown,
+  fallbackId: string,
+): VehicleUnit[] {
   const json = asRecord(raw);
   if (!json) return units;
 
@@ -135,7 +166,10 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
             trim: typeof rec["trim"] === "string" ? rec["trim"] : "STANDARD",
             vin: typeof rec["vin"] === "string" ? rec["vin"] : "UNKNOWN",
             color: typeof rec["color"] === "string" ? rec["color"] : "Neutral",
-            status_label: typeof rec["status_label"] === "string" ? rec["status_label"] : "Standby (Deep Sleep)",
+            status_label:
+              typeof rec["status_label"] === "string"
+                ? rec["status_label"]
+                : "Standby (Deep Sleep)",
             state:
               typeof rec["state"] === "string" &&
               ["STANDBY", "WARMUP", "CRITICAL", "DEPARTED"].includes(rec["state"])
@@ -205,7 +239,10 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
   if (typeof rawBuffer === "number" && Number.isFinite(rawBuffer)) {
     setMetaIfChanged("buffer_used", Math.max(0, Math.min(5000, Math.floor(rawBuffer))));
   }
-  if (typeof patchSrc["state"] === "string" && ["STANDBY", "WARMUP", "CRITICAL", "DEPARTED"].includes(patchSrc["state"])) {
+  if (
+    typeof patchSrc["state"] === "string" &&
+    ["STANDBY", "WARMUP", "CRITICAL", "DEPARTED"].includes(patchSrc["state"])
+  ) {
     setMetaIfChanged("state", patchSrc["state"] as VehicleUnit["state"]);
   }
   if (typeof patchSrc["status_label"] === "string") {
@@ -226,7 +263,10 @@ export function applyRemoteUpdate(units: VehicleUnit[], raw: unknown, fallbackId
   if (typeof patchSrc["connection_badge"] === "string") {
     setMetaIfChanged("connection_badge", patchSrc["connection_badge"]);
   }
-  if (typeof patchSrc["online_threshold_sec"] === "number" && Number.isFinite(patchSrc["online_threshold_sec"])) {
+  if (
+    typeof patchSrc["online_threshold_sec"] === "number" &&
+    Number.isFinite(patchSrc["online_threshold_sec"])
+  ) {
     setMetaIfChanged("online_threshold_sec", patchSrc["online_threshold_sec"]);
   }
   if (typeof patchSrc["net_zone"] === "string") {

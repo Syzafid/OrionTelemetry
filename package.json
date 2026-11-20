@@ -12,6 +12,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "lint:ci": "eslint --max-warnings 0 src/ --ignore-pattern src/context/TelemetryContext.tsx --ignore-pattern src/components/hmi/primitives.tsx --ignore-pattern src/components/hmi/UnitQrCode.tsx --ignore-pattern src/components/hmi/motion-bits.tsx && eslint --quiet src/context/TelemetryContext.tsx src/components/hmi/primitives.tsx src/components/hmi/UnitQrCode.tsx src/components/hmi/motion-bits.tsx",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",

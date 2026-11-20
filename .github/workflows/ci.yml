@@ -5,12 +5,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  verify-menu01-and-build:
-    name: Typecheck, Lint, Anti-Slop Guard, Tests & SSR Build
+  frontend-verify:
+    name: Frontend Verify (TypeScript, ESLint, Anti-Slop, Vitest)
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,102 +35,168 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: ESLint check (Menu 01, 02, 03, 04, 05 & 06 modules and tests)
-        run: |
-          npx eslint --max-warnings 0 \
-            src/lib/vehicle-topology.ts \
-            src/lib/battery-analytics.ts \
-            src/lib/fleet-filter.ts \
-            src/lib/excel-export.ts \
-            src/lib/obd-diagnostics.ts \
-            src/lib/presence-analytics.ts \
-            src/lib/config-validation.ts \
-            src/components/hmi/ShowroomModule.tsx \
-            src/components/hmi/VehicleTopologyMap.tsx \
-            src/components/hmi/ComponentNodeInspector.tsx \
-            src/components/hmi/FleetModule.tsx \
-            src/components/hmi/WarmupQueueModule.tsx \
-            src/components/hmi/DiagnosticsModule.tsx \
-            src/components/hmi/PresenceModule.tsx \
-            src/components/hmi/ConfigModule.tsx \
-            src/components/hmi/CommandPaletteModal.tsx \
-            src/components/hmi/OrionLogo.tsx \
-            src/components/hmi/TopNav.tsx \
-            src/routes/__root.tsx \
-            src/routes/index.tsx \
-            src/routes/dashboard.tsx \
-            src/test/battery-analytics.test.ts \
-            src/test/menu01-topology.test.tsx \
-            src/test/menu02-fleet.test.tsx \
-            src/test/menu03-warmup.test.tsx \
-            src/test/menu04-diagnostics.test.tsx \
-            src/test/menu05-presence.test.tsx \
-            src/test/menu06-config.test.tsx \
-            src/test/live-integration.test.tsx
-          npx eslint --quiet src/context/TelemetryContext.tsx src/components/hmi/primitives.tsx
+      - name: ESLint full src coverage
+        run: npm run lint:ci
 
-      - name: Anti-Slop Guardrail (Zero Em Dash & Zero Math.sin in Menu 01, 02, 03, 04, 05 & 06)
+      - name: Anti-Slop Guardrail (dynamic scan across DESIGN.md, styles.css, and src/)
         run: |
           node -e '
             const fs = require("node:fs");
-            const files = [
-              "DESIGN.md",
-              "src/lib/vehicle-topology.ts",
-              "src/lib/battery-analytics.ts",
-              "src/lib/fleet-filter.ts",
-              "src/lib/excel-export.ts",
-              "src/lib/obd-diagnostics.ts",
-              "src/lib/presence-analytics.ts",
-              "src/lib/config-validation.ts",
-              "src/context/TelemetryContext.tsx",
-              "src/components/hmi/ShowroomModule.tsx",
-              "src/components/hmi/VehicleTopologyMap.tsx",
-              "src/components/hmi/ComponentNodeInspector.tsx",
-              "src/components/hmi/FleetModule.tsx",
-              "src/components/hmi/WarmupQueueModule.tsx",
-              "src/components/hmi/DiagnosticsModule.tsx",
-              "src/components/hmi/PresenceModule.tsx",
-              "src/components/hmi/ConfigModule.tsx",
-              "src/components/hmi/CommandPaletteModal.tsx",
-              "src/components/hmi/OrionLogo.tsx",
-              "src/components/hmi/primitives.tsx",
-              "src/components/hmi/TopNav.tsx",
-              "src/routes/__root.tsx",
-              "src/routes/index.tsx",
-              "src/routes/dashboard.tsx",
-              "src/test/battery-analytics.test.ts",
-              "src/test/menu01-topology.test.tsx",
-              "src/test/menu02-fleet.test.tsx",
-              "src/test/menu03-warmup.test.tsx",
-              "src/test/menu04-diagnostics.test.tsx",
-              "src/test/menu05-presence.test.tsx",
-              "src/test/menu06-config.test.tsx",
-              "src/test/live-integration.test.tsx",
-              "src/styles.css"
-            ];
-            for (const f of files) {
-              const text = fs.readFileSync(f, "utf8");
-              if (text.includes("\u2014")) {
-                console.error("Em dash found in " + f);
-                process.exit(1);
+            const path = require("node:path");
+
+            function walk(dir) {
+              const out = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  out.push(...walk(full));
+                } else {
+                  out.push(full);
+                }
               }
-              if (f.startsWith("src/components/hmi/") && /\bMath\.sin\s*\(/.test(text)) {
-                console.error("Synthetic Math.sin() found in " + f);
-                process.exit(1);
+              return out;
+            }
+
+            const targets = [
+              "DESIGN.md",
+              "src/styles.css",
+              ...walk("src").filter((f) => {
+                const norm = f.replace(/\\/g, "/");
+                return /\.(ts|tsx)$/.test(norm) && !norm.startsWith("src/components/ui/") && norm !== "src/routeTree.gen.ts";
+              }),
+            ];
+
+            for (const file of targets) {
+              if (!fs.existsSync(file)) continue;
+              const content = fs.readFileSync(file, "utf8");
+              if (content.includes("\u2014")) {
+                throw new Error(`Em-dash (U+2014) violation found in ${file}`);
+              }
+              if (file.replace(/\\/g, "/").startsWith("src/components/hmi/") && file.endsWith(".tsx") && content.includes("Math.sin(")) {
+                throw new Error(`Fake Math.sin oscillation found in ${file}`);
               }
             }
-            console.log("Anti-slop check passed on " + files.length + " files.");
+
+            const css = fs.readFileSync("src/styles.css", "utf8");
+            if (!css.includes("Space Grotesk") || !css.includes("JetBrains Mono")) {
+              throw new Error("src/styles.css must configure Space Grotesk and JetBrains Mono fonts");
+            }
+            console.log(`Anti-Slop Guardrail PASSED across ${targets.length} files.`);
           '
 
-      - name: Run Vitest unit & component tests
+      - name: Run Vitest unit & integration suites
         run: npm test
 
-      - name: Build production bundle & Heroku SSR pre-render
+  backend-php-verify:
+    name: Backend PHP Verify (Composer, PHP 8.3 lint, Security Guards)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3 and Composer v2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo, pdo_mysql, json, mbstring
+          tools: composer:v2
+
+      - name: Validate composer.json and composer.lock strictly
+        run: composer validate --strict
+
+      - name: Syntax check all PHP files in backend/dipo_api
+        run: |
+          for f in backend/dipo_api/*.php; do
+            php -l "$f"
+          done
+
+      - name: Verify PHP security guards and secrets hygiene
+        run: |
+          if git ls-files --error-unmatch backend/dipo_api/.env >/dev/null 2>&1; then
+            echo "FAIL: backend/dipo_api/.env must never be tracked by git"
+            exit 1
+          fi
+          php -r '
+            $migrate = file_get_contents("backend/dipo_api/migrate.php");
+            if (strpos($migrate, "HTTP_X_MIGRATE_TOKEN") === false || strpos($migrate, "PHP_SAPI") === false) {
+              fwrite(STDERR, "FAIL: migrate.php missing CLI or X-Migrate-Token guard\n");
+              exit(1);
+            }
+            $db = file_get_contents("backend/dipo_api/db.php");
+            if (strpos($db, "SCRIPT_FILENAME") === false || strpos($db, ".oriontelemetry.tech") === false) {
+              fwrite(STDERR, "FAIL: db.php missing direct HTTP 403 guard or strict CORS suffix validation\n");
+              exit(1);
+            }
+            echo "PHP security guards OK\n";
+          '
+
+  build-and-bundle-check:
+    name: Production Build & Heroku Bundle Verification
+    needs: [frontend-verify, backend-php-verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production app and prepare Heroku bundle
         run: npm run build
 
-      - name: Verify pre-rendered routes & PHP API bundle
+      - name: Verify prerendered routes, .htaccess rules, and PHP whitelist
         run: |
-          test -s .output/public/index.html
-          test -s .output/public/dashboard/index.html
-          test -f .output/public/dipo_api/get_data.php
-          echo "Verified .output/public pre-rendered HTML and dipo_api endpoints."
+          node -e '
+            const fs = require("node:fs");
+
+            for (const rel of [".output/public/index.html", ".output/public/dashboard/index.html"]) {
+              const html = fs.readFileSync(rel, "utf8");
+              if (!html.includes("<html lang=\"id\"") || !html.includes("<main")) {
+                throw new Error(`Invalid prerendered HTML in ${rel}`);
+              }
+            }
+
+            const htaccess = fs.readFileSync(".output/public/.htaccess", "utf8");
+            const requiredHtaccessSnippets = [
+              "<FilesMatch",
+              "Require all denied",
+              "X-Content-Type-Options",
+              "^dipo_api/(?:db\\.php|migrate\\.php|.*\\.sql|\\..*)$ - [F,L]",
+            ];
+            for (const snippet of requiredHtaccessSnippets) {
+              if (!htaccess.includes(snippet)) {
+                throw new Error(`.output/public/.htaccess missing required rule: ${snippet}`);
+              }
+            }
+
+            const expectedPhp = new Set([
+              "db.php",
+              "get_data.php",
+              "get_live_status.php",
+              "simpan_data.php",
+              "update_config.php",
+              "export_csv.php",
+              "export_excel.php",
+            ]);
+            const actualFiles = new Set(fs.readdirSync(".output/public/dipo_api"));
+            for (const f of expectedPhp) {
+              if (!actualFiles.has(f)) {
+                throw new Error(`Missing whitelisted PHP file: ${f}`);
+              }
+            }
+            for (const f of actualFiles) {
+              if (!expectedPhp.has(f)) {
+                throw new Error(`Forbidden file packaged into .output/public/dipo_api: ${f}`);
+              }
+            }
+
+            console.log("Production bundle verification PASSED:", [...actualFiles].sort().join(", "));
+          '
