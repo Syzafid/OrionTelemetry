@@ -716,12 +716,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   }>({});
   const lastSnapshotWriteRef = useRef(0);
 
-  /** Client-side only: fetch the Dipo API with anti-cache timestamp and 1500ms abort timeout, merge safely. */
+  /** Client-side only: fetch the Dipo API with anti-cache timestamp and 2500ms abort timeout, merge safely. */
   const poll = useCallback(async () => {
     if (isPollingRef.current) return;
     isPollingRef.current = true;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
+    const timer = setTimeout(() => controller.abort(), 2500);
     try {
       const cacheBustUrl = `${apiUrl}${apiUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
       const res = await fetch(cacheBustUrl, {
@@ -892,10 +892,16 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
     void poll();
 
     const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       void poll();
     }, 3000);
 
     const tickerId = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       setAllUnits((us) => {
         let next: VehicleUnit[] | null = null;
         for (let i = 0; i < us.length; i++) {

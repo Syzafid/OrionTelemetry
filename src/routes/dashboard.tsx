@@ -1,18 +1,39 @@
+import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Minimize2, Maximize2 } from "lucide-react";
 import { AnimatePresence, LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import * as m from "motion/react-m";
 import { DURATION, EASE_EXIT, EASE_STANDARD } from "@/lib/motion-tokens";
+import {
+  loadConfigModule,
+  loadDiagnosticsModule,
+  loadFleetModule,
+  loadPresenceModule,
+  loadWarmupQueueModule,
+} from "@/lib/hmi-module-loaders";
 import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
 import { TopNav } from "@/components/hmi/TopNav";
 import { ShowroomModule } from "@/components/hmi/ShowroomModule";
-import { FleetModule } from "@/components/hmi/FleetModule";
-import { WarmupQueueModule } from "@/components/hmi/WarmupQueueModule";
-import { DiagnosticsModule } from "@/components/hmi/DiagnosticsModule";
-import { PresenceModule } from "@/components/hmi/PresenceModule";
-import { ConfigModule } from "@/components/hmi/ConfigModule";
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { Button } from "@/components/ui/button";
+
+const FleetModule = lazy(loadFleetModule);
+const WarmupQueueModule = lazy(loadWarmupQueueModule);
+const DiagnosticsModule = lazy(loadDiagnosticsModule);
+const PresenceModule = lazy(loadPresenceModule);
+const ConfigModule = lazy(loadConfigModule);
+
+function ModuleLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="panel flex flex-1 min-h-[320px] items-center justify-center p-6"
+    >
+      <span className="num text-xs text-muted-foreground tracking-wider">Memuat modul HMI...</span>
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -71,11 +92,19 @@ function Workspace() {
             }}
             exit={{ opacity: 0, transition: { duration: DURATION.instant, ease: EASE_EXIT } }}
           >
-            {activeModule === "02" && <FleetModule />}
-            {activeModule === "03" && <WarmupQueueModule />}
-            {activeModule === "04" && <DiagnosticsModule />}
-            {activeModule === "05" && <PresenceModule />}
-            {activeModule === "06" && <ConfigModule />}
+            {activeModule === "02" ||
+            activeModule === "03" ||
+            activeModule === "04" ||
+            activeModule === "05" ||
+            activeModule === "06" ? (
+              <Suspense fallback={<ModuleLoadingFallback />}>
+                {activeModule === "02" && <FleetModule />}
+                {activeModule === "03" && <WarmupQueueModule />}
+                {activeModule === "04" && <DiagnosticsModule />}
+                {activeModule === "05" && <PresenceModule />}
+                {activeModule === "06" && <ConfigModule />}
+              </Suspense>
+            ) : null}
           </m.div>
         )}
       </AnimatePresence>

@@ -19,13 +19,15 @@ $pdo = require __DIR__ . '/db.php';
 // ditambah jitter scan WiFi background blocking (14 channel x 250ms = ~3.5 detik).
 const ONLINE_THRESHOLD_SEC = 10;
 
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+$reqMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$isHead = ($reqMethod === 'HEAD');
+if ($reqMethod !== 'GET' && !$isHead) {
     sendJson(['error' => 'METHOD_NOT_ALLOWED', 'message' => 'Use GET method.'], 405);
 }
 
-// Micro-cache 1.5s untuk melindungi kuota MySQL JawsDB (3.600 query/jam) dari spam polling frontend
+// Micro-cache 2.0s untuk melindungi kuota MySQL JawsDB (3.600 query/jam) dari spam polling frontend
 $cacheFile = sys_get_temp_dir() . '/orion_get_data_cache.json';
-$cacheTtl = 1.5;
+$cacheTtl = 2.0;
 $noCache = isset($_GET['nocache']) && $_GET['nocache'] === '1';
 if (!$noCache && is_file($cacheFile) && (microtime(true) - @filemtime($cacheFile)) < $cacheTtl) {
     $cached = @file_get_contents($cacheFile);
@@ -35,7 +37,9 @@ if (!$noCache && is_file($cacheFile) && (microtime(true) - @filemtime($cacheFile
         header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
         header("Pragma: no-cache");
         header("X-Orion-Cache: HIT");
-        echo $cached;
+        if (!$isHead) {
+            echo $cached;
+        }
         exit(0);
     }
 }
@@ -355,7 +359,11 @@ try {
 
     try {
         $stmtAllMoves = $pdo->query("
-            SELECT * FROM `movement_events`
+            SELECT * FROM (
+                SELECT * FROM `movement_events`
+                ORDER BY `event_epoch` DESC, `departed` DESC, `id` DESC
+                LIMIT 200
+            ) recent_mv
             ORDER BY `unit_id` ASC, `boot_id` ASC, `seq_no` ASC, `event_epoch` ASC, `id` ASC
         ");
         $allMoves = $stmtAllMoves->fetchAll();
@@ -639,8 +647,24 @@ try {
         'tickets'               => $ticketsList,
     ];
 
-    @file_put_contents($cacheFile, json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-    sendJson($finalPayload);
+    $encodedPayload = json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if ($encodedPayload !== false) {
+        $tmpCache = $cacheFile . '.tmp.' . getmypid();
+        if (@file_put_contents($tmpCache, $encodedPayload, LOCK_EX) !== false) {
+            @rename($tmpCache, $cacheFile);
+        }
+    }
+    http_response_code(200);
+    header("Content-Type: application/json; charset=utf-8");
+    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    header("Pragma: no-cache");
+    header("X-Orion-Cache: MISS");
+    if (!$isHead) {
+        echo $encodedPayload !== false
+            ? $encodedPayload
+            : json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+    exit(0);
 
 } catch (Exception $e) {
     sendJson([

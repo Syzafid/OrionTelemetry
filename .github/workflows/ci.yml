@@ -169,11 +169,29 @@ jobs:
               "<FilesMatch",
               "Require all denied",
               "X-Content-Type-Options",
+              "AddOutputFilterByType DEFLATE",
+              "max-age=31536000, immutable",
               "^dipo_api/(?:db\\.php|migrate\\.php|.*\\.sql|\\..*)$ - [F,L]",
             ];
             for (const snippet of requiredHtaccessSnippets) {
               if (!htaccess.includes(snippet)) {
                 throw new Error(`.output/public/.htaccess missing required rule: ${snippet}`);
+              }
+            }
+
+            const assetsDir = ".output/public/assets";
+            const dashboardChunks = fs
+              .readdirSync(assetsDir)
+              .filter((f) => /^dashboard-.*\.js$/.test(f));
+            if (dashboardChunks.length === 0) {
+              throw new Error("Expected initial dashboard-*.js entry chunk in .output/public/assets");
+            }
+            for (const chunk of dashboardChunks) {
+              const sizeBytes = fs.statSync(`${assetsDir}/${chunk}`).size;
+              const sizeKb = (sizeBytes / 1024).toFixed(1);
+              console.log(`Initial chunk ${chunk}: ${sizeKb} kB`);
+              if (sizeBytes >= 450 * 1024) {
+                throw new Error(`Initial chunk ${chunk} (${sizeKb} kB) exceeds 450 kB raw budget`);
               }
             }
 

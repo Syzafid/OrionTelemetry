@@ -102,6 +102,46 @@ jobs:
           check_http_200 "https://www.oriontelemetry.tech/"
           check_http_200 "https://www.oriontelemetry.tech/dashboard"
 
+          ROOT_HDR=$(curl -sSI -H "Accept-Encoding: gzip" "https://www.oriontelemetry.tech/")
+          if ! echo "$ROOT_HDR" | grep -iq "^content-encoding:.*gzip"; then
+            echo "FAIL: Expected Content-Encoding: gzip on https://www.oriontelemetry.tech/"
+            echo "$ROOT_HDR"
+            exit 1
+          fi
+          echo "Gzip verified on root HTML response"
+
+          DASH_HTML=$(curl -sS -L "https://www.oriontelemetry.tech/dashboard")
+          DASH_ASSET=$(echo "$DASH_HTML" | grep -oE '/assets/dashboard-[^"]+\.js' | head -n1 || true)
+          if [ -z "$DASH_ASSET" ]; then
+            echo "FAIL: Could not find /assets/dashboard-*.js reference in /dashboard HTML"
+            exit 1
+          fi
+          ASSET_HDR=$(curl -sSI -H "Accept-Encoding: gzip" "https://www.oriontelemetry.tech${DASH_ASSET}")
+          echo "Asset header check for ${DASH_ASSET}"
+          if ! echo "$ASSET_HDR" | grep -iq "^HTTP/.* 200"; then
+            echo "FAIL: Expected HTTP 200 for ${DASH_ASSET}"
+            echo "$ASSET_HDR"
+            exit 1
+          fi
+          if ! echo "$ASSET_HDR" | grep -iq "^content-encoding:.*gzip"; then
+            echo "FAIL: Expected Content-Encoding: gzip on ${DASH_ASSET}"
+            echo "$ASSET_HDR"
+            exit 1
+          fi
+          if ! echo "$ASSET_HDR" | grep -iq "^cache-control:.*immutable"; then
+            echo "FAIL: Expected Cache-Control immutable on ${DASH_ASSET}"
+            echo "$ASSET_HDR"
+            exit 1
+          fi
+          echo "Immutable + Gzip verified on ${DASH_ASSET}"
+
+          HEAD_API_CODE=$(curl -sS -I -o /dev/null -w "%{http_code}" "https://www.oriontelemetry.tech/dipo_api/get_data.php")
+          echo "HEAD https://www.oriontelemetry.tech/dipo_api/get_data.php -> HTTP $HEAD_API_CODE"
+          if [ "$HEAD_API_CODE" != "200" ]; then
+            echo "FAIL: Expected HTTP 200 on HEAD /dipo_api/get_data.php, got $HEAD_API_CODE"
+            exit 1
+          fi
+
           BODY_FILE="$(mktemp)"
           API_CODE=$(curl -sS -o "$BODY_FILE" -w "%{http_code}" "https://www.oriontelemetry.tech/dipo_api/get_data.php?nocache=1")
           echo "https://www.oriontelemetry.tech/dipo_api/get_data.php?nocache=1 -> HTTP $API_CODE"

@@ -1,15 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Command, Layers, Radio, Settings2, Volume2, VolumeX } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
-import { CommandPaletteModal } from "./CommandPaletteModal";
+import {
+  loadCommandPaletteModal,
+  prefetchCommandPalette,
+  prefetchHmiModule,
+} from "@/lib/hmi-module-loaders";
 import { OrionLogo } from "./OrionLogo";
 import { Led } from "./primitives";
 import { cn } from "@/lib/utils";
 import * as m from "motion/react-m";
 import { DURATION, EASE_STANDARD } from "@/lib/motion-tokens";
+
+const CommandPaletteModal = lazy(loadCommandPaletteModal);
 
 const MODULES: { id: ModuleId; label: string }[] = [
   { id: "01", label: "Topologi & Transduser" },
@@ -86,6 +92,7 @@ export function TopNav() {
 
   const [alarmArmed, setAlarmArmed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [commandMounted, setCommandMounted] = useState(false);
   const lastChimeRef = useRef<number>(0);
 
   const hasCriticalCondition = units.some((u) => {
@@ -123,6 +130,7 @@ export function TopNav() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setCommandMounted(true);
         setCommandOpen((prev) => !prev);
         return;
       }
@@ -228,7 +236,12 @@ export function TopNav() {
             {/* Global Command Palette Trigger (Ctrl+K) */}
             <button
               type="button"
-              onClick={() => setCommandOpen(true)}
+              onClick={() => {
+                setCommandMounted(true);
+                setCommandOpen(true);
+              }}
+              onMouseEnter={prefetchCommandPalette}
+              onFocus={prefetchCommandPalette}
               title="Buka Palet Perintah Global (Ctrl+K / Cmd+K)"
               className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
             >
@@ -386,7 +399,7 @@ export function TopNav() {
                 </button>
                 <p className="mt-2 num text-[11px] leading-relaxed text-muted-foreground">
                   {live
-                    ? "Polling otomatis setiap 3 detik (batas tunggu 1,5 detik). Saat gagal, snapshot lokal terakhir tetap dipertahankan."
+                    ? "Polling otomatis setiap 3 detik saat tab aktif (batas tunggu 2,5 detik). Saat gagal, snapshot lokal terakhir tetap dipertahankan."
                     : "Aktifkan mode Live API untuk melakukan polling endpoint MySQL setiap 3 detik."}
                 </p>
               </PopoverContent>
@@ -402,6 +415,8 @@ export function TopNav() {
                   key={mod.id}
                   type="button"
                   onClick={() => setActiveModule(mod.id)}
+                  onMouseEnter={() => prefetchHmiModule(mod.id)}
+                  onFocus={() => prefetchHmiModule(mod.id)}
                   className={cn(
                     "relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 border-r border-border px-3.5 py-2.5 font-display text-[12px] font-medium tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-4 sm:py-3 md:px-5",
                     on
@@ -428,12 +443,16 @@ export function TopNav() {
         </div>
       </header>
 
-      <CommandPaletteModal
-        open={commandOpen}
-        onClose={() => setCommandOpen(false)}
-        alarmArmed={alarmArmed}
-        onToggleAlarm={toggleAlarm}
-      />
+      {commandMounted && (
+        <Suspense fallback={null}>
+          <CommandPaletteModal
+            open={commandOpen}
+            onClose={() => setCommandOpen(false)}
+            alarmArmed={alarmArmed}
+            onToggleAlarm={toggleAlarm}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
