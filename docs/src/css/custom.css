@@ -49,3 +49,150 @@ table {
 code {
   border-radius: 2px;
 }
+
+.orion-mermaid-card,
+.orion-blueprint-card {
+  margin: 1.25rem 0 1.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .orion-mermaid-card,
+[data-theme="dark"] .orion-blueprint-card {
+  border-color: #272d38;
+  background: #141820;
+}
+
+.orion-export-bar,
+.orion-doc-export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid #d0d7de;
+  background: #f6f8fa;
+}
+
+[data-theme="dark"] .orion-export-bar,
+[data-theme="dark"] .orion-doc-export-bar {
+  border-bottom-color: #272d38;
+  background: #0e1116;
+}
+
+.orion-doc-export-bar {
+  margin-bottom: 1rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+[data-theme="dark"] .orion-doc-export-bar {
+  border-color: #272d38;
+}
+
+.orion-export-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1f2328;
+}
+
+[data-theme="dark"] .orion-export-label {
+  color: #e6edf3;
+}
+
+.orion-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.orion-export-status {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: #b32429;
+  margin-right: 0.25rem;
+}
+
+[data-theme="dark"] .orion-export-status {
+  color: #f88a8e;
+}
+
+.orion-export-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid #c9d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1f2328;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.orion-export-btn:hover {
+  border-color: #b32429;
+  background: #fff5f5;
+  color: #9e1f24;
+}
+
+.orion-export-btn:focus-visible {
+  outline: 2px solid #c92a30;
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] .orion-export-btn {
+  border-color: #353d4b;
+  background: #1b212c;
+  color: #e6edf3;
+}
+
+[data-theme="dark"] .orion-export-btn:hover {
+  border-color: #f45b60;
+  background: #2a181c;
+  color: #fbadb0;
+}
+
+[data-theme="dark"] .orion-export-btn:focus-visible {
+  outline-color: #f67378;
+}
+
+.orion-mermaid-stage {
+  padding: 0.85rem;
+  overflow-x: auto;
+}
+
+.orion-blueprint-media {
+  padding: 0.75rem;
+  background: #ffffff;
+  text-align: center;
+}
+
+.orion-blueprint-media img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: 2px;
+}
+
+.orion-blueprint-caption {
+  padding: 0.5rem 0.85rem 0.7rem;
+  font-size: 0.82rem;
+  color: #57606a;
+  border-top: 1px solid #d0d7de;
+}
+
+[data-theme="dark"] .orion-blueprint-caption {
+  color: #9ba5b4;
+  border-top-color: #272d38;
+}

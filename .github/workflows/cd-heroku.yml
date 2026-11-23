@@ -102,7 +102,11 @@ jobs:
           check_http_200 "https://www.oriontelemetry.tech/"
           check_http_200 "https://www.oriontelemetry.tech/dashboard"
           check_http_200 "https://www.oriontelemetry.tech/docs/"
+          check_http_200 "https://www.oriontelemetry.tech/docs/architecture/data-flow-dfd/"
+          check_http_200 "https://www.oriontelemetry.tech/docs/hardware/pcb-v2-blueprint-layout/"
+          check_http_200 "https://www.oriontelemetry.tech/docs/hardware/electrical-flow/"
           check_http_200 "https://www.oriontelemetry.tech/docs/hardware/electrical-schematic/"
+          check_http_200 "https://www.oriontelemetry.tech/docs/raw-md/hardware/pcb-v2-blueprint-layout.md"
 
           ROOT_HDR=$(curl -sSI -H "Accept-Encoding: gzip" "https://www.oriontelemetry.tech/")
           if ! echo "$ROOT_HDR" | grep -iq "^content-encoding:.*gzip"; then

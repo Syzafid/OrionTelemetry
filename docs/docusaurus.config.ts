@@ -58,6 +58,15 @@ const config: Config = {
     },
     mermaid: {
       theme: { light: "neutral", dark: "dark" },
+      options: {
+        htmlLabels: false,
+        flowchart: {
+          htmlLabels: false,
+        },
+        state: {
+          htmlLabels: false,
+        },
+      },
     },
     navbar: {
       title: "ORION DOCS",
@@ -97,6 +106,9 @@ const config: Config = {
           title: "Arsitektur",
           items: [
             { label: "Ikhtisar Sistem", to: "/" },
+            { label: "Diagram Alir Data (DFD)", to: "/architecture/data-flow-dfd/" },
+            { label: "Peta Alur PCB v2.0", to: "/hardware/pcb-v2-blueprint-layout/" },
+            { label: "Alur Kelistrikan PCB v2.0", to: "/hardware/electrical-flow/" },
             { label: "Skematik Hardware PCB", to: "/hardware/electrical-schematic/" },
             { label: "Firmware ESP32 v1.6.0", to: "/firmware/telemetry-struct/" },
           ],

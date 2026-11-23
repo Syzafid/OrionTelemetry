@@ -3,6 +3,8 @@ id: pcb-v2-blueprint-layout
 title: Peta Alur PCB v2.0 Step 2.1 & Memo Revisi
 ---
 
+import BlueprintImageDownload from "@site/src/components/BlueprintImageDownload";
+
 # PCB ORION v2.0 (Step 2.1 S-D-G): Peta Lubang & Jalur Solder Bawah
 
 Papan matriks `70 x 50 mm` memakai grid **24 kolom (`c1..c24`) x 18 baris (`r1..r18`)** pada pitch `2,54 mm`. Pada **Revisi 3 (Step 2.1)**, pin adaptor SOT-23 ke SIP-3 untuk `Q1` dan `Q2` diurutkan menjadi **S-D-G** (`2-3-1`, Drain di tengah) agar modul adaptor dapat langsung disolder tanpa kawat ekstensi.
@@ -77,9 +79,21 @@ Komponen yang tidak berubah dari versi sebelumnya: `J1`, `D1`, `JP`, `U4 (MP1584
 - **Tampak Atas (Sisi Komponen)**: kolom `c1` di sebelah kiri (arah konektor pita `J1`), `c24` di sebelah kanan (arah ESP32 Base), baris `r1` di atas, `r18` di bawah.
 - **Tampak Bawah (Sisi Solder, Cermin)**: saat papan dibalik horizontal mengikuti poros vertikal seperti membalik halaman buku, `c24` berpindah ke kiri dan `c1` berpindah ke kanan sedangkan baris `r1` tetap berada di sisi atas.
 
-![Peta Komponen Tampak Atas PCB ORION v2.0 Step 2.1](/img/pcb-v2-tampak-atas.jpg)
+<BlueprintImageDownload
+  src="/img/pcb-v2-tampak-atas.jpg"
+  alt="Peta Komponen Tampak Atas PCB ORION v2.0 Step 2.1"
+  fileBaseName="pcb-orion-v2-step2_1-tampak-atas"
+  caption="Tampak Atas (sisi komponen): c1 kiri arah kabel pita J1, c24 kanan arah ESP32 Base"
+  rawMdPath="/raw-md/hardware/pcb-v2-blueprint-layout.md"
+/>
 
-![Peta Jalur Solder Bawah Cermin PCB ORION v2.0 Step 2.1](/img/pcb-v2-tampak-bawah-cermin.jpg)
+<BlueprintImageDownload
+  src="/img/pcb-v2-tampak-bawah-cermin.jpg"
+  alt="Peta Jalur Solder Bawah Cermin PCB ORION v2.0 Step 2.1"
+  fileBaseName="pcb-orion-v2-step2_1-tampak-bawah-cermin"
+  caption="Tampak Bawah (sisi solder, dicerminkan kiri-kanan): c24 kiri, c1 kanan"
+  rawMdPath="/raw-md/hardware/pcb-v2-blueprint-layout.md"
+/>
 
 ---
 
