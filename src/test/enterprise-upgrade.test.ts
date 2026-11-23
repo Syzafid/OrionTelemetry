@@ -101,6 +101,16 @@ describe("Enterprise Upgrade #2: QR Code Matrix & URL Deep-Linking", () => {
     expect(parsedWarm.moduleId).toBe("03");
     expect(parsed02.requires12Scale).toBe(false);
 
+    const parsedDynamic = parseDeepLinkParams("?unit=MITSUBISHI-STOCK-15&module=fleet");
+    expect(parsedDynamic.unitId).toBe("MITSUBISHI-STOCK-15");
+    expect(parsedDynamic.moduleId).toBe("02");
+    expect(parsedDynamic.requires12Scale).toBe(false);
+
+    const parsedOrion = parseDeepLinkParams("?unit=ORION-NODE-04&module=config");
+    expect(parsedOrion.unitId).toBe("ORION-NODE-04");
+    expect(parsedOrion.moduleId).toBe("06");
+    expect(parsedOrion.requires12Scale).toBe(false);
+
     const invalid = parseDeepLinkParams("?unit=UNKNOWN-99&module=invalid");
     expect(invalid.unitId).toBeNull();
     expect(invalid.moduleId).toBeNull();

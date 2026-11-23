@@ -325,6 +325,29 @@ try {
             break;
 
         // ----------------------------------------------------------------------
+        // ACTION 3b: UNPAIR_UNIT (Modul 06 - Detach Vehicle from OBD-II Node)
+        // ----------------------------------------------------------------------
+        case 'UNPAIR_UNIT':
+            $unitId = strtoupper(trim((string)($payload['unit_id'] ?? '')));
+            if (!$unitId) {
+                sendJson(['error' => 'MISSING_UNIT_ID', 'message' => 'unit_id is required for UNPAIR_UNIT.'], 400);
+            }
+
+            $stmtUnpair = $pdo->prepare("UPDATE `vehicles` SET `status_label` = 'Node Terlepas (Menunggu Re-Pair)', `updated_at` = NOW() WHERE `unit_id` = :uid");
+            $stmtUnpair->execute([':uid' => $unitId]);
+
+            recordSystemEvent($pdo, (string)$unitId, 'NODE_UNPAIRED', 'WARN', 'Vehicle sold / detached from OBD-II telemetry node');
+
+            invalidateOrionDataCache();
+            sendJson([
+                'status'       => 'OK',
+                'action'       => 'UNPAIR_UNIT',
+                'unit_id'      => $unitId,
+                'status_label' => 'Node Terlepas (Menunggu Re-Pair)',
+            ]);
+            break;
+
+        // ----------------------------------------------------------------------
         // ACTION 4: FLUSH_BUFFER (Modul 04 - Yard Presence Offline Buffer Flush)
         // ----------------------------------------------------------------------
         case 'FLUSH_BUFFER':

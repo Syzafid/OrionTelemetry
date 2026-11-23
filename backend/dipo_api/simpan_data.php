@@ -323,14 +323,54 @@ $pdo->beginTransaction();
 try {
     // Kunci baris kendaraan sebelum evaluasi state machine agar transisi atomik & bebas race-condition
     $stmtVeh = $pdo->prepare("
-        SELECT `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`, `net_zone`, `sync_ssid`,
-               `net_zone_boot`, `net_zone_seq`, `net_zone_ts`
+        SELECT `bay`, `state`, `status_label`, `buffer_used`, `last_boot`, `last_seq`, `last_ts_epoch`,
+               `net_zone`, `sync_ssid`, `net_zone_boot`, `net_zone_seq`, `net_zone_ts`,
+               TIMESTAMPDIFF(MINUTE, `updated_at`, NOW()) AS `status_age_min`
         FROM `vehicles`
         WHERE `unit_id` = :uid
         FOR UPDATE
     ");
     $stmtVeh->execute([':uid' => $primaryUnitId]);
     $vehRow = $stmtVeh->fetch();
+
+    // Auto-provisioning node baru yang lolos validasi header X-Orion-Node agar paket pertama tidak gagal FK 500
+    if (!$vehRow) {
+        $stmtAutoVeh = $pdo->prepare("
+            INSERT IGNORE INTO `vehicles` (
+                `unit_id`, `bay`, `model`, `trim`, `vin`, `color`,
+                `status_label`, `state`, `in_yard`, `online_status`, `last_seen`
+            ) VALUES (
+                :uid, 'UNASSIGNED', 'MITSUBISHI NODE', 'AUTO-DISCOVERED', 'UNREGISTERED', 'Neutral',
+                'Standby (Deep Sleep)', 'STANDBY', 1, 'ONLINE', NOW()
+            )
+        ");
+        $stmtAutoVeh->execute([':uid' => $primaryUnitId]);
+
+        $stmtAutoCfg = $pdo->prepare("
+            INSERT IGNORE INTO `node_configs` (
+                `unit_id`, `sleep_cfg`, `fast_poll_s`, `crit_v`, `debounce_cnt`, `cal_slope`, `cal_offset`, `pending_ack`
+            ) VALUES (
+                :uid, 300, 10, 11.80, 3, 0.0054120, 0.0690, 0
+            )
+        ");
+        $stmtAutoCfg->execute([':uid' => $primaryUnitId]);
+
+        try {
+            $stmtAutoEv = $pdo->prepare("
+                INSERT INTO `system_events` (`unit_id`, `event_type`, `severity`, `message`, `created_at`)
+                VALUES (:uid, 'NODE_AUTO_DISCOVERED', 'INFO', :msg, NOW())
+            ");
+            $stmtAutoEv->execute([
+                ':uid' => $primaryUnitId,
+                ':msg' => "Node {$primaryUnitId} auto-provisioned upon first valid telemetry packet",
+            ]);
+        } catch (Exception $ignored) {
+            // Non-blocking audit logging
+        }
+
+        $stmtVeh->execute([':uid' => $primaryUnitId]);
+        $vehRow = $stmtVeh->fetch();
+    }
 
     $curBoot     = $vehRow ? (int)$vehRow['last_boot'] : 0;
     $curSeq      = $vehRow ? (int)$vehRow['last_seq'] : 0;
@@ -704,6 +744,11 @@ try {
             $critV = $cfgRow ? (float)$cfgRow['crit_v'] : 11.80;
 
             // State Machine evaluasi
+            $prevStatusLabel = $vehRow ? (string)($vehRow['status_label'] ?? '') : '';
+            $statusAgeMin = ($vehRow && isset($vehRow['status_age_min']) && $vehRow['status_age_min'] !== null)
+                ? (int)$vehRow['status_age_min']
+                : 9999;
+
             if ($critAlert || $vBat < $critV) {
                 $newState = 'CRITICAL';
                 $newStatusLabel = 'Critical Battery Drain';
@@ -719,6 +764,11 @@ try {
             } else {
                 $newState = 'STANDBY';
                 $newStatusLabel = 'Standby (Deep Sleep)';
+            }
+
+            // Pertahankan penugasan pemanasan mesin (< 45 menit) agar paket standby 5 detik tidak langsung menimpanya
+            if ($newState === 'STANDBY' && $prevStatusLabel === 'Warm-Up Dispatched' && $statusAgeMin < 45) {
+                $newStatusLabel = 'Warm-Up Dispatched';
             }
 
             // Kelola Burst Sync Badge (`buffer_used`) langsung dari nilai aktual firmware
@@ -802,6 +852,63 @@ try {
             ]);
 
             $statusUpdated = true;
+
+            $dtcCode = strtoupper(trim((string)$newestBatchRec['dtc']));
+            $hasActiveDtc = ((int)$newestBatchRec['dtc_cnt'] > 0 && $dtcCode !== '' && $dtcCode !== 'NONE');
+            if ($newState === 'CRITICAL' || $hasActiveDtc) {
+                try {
+                    $stmtChkTk = $pdo->prepare("SELECT `status` FROM `maintenance_tickets` WHERE `unit_id` = :uid LIMIT 1");
+                    $stmtChkTk->execute([':uid' => $primaryUnitId]);
+                    $tkRow = $stmtChkTk->fetch();
+
+                    if (!$tkRow || strtoupper((string)$tkRow['status']) === 'RESOLVED') {
+                        $issueParts = [];
+                        if ($vBat < $critV) {
+                            $issueParts[] = sprintf('Tegangan kritis %.2fV (< %.2fV)', $vBat, $critV);
+                        }
+                        if ($hasActiveDtc) {
+                            $issueParts[] = "Kode DTC {$dtcCode} aktif";
+                        }
+                        if (empty($issueParts)) {
+                            $issueParts[] = 'Peringatan kritis telemetri node';
+                        }
+                        $issueSummary = substr(implode(' & ', $issueParts), 0, 128);
+                        $tkBay = ($vehRow && !empty($vehRow['bay'])) ? (string)$vehRow['bay'] : 'A-01';
+                        $ticketCode = 'TKT-' . substr(preg_replace('/[^0-9]/', '', (string)$primaryUnitId) ?: '0400', -2) . '99';
+
+                        $stmtOpenTk = $pdo->prepare("
+                            INSERT INTO `maintenance_tickets` (`ticket_code`, `unit_id`, `bay`, `issue_summary`, `status`, `assigned_to`, `handover_note`)
+                            VALUES (:tcode, :uid, :bay, :issue, 'OPEN', 'Unassigned', 'Dibuka otomatis oleh telemetri ESP32')
+                            ON DUPLICATE KEY UPDATE
+                                `bay`           = VALUES(`bay`),
+                                `issue_summary` = VALUES(`issue_summary`),
+                                `status`        = 'OPEN',
+                                `assigned_to`   = 'Unassigned',
+                                `handover_note` = VALUES(`handover_note`),
+                                `updated_at`    = NOW()
+                        ");
+                        $stmtOpenTk->execute([
+                            ':tcode' => $ticketCode,
+                            ':uid'   => $primaryUnitId,
+                            ':bay'   => $tkBay,
+                            ':issue' => $issueSummary,
+                        ]);
+
+                        $evType = $hasActiveDtc ? 'DTC_ALERT' : 'CRITICAL_BATTERY';
+                        $stmtCritEv = $pdo->prepare("
+                            INSERT INTO `system_events` (`unit_id`, `event_type`, `severity`, `message`, `created_at`)
+                            VALUES (:uid, :etype, 'CRITICAL', :msg, NOW())
+                        ");
+                        $stmtCritEv->execute([
+                            ':uid'   => $primaryUnitId,
+                            ':etype' => $evType,
+                            ':msg'   => $issueSummary,
+                        ]);
+                    }
+                } catch (Exception $ignored) {
+                    // Non-blocking automatic ticket & alert logging
+                }
+            }
         } elseif ($shouldUpdateZone) {
             $stmtUpdateZoneOnly = $pdo->prepare("
                 UPDATE `vehicles`

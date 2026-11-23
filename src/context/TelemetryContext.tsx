@@ -90,6 +90,8 @@ export function parseDeepLinkParams(search: string): DeepLinkResolution {
     if (matchedIdx >= 0) {
       unitId = EXPANDED_YARD_UNITS[matchedIdx]!.unit_id;
       requires12Scale = matchedIdx >= 3;
+    } else if (/^(?:MITSUBISHI|ORION)-[A-Z0-9_-]{2,48}$/.test(rawUnit)) {
+      unitId = rawUnit;
     }
   }
 
@@ -358,6 +360,8 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       const stagesNvsAck =
         patch.crit_v !== undefined ||
         patch.sleep_cfg !== undefined ||
+        patch.fast_poll_s !== undefined ||
+        patch.debounce_cnt !== undefined ||
         patch.cal_slope !== undefined ||
         patch.cal_offset !== undefined;
       const nextPending = patch.pending_ack !== undefined ? patch.pending_ack : stagesNvsAck;
@@ -546,8 +550,9 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         "WARN",
         "Vehicle sold / detached from OBD-II telemetry node",
       );
+      void sendMutation("UNPAIR_UNIT", { unit_id: id });
     },
-    [appendLocalAudit],
+    [appendLocalAudit, sendMutation],
   );
 
   const pairUnit = useCallback(
