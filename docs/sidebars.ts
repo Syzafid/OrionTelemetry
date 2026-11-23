@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
       label: "2. Hardware & Kelistrikan PCB",
       collapsed: false,
       items: [
+        "hardware/yard-approval-proposal",
         "hardware/pcb-v2-blueprint-layout",
         "hardware/electrical-flow",
         "hardware/electrical-schematic",

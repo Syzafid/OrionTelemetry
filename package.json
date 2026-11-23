@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check:hygiene": "node scripts/check-repo-hygiene.mjs",
+    "pdf:yard-approval": "node scripts/generate-yard-approval-pdf.mjs",
     "prepare": "node -e \"const fs=require('node:fs'),cp=require('node:child_process');if(fs.existsSync('.git')){try{cp.execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}}\""
   },
   "overrides": {
