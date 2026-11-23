@@ -5,13 +5,23 @@ title: Diagram Alir Data (DFD Level 0, 1, 2)
 
 # Diagram Alir Data Sistem ORION (DFD Level 0, 1, dan 2)
 
-Halaman ini mendokumentasikan aliran data berjenjang pada sistem **ORION Telemetry & Digital Twin** mulai dari sinyal analog/CAN di papan [PCB v2.0 Step 2.1](../hardware/pcb-v2-blueprint-layout.md), pemrosesan firmware [ESP32 v1.6.0](../firmware/telemetry-struct.md), ingesti PHP/MySQL, hingga konsol HMI dan laporan ekspor.
+Halaman ini menjelaskan jalur perjalanan data pada sistem ORION mulai dari sinyal tegangan dan frame CAN di [PCB v2.0 Step 2.1](../hardware/pcb-v2-blueprint-layout.md), pemadatan di firmware [ESP32 v1.6.0](../firmware/telemetry-struct.md), pemrosesan oleh PHP/MySQL, hingga tampil di layar operator atau diunduh menjadi berkas Excel.
+
+## Perjalanan Satu Paket Data (Dari Pin OBD-II ke Layar Operator)
+
+Sebelum membaca diagram lengkap di bawah, ikuti alur lima tahap berikut untuk memahami apa yang terjadi dalam satu siklus bangun perangkat:
+
+1. Ketika alarm `DS3231SN` berbunyi pada pin `GPIO32`, mikrokontroler ESP32 bangun dari Deep Sleep dan menyalakan `GPIO27` selama `40 ms` agar tegangan aki masuk melewati pembagi `R1/R2` ke pin `GPIO34`.
+2. Firmware menyampel tegangan `16 kali`, menyalakan transceiver `WCMCU-230` lewat `GPIO26` untuk memeriksa kesehatan bus CAN serta PID mesin (bila kunci kontak aktif), lalu memadatkan hasilnya menjadi rekaman biner `88 byte`.
+3. Jika Wi-Fi gudang terhubung, ESP32 langsung mengirim rekaman JSON via `HTTPS POST` ke `simpan_data.php`. Bila tidak ada sinyal, rekaman masuk ke antrean dua tingkat (20 slot di RTC SRAM dan 2.000 slot di LittleFS Flash) untuk dikirim ulang nanti.
+4. Di server, `simpan_data.php` menyaring paket duplikat, memeriksa apakah mobil baru saja keluar-masuk gudang, membuka tiket otomatis jika voltase di bawah ambang batas, dan mengembalikan balasan `HTTP 200` (berikut konfigurasi baru bila ada antrean `pending_ack`).
+5. Layar HMI di browser operator menanyakan `get_data.php` setiap `3 detik`, menghitung prediksi waktu kritis aki (TTC), dan menyajikan hasilnya di enam modul tanpa merekayasa kurva buatan ketika unit sedang offline.
 
 ---
 
 ## 1. DFD Level 0 (Diagram Konteks)
 
-Diagram konteks memperlihatkan batas sistem **ORION Telemetry & Digital Twin** serta pertukaran data utama dengan tiga entitas eksternal di lapangan: **Kendaraan & Port OBD-II**, **Infrastruktur Jaringan Wi-Fi & NTP**, dan **Operator / Teknisi Stock Yard**.
+Diagram konteks memperlihatkan batas sistem ORION beserta pertukaran informasi dengan tiga pihak luar di lapangan: kendaraan (aki dan ECU), infrastruktur Wi-Fi/NTP, serta operator/teknisi bengkel.
 
 ```mermaid
 flowchart LR
@@ -33,9 +43,9 @@ flowchart LR
 
 ---
 
-## 2. DFD Level 1 (Dekomposisi Proses Utama `1.0` - `6.0`)
+## 2. DFD Level 1 (Enam Proses Utama & Lima Penyimpanan Data)
 
-Pada Level 1, sistem dibagi menjadi enam proses fungsional (`1.0` s/d `6.0`) yang berinteraksi melalui lima tempat penyimpanan data (*Data Store*) persisten maupun memori volatil terproteksi (`D1` s/d `D5`).
+Sistem dipecah menjadi enam proses utama (`1.0` hingga `6.0`) yang membaca dan menulis lima tempat penyimpanan data (`D1` sampai `D5`).
 
 ```mermaid
 flowchart TD
@@ -81,27 +91,27 @@ flowchart TD
   P6 -->|"Berkas Unduhan CSV & Excel 3-Sheet"| USR
 ```
 
-### Kamus Proses & Tempat Penyimpanan Data (DFD Level 1)
+### Kamus Proses & Penyimpanan Data (Level 1)
 
-| Kode | Nama Proses / Data Store | Lokasi Implementasi | Masukan & Keluaran Inti |
+| Kode | Nama Proses atau Data Store | Lokasi Implementasi | Tugas dan Aliran Masuk/Keluar |
 | :--- | :--- | :--- | :--- |
-| **`1.0`** | Akuisisi Sinyal & CAN Read-Only | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Memicu `GPIO27` (`40 ms`) & `GPIO26` (`20 ms`); mengubah `adc_raw_mv` menjadi `v_bat` dan menanyakan PID `0x01`/`0x03`/`0x07`. |
-| **`2.0`** | Evaluasi 4-Zona Wi-Fi & Buffer 2-Tingkat | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Mengklasifikasikan `YARD / TECH_HOTSPOT / OFFLINE`, mengemas `TelemetryRecord` (`88 byte`), atau menyangga ke `D1`/`D2`. |
-| **`3.0`** | Ingesti Transaksional & Auto-Tiket | [simpan_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/simpan_data.php) | Mengurutkan batch (`boot, seq, ts_epoch`), menyaring duplikat idempoten, mencatat keluar-masuk yard, dan membuka tiket kritis otomatis. |
-| **`4.0`** | Kontrol Konfigurasi & Piggyback ACK | [update_config.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/update_config.php) | Menulis parameter baru ke `node_configs` dengan `pending_ack = 1`, lalu menitipkannya pada respons HTTP `200` `simpan_data.php` berikutnya. |
-| **`5.0`** | Penyajian Live & Prognostik HMI | [get_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/get_data.php), [TelemetryContext.tsx](file:///d:/magang/v1/pixel-twin-workbench/src/context/TelemetryContext.tsx) | Menggunakan micro-cache `2.0 s`, *Mass Disconnect Guard* (`>= 66%`), dan regresi OLS + Arrhenius di frontend. |
-| **`6.0`** | Agregasi Audit & Ekspor Multi-Resolusi | `export_csv.php`, `export_excel.php` | Melakukan agregasi berinterval (`raw`, `15m`, `1h`, `1d`) dan mengembalikan berkas CSV/Excel multi-sheet. |
-| **`D1`** | Tier-1 RTC SRAM | Memori `RTC_DATA_ATTR` | Kapasitas `20` rekaman x `88 byte` = `1.760 byte`; bertahan selama Deep Sleep tanpa menulis ke Flash. |
-| **`D2`** | Tier-2 LittleFS Ring Buffer | `/queue.bin` + `/qmeta.bin` | Kapasitas `2.000` rekaman = `176.000 byte`; ditulis melingkar saat antrean `D1` penuh. |
-| **`D3`** | NVS Flash Partition | Namespace `orion_nvm` | Menyimpan `crit_v`, `slope_m`, `offset_c`, `sleep_cfg`, serta `last_ntp_epoch` antar reboot daya penuh. |
-| **`D4`** | MySQL Telemetry & Operasional | `vehicles`, `telemetry_logs`, `movement_events`, `maintenance_tickets`, `system_events` | Penyimpanan relasional persisten dengan penguncian baris `SELECT ... FOR UPDATE`. |
-| **`D5`** | MySQL Konfigurasi Node | `node_configs` | Menyimpan target kalibrasi per `unit_id` dan bendera antrean `pending_ack`. |
+| `1.0` | Akuisisi Sinyal & CAN Read-Only | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Menyalakan `GPIO27` (`40 ms`) & `GPIO26` (`20 ms`); mengubah bacaan mentah mV menjadi `v_bat` dan menanyakan PID `0x01`/`0x03`/`0x07`. |
+| `2.0` | Evaluasi 4-Zona Wi-Fi & Buffer 2-Tingkat | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Menentukan zona `YARD`, `TECH_HOTSPOT`, atau `OFFLINE`, mengemas struktur `88 byte`, atau menampung ke `D1`/`D2`. |
+| `3.0` | Ingesti Transaksional & Auto-Tiket | [simpan_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/simpan_data.php) | Mengurutkan batch (`boot, seq, ts_epoch`), membuang duplikat, mencatat perjalanan keluar-masuk, dan membuka tiket kritis otomatis. |
+| `4.0` | Kontrol Konfigurasi & Piggyback ACK | [update_config.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/update_config.php) | Menulis parameter baru ke `node_configs` dengan `pending_ack = 1`, lalu menitipkannya ke balasan `HTTP 200` `simpan_data.php` berikutnya. |
+| `5.0` | Penyajian Live & Prognostik HMI | [get_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/get_data.php), [TelemetryContext.tsx](file:///d:/magang/v1/pixel-twin-workbench/src/context/TelemetryContext.tsx) | Melayani polling browser dari cache `2,0 detik`, menahan status gudang saat AP mati massal (`>= 66%`), dan menghitung regresi OLS + Arrhenius. |
+| `6.0` | Agregasi Audit & Ekspor Multi-Resolusi | `export_csv.php`, `export_excel.php` | Mengolah data historis per interval (`RAW`, `HOURLY`, `DAILY_SUMMARY`) dan menghasilkan berkas unduhan CSV atau Excel 3 sheet. |
+| `D1` | Tier-1 RTC SRAM | Memori `RTC_DATA_ATTR` | Kapasitas `20` rekaman (`1.760 byte`); bertahan selama Deep Sleep tanpa membuat chip Flash cepat aus. |
+| `D2` | Tier-2 LittleFS Ring Buffer | `/tier2_queue.bin` + `/qmeta.bin` | Kapasitas `2.000` rekaman (`176.000 byte`); menampung limpahan otomatis ketika antrean `D1` sudah penuh. |
+| `D3` | NVS Flash Partition | Namespace `orion_nvm` | Menyimpan `crit_v`, `slope_m`, `offset_c`, `sleep_cfg`, dan epoch terakhir agar selamat meski aki sempat dicabut. |
+| `D4` | MySQL Telemetry & Operasional | 5 tabel relasional InnoDB | Menyimpan kondisi terkini dan riwayat kronologis dengan kunci baris `SELECT ... FOR UPDATE`. |
+| `D5` | MySQL Konfigurasi Node | `node_configs` | Menyimpan target kalibrasi per `unit_id` dan tanda antrean `pending_ack`. |
 
 ---
 
 ## 3. DFD Level 2: Aliran Kritis End-to-End
 
-### Level 2A: Konversi Sinyal PCB v2.0 Menjadi Paket Biner `88-Byte` (Proses `1.0` & `2.0`)
+### Level 2A: Konversi Sinyal Fisik PCB v2.0 ke Struct `88-Byte` (Proses `1.0` dan `2.0`)
 
 ```mermaid
 flowchart LR
@@ -111,17 +121,17 @@ flowchart LR
   ADC_READ --> CALC_V["v_bat = rawMv * slope_m + offset_c"]
   GATE_ADC -->|"GPIO27 LOW (0 uA)"| GATE_CAN["Set GPIO26 LOW (Q1 -> 3V3_CAN U3 ON 20ms)"]
   GATE_CAN --> CAN_POLL["Uji Loopback / Baca Mode 01 (15 PID), Mode 03/07 (DTC)"]
-  CAN_POLL -->|"GPIO26 HIGH (0V)"| PACK["Bit-Pack ke TelemetryRecord (88-Byte) + CRC8"]
+  CAN_POLL -->|"GPIO26 HIGH (0V)"| PACK["Bit-Pack ke TelemetryItem (88-Byte) + CRC8"]
   CALC_V --> PACK
 ```
 
-### Level 2B: Aliran Rekonsiliasi Waktu Pra-NTP, Exit Lag `can_ok`, & Burst Sync (Proses `2.0` -> `3.0`)
+### Level 2B: Penentuan Waktu Keluar Gudang, Penyelarasan Pra-NTP & Burst Sync (Proses `2.0` ke `3.0`)
 
 ```mermaid
 flowchart TD
-  TRIG_OUT["Miss Scan AP Gudang ke-1 -> Catat rtcFirstMissEpoch"] -->|"Masuk Zona OFFLINE / TECH_HOTSPOT"| LAG_PACK["Kemas exit_lag_steps = (ts_epoch - rtcFirstMissEpoch) / 20 ke bit 1..7 can_ok"]
+  TRIG_OUT["Miss Scan AP Gudang ke-1 -> Catat rtcFirstMissEpoch"] -->|"Masuk Zona OFFLINE / TECH_HOTSPOT"| LAG_PACK["Kemas exit_lag_steps = (ts_epoch - rtcFirstMissEpoch) / 20 ke bit 3..7 can_ok"]
   LAG_PACK --> QUEUE["Simpan ke D1 RTC SRAM -> Spillover ke D2 LittleFS"]
-  QUEUE -->|"Kendaraan Kembali ke AP-GUDANG-01 (RSSI >= -70 dBm)"| FLUSH["Kirim Burst <= 20 Rekaman (Header X-Burst-Sync: true)"]
+  QUEUE -->|"Kendaraan Kembali ke AP-GUDANG-01 (RSSI >= -70 dBm)"| FLUSH["Kirim Burst (Header X-Burst-Sync: true)"]
   FLUSH --> RECONCILE["simpan_data.php: Koreksi ts_epoch Pra-NTP bila clock_adjusted = 1"]
   RECONCILE --> EXIT_TIME["Hitung zone_exit_epoch = ts_epoch - (exit_lag_steps * 20)"]
   EXIT_TIME --> UPSERT["INSERT ON DUPLICATE KEY UPDATE telemetry_logs & movement_events"]
@@ -129,9 +139,6 @@ flowchart TD
 
 ---
 
-## 4. Keterlacakan Lintas Dokumen
+## Referensi Silang Dokumen
 
-- Rangkaian fisik penghasil `GPIO34` dan `GPIO26`/`GPIO27`: [Alur Kelistrikan Lengkap PCB v2.0](../hardware/electrical-flow.md).
-- Tata letak byte struktur `88-byte` pada proses `2.0`: [Struktur Paket Biner 88-Byte](../firmware/telemetry-struct.md).
-- Mesin status 4-zona & lag keluar: [State Machine 4-Zona Wi-Fi & NTP Sync](../firmware/wifi-zone-handover.md).
-- Implementasi transaksi & respons Piggyback ACK: [Ingest Data & Protokol Piggyback ACK](../backend-api/ingest-and-piggyback.md).
+Penjelasan rangkaian pembentuk sinyal `GPIO34`, `GPIO26`, dan `GPIO27` dibahas pada [Alur Kelistrikan Lengkap PCB v2.0](../hardware/electrical-flow.md). Susunan lengkap `88-byte` pada proses `2.0` dirinci pada [Struktur TelemetryItem 88-Byte](../firmware/telemetry-struct.md), transisi jaringan dibahas pada [State Machine 4-Zona Wi-Fi](../firmware/wifi-zone-handover.md), dan kontrak respons Piggyback ACK ada pada [Ingest Data & Piggyback ACK](../backend-api/ingest-and-piggyback.md).

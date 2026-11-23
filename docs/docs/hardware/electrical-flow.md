@@ -5,11 +5,11 @@ title: Alur Kelistrikan Lengkap PCB v2.0
 
 # Alur Kelistrikan & Sirkuit PCB ORION v2.0 (Step 2.1)
 
-Halaman ini memetakan aliran arus searah, sinyal logika kontrol, bus diferensial CAN, serta jalur ground balik di atas papan **PCB ORION v2.0 Step 2.1 (`70 x 50 mm`)**. Rincian lubang penancapan masing-masing komponen tersedia pada halaman [Peta Alur PCB v2.0 Step 2.1](pcb-v2-blueprint-layout.md).
+Halaman ini menelusuri perjalanan arus daya, sinyal kendali logika, jalur diferensial CAN, dan aliran ground balik di atas papan **PCB ORION v2.0 Step 2.1 (`70 x 50 mm`)**. Titik koordinat lubang masing-masing komponen tersedia pada [Peta Alur PCB v2.0 Step 2.1](pcb-v2-blueprint-layout.md).
 
-## 1. Blok 1: Suplai Daya Utama, Proteksi Polaritas & Shunt Bypass
+## 1. Suplai Daya Utama, Proteksi Polaritas & Shunt Bypass
 
-Arus masuk berasal dari pin 16 port OBD-II melewati sekring pengaman di harness sebelum memasuki konektor `J1.4`.
+Sumber daya 12V masuk dari pin 16 port OBD-II melewati sekring harness menuju konektor `J1.4`.
 
 ```mermaid
 flowchart LR
@@ -27,16 +27,17 @@ flowchart LR
   V33B --> ESP["H.3V3 (c23r14) -> ESP32 Base + C2 100uF"]
 ```
 
-- **Sekring & Kabel Pita**: gunakan sekring **500 mA time-lag** sebagai batas aman awal sampai diameter inti kawat pita `W9` terukur `>= 26 AWG (+/- 0,40 mm)`; bila terbukti `>= 26 AWG`, sekring boleh dinaikkan menjadi `1 A`.
-- **Proteksi Polaritas (`D1 1N5819`) & Surja (`TVS P6KE18A`)**: `1N5819` memblokir pemasangan aki terbalik dengan jatuh tegangan maju kecil (`0,2-0,35 V`) sehingga `MP1584` terlindungi bahkan saat uji bangku. `TVS P6KE18A` di `c3r15-c3r16` bersifat opsional untuk menjepit lonjakan transien otomotif langsung ke `GND`.
-- **Pengukuran Arus Tidur (`R5 10 Ohm || JP`)**: selama beroperasi di kendaraan, jumper `JP` wajib terpasang agar arus mengalir melewati hambatan nol. Untuk mengukur arus tidur (`E5`), buka jumper `JP` sehingga arus mengalir lewat `R5 (10 Ohm)` atau hubungkan miliamperemeter seri melintasi pin `JP`.
-- **Suplai `3.3 V` ke RTC dan ESP32 (`JV1` & `C2`)**: keluaran teratur `MP1584` (`V33A`) melewati kawat atas tunggal `JV1` (`c16r8 -> c22r14`) untuk memberi daya modul `ZS-042` (`c21r14`) serta pin `H.3V3` (`c23r14`). Kapasitor bulk `C2 (100 uF)` dipasang di luar papan pada pin `V/G` ESP32 Base untuk meredam puncak arus TX Wi-Fi.
+Selama inti tembaga kabel pita `W9` belum diukur, gunakan sekring eksternal **500 mA time-lag**; naikkan ke `1 A` hanya setelah konduktor terukur minimal `26 AWG (0,40 mm)`. Setelah melewati sekring, arus menemui dioda Schottky `D1 (1N5819)` yang menahan arus balik bila kabel aki sempat tertukar sekaligus menyumbang jatuh tegangan rendah sekitar `0,2-0,35 V`. Dioda `TVS P6KE18A` di `c3r15-c3r16` bersifat opsional untuk meredam lonjakan tegangan otomotif langsung ke ground.
+
+Dari katoda `D1`, arus melewati cabang paralel antara jumper bypass `JP (c7r5-c7r6)` dan resistor shunt `R5 (10 Ohm)`. Pada pemakaian harian di mobil, pasang jumper `JP` agar regulator `MP1584` mendapat suplai tanpa hambatan tambahan. Ketika teknisi hendak mengaudit arus tidur perangkat (`gerbang E5`), lepas jumper `JP` supaya seluruh arus mengalir melewati `R5` (atau miliamperemeter seri) dan terbaca akurat.
+
+Regulator `MP1584` menurunkan tegangan menjadi `3,3 V` konstan pada rel `V33A`, lalu menyeberang ke sisi kanan melalui kawat jumper atas `JV1` menuju modul `ZS-042` dan pin `H.3V3` ESP32 Base. Kapasitor bulk `C2 (100 uF)` disolder di pin `V/G` pada ESP32 Base untuk menyangga lonjakan arus saat pemancar Wi-Fi aktif.
 
 ---
 
-## 2. Blok 2: Sakelar High-Side ADC & Pembagi Tegangan Aki
+## 2. Sakelar High-Side ADC & Pembagi Tegangan Aki
 
-Untuk menjaga arus tidur sistem tetap di bawah `500 uA`, pembagi resistor `100 kOhm / 27 kOhm` diputus dari aki `+12V_D` oleh P-MOSFET `Q2 (AO3401A)` setiap kali ESP32 tidak sedang menyampel tegangan.
+Rangkaian pembagi resistor yang terus tersambung ke aki akan menguras baterai perlahan selama berbulan-bulan. ORION memasang sakelar dua tahap (`Q3 2N3904` + `Q2 AO3401A`) supaya pembagi `100 kOhm / 27 kOhm` hanya menyala selama `40 ms` setiap kali ESP32 mengambil sampel.
 
 ```mermaid
 flowchart LR
@@ -56,9 +57,13 @@ flowchart LR
   NODEM --> ADCO["H.ADC_OUT (c23r11 / GPIO34)"]
 ```
 
-### Analisis Aman Tegangan Gate $V_{GS}$ pada `Q2 (AO3401A)`
+### Mengapa `R1` Diletakkan di Kiri Sedangkan `R2 + C1` di Kanan?
 
-P-MOSFET `AO3401A` memiliki batas mutlak maksimum $V_{GS(\max)} = \pm 12\text{ V}$. Apabila collector `Q3` menarik gate `Q2` langsung ke `GND`, maka pada tegangan pengisian alternator `14,4 V` nilai $V_{GS}$ menjadi `-14,1 V` dan merusak lapisan oksida gate MOSFET. Pembagi `R4 (47 kOhm)` dan `R6 (27 kOhm)` membatasi ayunan tegangan gate secara presisi saat `GPIO 27` bernilai `HIGH`:
+Pada papan Step 2.1, resistor atas `R1 (100 kOhm)` menempel dekat drain `Q2` di sisi kiri (`c7r7-c7r8`), sementara resistor bawah `R2 (27 kOhm 1/8 W)` dan kapasitor `C1 (100 nF)` ditempatkan di sisi kanan tepat di depan pin `H.ADC_OUT (c23r11)`. Pemisahan ini membuat kapasitor filter `C1` dan jalur return `GND3 (c23r10)` berada sedekat mungkin dengan pin analog ESP32 untuk meredam gangguan frekuensi tinggi yang mungkin tertangkap kawat panjang saat melintasi bawah modul RTC `ZS-042`.
+
+### Perhitungan Batas Aman Tegangan Gate $V_{GS}$ pada `Q2`
+
+MOSFET `AO3401A` memiliki batas toleransi maksimal $V_{GS(\max)} = \pm 12\text{ V}$. Bila collector `Q3` langsung menempel ke ground tanpa resistor pembatas `R6 (27 kOhm)`, maka ketika mesin menyala dan alternator mengisi pada `14,4 V`, tegangan gate-ke-source $V_{GS}$ bisa menembus `-14,1 V` dan merusak komponen. Gabungan pembagi `R4 (47 kOhm)` dan `R6 (27 kOhm)` menahan $V_{GS}$ dalam zona aman saat `GPIO 27` aktif:
 
 $$V_G \approx V_{\text{N12D}} \times \frac{R_6}{R_4 + R_6} = V_{\text{N12D}} \times \frac{27}{47 + 27} \approx 0{,}3649 \times V_{\text{N12D}}$$
 
@@ -66,15 +71,15 @@ $$V_{GS} = V_G - V_{\text{N12D}} = -V_{\text{N12D}} \times \frac{47}{74} \approx
 
 | Kondisi Tegangan Aki | Tegangan `N12D` (Setelah `D1`) | Tegangan Node Gate (`V_G`) | Tegangan $V_{GS}$ di `Q2` | Status Keamanan `AO3401A` |
 | :--- | :--- | :--- | :--- | :--- |
-| Aki Standar (`11,9 V - 12,1 V`) | `~ 11,9 V` | `~ 4,34 V` | `~ -7,56 V` | Aman (`< 12 V`), `Q2` jenuh penuh |
-| Mesin ON / Alternator (`14,4 V`) | `~ 14,15 V` | `~ 5,16 V` | `~ -8,99 V` | Aman jauh di bawah batas `-12 V` |
-| Deep Sleep (`GPIO27` = `LOW` / `Hi-Z`) | `11,9 V - 14,2 V` | ditarik `R4` = `V_N12D` | `0,00 V` | `Q2` memutus penuh (`Node M = 0,00 V`) |
+| Aki Standar (`11,9 V - 12,1 V`) | `~ 11,9 V` | `~ 4,34 V` | `~ -7,56 V` | Aman (`< 12 V`), `Q2` menyambung penuh |
+| Mesin ON / Alternator (`14,4 V`) | `~ 14,15 V` | `~ 5,16 V` | `~ -8,99 V` | Aman di bawah batas mutlak `-12 V` |
+| Deep Sleep (`GPIO27` = `LOW` / `Hi-Z`) | `11,9 V - 14,2 V` | ditarik `R4` menyamai `V_N12D` | `0,00 V` | `Q2` menutup total (`Node M = 0,00 V`) |
 
 ---
 
-## 3. Blok 3: Power Gate Transceiver CAN (`Q1`) & Bus Diferensial
+## 3. Power Gate Transceiver CAN (`Q1`) & Bus Diferensial
 
-Transceiver `SN65HVD230` (`WCMCU-230` pada soket `U3`) hanya dinyalakan sesaat ketika ESP32 siap melakukan loopback atau membaca frame ECU ISO 15765-4.
+Transceiver `SN65HVD230` pada modul `WCMCU-230` (`U3`) menyala hanya beberapa puluh milidetik ketika ESP32 siap melakukan uji loopback atau membaca frame ECU 500 kbps.
 
 ```mermaid
 flowchart LR
@@ -90,12 +95,11 @@ flowchart LR
   HCTX["H.CTX (c23r5 / GPIO5)"] -->|"U3.CTX c22r5"| U3BUS
 ```
 
-- Saat `GPIO26 = HIGH` atau ESP32 tertidur (`Hi-Z`), `R3 (47 kOhm)` menarik gate `Q1` menyamai sumber `3,3 V` sehingga `V33CAN` turun menjadi `0,00 V`.
-- Karena pin input `CANL` dan `CANH` di `J1` telah ditukar pada **Step 2.1**, kedua jalur dari `J1` melintas lurus sejajar di bawah `MP1584` menuju soket `U3` (yang diputar `180 derajat`) tanpa satu pun persilangan solder.
+Ketika `GPIO26` berada pada logika `HIGH` atau mengambang saat ESP32 tidur, `R3 (47 kOhm)` menarik gate `Q1` menyamai sumber `3,3 V` sehingga catu daya `V33CAN` ke transceiver terputus ke `0,00 V`. Karena pin `CANL` dan `CANH` pada konektor `J1` ditukar posisinya mengikuti orientasi `WCMCU-230` yang diputar `180 derajat`, kedua kawat sinyal melintas sejajar lurus di bawah modul `MP1584` menuju soket `U3` tanpa persilangan jalur.
 
 ---
 
-## 4. Blok 4: Pewaktuan RTC `DS3231SN` (`ZS-042`) & Jalur Interupsi Bangun
+## 4. Pewaktuan RTC `DS3231SN` (`ZS-042`) & Interupsi Bangun `SQW`
 
 ```mermaid
 flowchart TB
@@ -107,16 +111,10 @@ flowchart TB
   U2SQW["U2.SQW (Sisi 6-pin Kiri c7r16)"] -->|"Melintasi r16 -> c21r17"| HRTC["H.RTC_INT (c23r17 / GPIO32)"]
 ```
 
-- Hanya 1 pin pada blok kiri `6-pin` (`U2.SQW` di `c7r16`) yang dihubungkan ke jalur sinyal; 5 lubang sisanya (`c7r12..c7r15` dan `c7r17`) disolder sebagai **pad mati** untuk kekakuan mekanis soket `8,5 mm`.
-- Sinyal `SQW` ditarik ke `LOW` oleh alarm `A1` `DS3231SN` ketika waktu `sleep_cfg` tercapai, membangunkan `ESP32` lewat `ext0` wake-up pada `GPIO32`.
-- Pelepasan LED indikator dan rangkaian pengisi (`dioda + resistor`) dari PCB `ZS-042` mencegah pengisian balik berbahaya ke sel litium primer `CR2032` serta menekan kebocoran arus stasioner.
+Dari enam lubang soket di sisi kiri (`c7`), hanya `U2.SQW` (`c7r16`) yang dihubungkan ke jalur listrik, sedangkan lima lubang lain (`c7r12..c7r15` dan `c7r17`) disolder sebagai penopang fisik soket `8,5 mm`. Saat alarm bangun tiba, `DS3231SN` menarik pin `SQW` ke `LOW` sehingga memicu bangun `ext0` di `GPIO32`. Sebelum modul `ZS-042` ditancapkan, LED daya dan dioda/resistor pengisi baterai wajib dilepas supaya arus `3,3 V` tidak membebani baterai kancing non-isi ulang `CR2032` dan tidak menambah arus bocor saat Deep Sleep.
 
 ---
 
-## 5. Blok 5: Topologi Distribusi Ground Cincin (*Ring GND*)
+## 5. Distribusi Ground Cincin (*Ring GND*)
 
-Seluruh jalur ground kembali dirangkai membentuk cincin luar papan guna menekan jatuh tegangan (`ground bounce`) antara beban RF ESP32 (`300-400 mA` saat TX Wi-Fi) dan pengukuran analog ADC:
-
-1. **Kolektor Arus Utama (`22 AWG` polos/tinned)**: ketiga pin ground header ESP32 (`H.GND1 c23r6`, `H.GND3 c23r10`, `H.GND2 c23r13`) masuk ke tulang punggung kolom `c24`, bergerak ke utara menyusuri busbar utama baris `r1`, dan keluar langsung melalui konektor `J1.1 (c2r1)` ke sasis kendaraan.
-2. **Ground Regulator & Transceiver (`24 AWG` / `30 AWG`)**: `U4.IN- (c8r2)` dan `U4.OUT- (c16r2)` langsung menempel pendek ke busbar atas `r1`; `U3.GND (c22r6)`, `C1.b (c20r10)`, `U2.GND4 (c21r13)` masing-masing langsung tersambung pendek ke kolom `c24`.
-3. **Ground Sisi Kiri / Mikroarus (`24 AWG`)**: kaki emitter `Q3.E (c4r13)`, `R8.b (c5r13)`, dan `TVS.A (c3r16)` bergabung di riser kiri `c2` lalu mengalir melalui busbar bawah `r18` menuju cincin `c24` dan `J1.1`.
+Seluruh jalur ground kembali dirangkai membentuk cincin luar di tepi papan untuk mencegah gangguan tegangan balik antara lonjakan arus Wi-Fi (`300-400 mA`) dan pengukuran sensitif pin ADC. Ketiga pin ground header ESP32 (`H.GND1`, `H.GND3`, dan `H.GND2`) masuk ke tulang punggung `c24`, mengalir ke utara menyusuri busbar tembaga tebal `r1` (`22 AWG`), lalu keluar melalui `J1.1 (c2r1)` ke sasis kendaraan. Pin ground `MP1584` (`c8r2`, `c16r2`) menempel pendek langsung ke `r1`, sementara ground sisi kiri mikroarus (`Q3.E`, `R8.b`, `TVS.A`) dikumpulkan di riser `c2` dan dibawa menyusuri busbar bawah `r18` (`24 AWG`) menuju cincin `c24`.

@@ -5,11 +5,19 @@ title: Manajemen Daya, Pulsa 40ms & Deep Sleep
 
 # Manajemen Daya, Pulsa Sampling 40ms & Deep Sleep
 
-Kendaraan di *stock yard* dapat terparkir berminggu-minggu sebelum serah terima ke pelanggan. Rancangan kelistrikan ORION meminimalkan konsumsi arus diam (*parasitic quiescent draw*) agar perangkat tidak menjadi sumber habisnya daya aki.
+Mobil di lapangan parkir diler (*stock yard*) bisa menunggu berbulan-bulan sebelum dikirim ke pembeli. Jika node OBD-II menyedot arus puluhan miliampere tanpa henti, aki kendaraan baru akan habis dalam hitungan minggu.
 
-## 1. Siklus Akuisisi Daya Terkunci (*Duty-Cycled Sampling*)
+## 1. Perbandingan Nyata: ORION vs OBD Dongle Biasa (Parkir 60 Hari)
 
-Setiap bangun atau siklus polling (`sampleBatteryAndCan()` di [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino)):
+Bayangkan satu unit Pajero Sport dengan aki sehat berkapasitas `65 Ah` diparkir selama `60 hari` (`1.440 jam`) tanpa dinyalakan.
+
+Jika dipasangi **OBD dongle konvensional** yang terus menyala pada arus sekitar `40 mA`, beban diamnya memakan $40\text{ mA} \times 1.440\text{ jam} = 57.600\text{ mAh}$ atau `57,6 Ah`. Dalam tiga sampai empat minggu saja, kapasitas aki praktis habis dan mobil gagal distarter.
+
+Sebaliknya, **node ORION** pada mode bangun tiap `6 Hours` (arus tidur `~410 uA`, aktif singkat `~1,84 detik`) hanya menghabiskan $0{,}41\text{ mA} \times 1.440\text{ jam} \approx 0{,}59\text{ Ah}$ selama tidur ditambah energi bangun Wi-Fi sebesar $4{,}82\text{ mAh/hari} \times 60\text{ hari} \approx 0{,}29\text{ Ah}$. Total energi yang terpakai selama 60 hari penuh hanya sekitar **`0,88 Ah`**, atau kurang dari `1,5%` kapasitas aki `65 Ah`.
+
+## 2. Siklus Pengambilan Data Berjeda (*Duty-Cycled Sampling*)
+
+Setiap bangun dari Deep Sleep, fungsi `sampleBatteryAndCan()` di [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) hanya menyalakan bagian pembagi tegangan dan transceiver CAN dalam hitungan milidetik:
 
 ```mermaid
 sequenceDiagram
@@ -31,21 +39,16 @@ sequenceDiagram
   ESP->>RTC: Setel alarm bangun berikutnya (sleep_cfg)
 ```
 
-### Detail Pengukuran ADC
+Pertama, ESP32 mengangkat `GPIO 27` ke `HIGH` sehingga `Q3` dan `Q2` menyambungkan `+12V_D` ke pembagi resistor. Firmware menunggu `40 ms` agar kapasitor `C1 (100 nF)` terisi penuh dan tegangannya stabil, lalu membaca `PIN_ADC_BAT (GPIO 34)` sebanyak `16 kali` berurutan tiap `1 ms` dan mengambil rata-ratanya (`rawMv`). Tepat setelah itu (`total ~56 ms`), `GPIO 27` diturunkan kembali ke `LOW` sehingga `R8` dan `R4` menutup gerbang pembagi menjadi `0 uA`. Bila hasil konversi $V_{\text{bat}} \ge 13.20\text{ V}$, firmware langsung mengenali alternator sedang mengisi (`engine_on = 1`).
 
-1. `digitalWrite(PIN_GATE_ADC, HIGH)` memicu basis `Q3 (2N3904)` yang menarik gate `Q2 (AO3401A)` melalui pembagi `R4/R6` selama `40 ms` agar kapasitor peredam riak `C1 (100 nF)` di `c20r10-c20r11` terisi penuh dan stabil.
-2. Firmware melakukan **16 sampel berurutan** pada `PIN_ADC_BAT` (`GPIO 34`) dengan jeda `1 ms` per sampel lalu mengambil nilai rata-rata integer (`rawMv`).
-3. Segera setelah akuisisi selesai (`total jendela aktif ~56 ms`), `GPIO 27` dikembalikan ke `LOW`. Resistor `R8 (100 kOhm)` memastikan basis `Q3` mati dan `R4 (47 kOhm)` menutup `Q2` sehingga arus pembagi `R1/R2` kembali `0 uA`.
-4. Tegangan baterai dihitung dengan rumus $V_{\text{bat}} = (\text{rawMv} \times \text{cal\_slope}) + \text{cal\_offset}$. Jika `V_bat >= 13.20 V`, sistem mendeteksi pengisian alternator aktif (`engine_on = 1`).
+## 3. Cara Mengukur Arus Tidur lewat Shunt `R5` & Modifikasi `ZS-042`
 
-## 2. Profil Arus Tidur, Pengukuran Shunt `R5` & Modifikasi `ZS-042`
-
-| Fase Operasi | Nilai Tipikal | Keterangan |
+| Parameter Operasi | Nilai Acuan Desain | Penjelasan Pemeriksaan di Meja Kerja |
 | :--- | :--- | :--- |
-| **Arus Tidur Node (Shunt `R5`)** | Target desain `< 500 uA` (v1.0 terukur `380 - 410 uA`; **gerbang E5 v2.0 wajib diukur**) | Diukur setelah membuka jumper bypass `JP (c7r5-c7r6)` sehingga arus mengalir melewati resistor `R5 10 Ohm (c6r5-c6r4)` atau ammeter seri. Nilai `>= 600 uA` menandakan kebocoran arus (*parasitic drain*). |
-| **Konsumsi Siklus Aktif** | `4.82 mAh / hari` (mode `6 Hours`), `active_ms ~ 1840 ms` | Radio Wi-Fi dimatikan selama Deep Sleep; Wi-Fi modem sleep dinonaktifkan (`WiFi.setSleep(false)`) hanya selama fase bangun singkat agar handshake TLS selesai cepat. |
-| **Interval Bangun (`sleep_cfg`)** | `300s` (5 Menit) s/d `21600s` (6 Jam) | Dapat diubah dari HMI Modul 06 dan disinkronkan ke NVS ESP32 saat siklus kirim berikutnya melalui **Piggyback ACK**. |
+| Arus Tidur Node (`shunt_sleep_ua`) | Target `< 500 uA` (prototipe v1.0 terukur `380 - 410 uA`; **gerbang E5 v2.0 wajib diukur**) | Cabut jumper bypass `JP (c7r5-c7r6)` dan pasang miliamperemeter seri (atau ukur tegangan jatuh melintasi resistor shunt `R5 10 Ohm` di `c6r5-c6r4`). Angka `>= 600 uA` menandakan kebocoran komponen. |
+| Konsumsi Siklus Aktif | `4,82 mAh/hari` pada mode `6 Hours` (`active_ms ~ 1.840 ms`) | Wi-Fi modem-sleep dimatikan sementara selama jendela kirim singkat (`WiFi.setSleep(false)`) agar negosiasi HTTPS selesai cepat lalu langsung kembali tidur. |
+| Interval Bangun (`sleep_cfg`) | `300 detik` (5 Menit) s/d `21.600 detik` (6 Jam) | Dapat diubah dari HMI Modul 06 dan diteruskan ke NVS ESP32 saat pengiriman data berikutnya lewat **Piggyback ACK**. |
 
-:::warning Modifikasi Wajib `ZS-042` Pra-Integrasi (Tahap C)
-Sebelum modul RTC `ZS-042` dipasang ke soket PCB v2.0, lepas LED indikator daya (`POWER LED`) serta rangkaian pengisi baterai (dioda `1N4148`/resistor `200 Ohm`). Membiarkan sirkuit pengisi tersambung saat `VCC` disuplai `3,3 V` akan memaksa arus pengisian masuk ke sel primer non-rechargeable `CR2032` dan menambah arus parasit diam.
+:::warning Modifikasi Wajib `ZS-042` Sebelum Dipasang (Tahap C)
+Sebelum menancapkan modul `ZS-042` ke soket PCB v2.0, cabut atau putus LED indikator daya (`POWER LED`) beserta rangkaian pengisi baterai (dioda `1N4148` atau resistor `200 Ohm`). Membiarkan jalur pengisi tetap utuh saat pin `VCC` menerima `3,3 V` akan memaksa arus masuk terus-menerus ke baterai koin primer `CR2032` dan menaikkan arus tidur papan.
 :::

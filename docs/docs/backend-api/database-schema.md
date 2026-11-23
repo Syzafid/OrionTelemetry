@@ -5,9 +5,9 @@ title: Skema 6 Tabel MySQL
 
 # Skema Basis Data MySQL (`schema_production.sql`)
 
-Backend ORION berjalan di atas MySQL 8 / InnoDB (`utf8mb4_unicode_ci`, zona waktu sesi `Asia/Jakarta` WIB) yang diinisialisasi secara idempoten melalui [schema_production.sql](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/schema_production.sql).
+Seluruh data backend ORION disimpan di atas MySQL 8 dengan mesin penyimpanan InnoDB (`utf8mb4_unicode_ci`, zona waktu sesi `Asia/Jakarta` WIB). Skema dibuat secara idempoten melalui [schema_production.sql](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/schema_production.sql) sehingga aman dijalankan berulang saat instalasi maupun migrasi awal.
 
-## 1. Diagram Relasi Entitas (ERD)
+## 1. Hubungan Antar Enam Tabel Utama
 
 ```mermaid
 erDiagram
@@ -18,13 +18,21 @@ erDiagram
   vehicles ||--o| maintenance_tickets : "tiket perawatan"
 ```
 
-## 2. Spesifikasi Tabel Utama
+## 2. Fungsi Setiap Tabel di Lapangan
 
-| Tabel | Primary Key / Unique Key | Fungsi Operasional |
+| Nama Tabel | Kunci Utama & Unik | Peran saat Sistem Berjalan |
 | :--- | :--- | :--- |
-| **`vehicles`** | `PK (unit_id)`, Index `bay`, `state` | Menyimpan identitas kendaraan (`bay`, `model`, `trim`, `vin`, `color`), status teraktual (`state`, `status_label`, `online_status`, `in_yard`, `net_zone`, `sync_ssid`), pembacaan snapshot terakhir (`v_bat`, `adc_raw_mv`, `rtc_temp_c`, `can_ok`, `rssi`, 15 kolom OBD-II), serta penjaga monoton (`last_boot`, `last_seq`, `last_ts_epoch`, `net_zone_boot`, `net_zone_seq`, `net_zone_ts`). |
-| **`telemetry_logs`** | `PK (id)`, `UNIQUE uniq_unit_boot_seq (unit_id, boot, seq)`, Index `idx_unit_created (unit_id, created_at)` | Menyimpan seluruh riwayat wake-cycle 35+ kolom. Kunci unik `(unit_id, boot, seq)` menjamin retry Burst Sync tidak pernah membuat baris ganda (`FK ON DELETE CASCADE`). |
-| **`node_configs`** | `PK (unit_id)` | Menyimpan parameter kontrol jarak jauh node (`sleep_cfg`, `fast_poll_s`, `crit_v`, `debounce_cnt`), koefisien kalibrasi ADC (`cal_slope DECIMAL(10,7)`, `cal_offset DECIMAL(6,4)`), dan flag sinkronisasi satu-kali `pending_ack TINYINT(1)`. |
-| **`movement_events`** | `PK (id)`, `UNIQUE uniq_mv_unit_boot_seq_type (unit_id, boot_id, seq_no, event_type)`, Index `idx_unit_departed` | Menyimpan transisi zona (`EXIT_YARD` / `ENTER_YARD`), zona asal/tujuan (`from_zone`, `to_zone`), `event_epoch`, `away_min`, `debounce_hits`, serta label tag operasional (`Test Drive`, `PDI Workshop`, `Detailing`, `Customer Delivery`). |
-| **`system_events`** | `PK (id)`, Index `idx_event_unit_created (unit_id, created_at)` | Jejak audit permanen dengan tingkat keparahan (`INFO`, `WARN`, `CRITICAL`) untuk kalibrasi, registrasi/unpair node, dispatch pemanasan, burst sync, dan peringatan kritis/DTC. |
-| **`maintenance_tickets`** | `PK (id)`, `UNIQUE uniq_ticket_unit (unit_id)` | Mengelola tiket perawatan per kendaraan (`ticket_code`, `issue_summary`, `status ENUM('OPEN','IN_PROGRESS','RESOLVED')`, `assigned_to`, `handover_note`, `updated_at`). |
+| `vehicles` | `PK (unit_id)`, Index `bay`, `state` | Menyimpan status terakhir setiap mobil agar layar HMI membukanya seketika tanpa memindai jutaan baris log. |
+| `telemetry_logs` | `PK (id)`, `UNIQUE uniq_unit_boot_seq (unit_id, boot, seq)`, Index `idx_unit_created` | Menyimpan riwayat lengkap setiap bangun dari tidur (`35+` kolom). Kunci unik `(unit_id, boot, seq)` memastikan pengiriman ulang *Burst Sync* tidak pernah menggandakan baris. |
+| `node_configs` | `PK (unit_id)` | Menyimpan setelan jarak jauh tiap unit (`sleep_cfg`, `fast_poll_s`, `crit_v`, `debounce_cnt`, `cal_slope`, `cal_offset`) beserta bendera `pending_ack` (`0` atau `1`). |
+| `movement_events` | `PK (id)`, `UNIQUE uniq_mv_unit_boot_seq_type (unit_id, boot_id, seq_no, event_type)` | Mencatat momen perpindahan `EXIT_YARD` dan `ENTER_YARD`, lama mobil di luar (`away_min`), hitungan debounce, serta label kegiatan (`Test Drive`, `PDI Workshop`, `Detailing`, `Customer Delivery`). |
+| `system_events` | `PK (id)`, Index `idx_event_unit_created` | Buku catatan audit permanen (`INFO`, `WARN`, `CRITICAL`) untuk kalibrasi multimeter, pasang/lepas node, pengiriman staf pemanasan, unggahan buffer, dan alarm aki lemah. |
+| `maintenance_tickets` | `PK (id)`, `UNIQUE uniq_ticket_unit (unit_id)` | Menyimpan satu tiket kerja aktif per kendaraan (`ticket_code`, ringkasan masalah, status `OPEN` / `IN_PROGRESS` / `RESOLVED`, nama teknisi, dan catatan serah-terima). |
+
+## 3. Pengelompokan Kolom di Tabel `vehicles`
+
+Supaya pembacaan cepat dan aman terhadap paket lama yang datang terlambat, kolom pada tabel `vehicles` terbagi ke dalam tiga kelompok:
+
+1. **Identitas & Lokasi Unit**: `unit_id`, `bay`, `model`, `trim`, `vin`, dan `color` untuk mengenali fisik kendaraan beserta penempatannya di baris parkir diler.
+2. **Snapshot Telemetri Terkini**: `state`, `status_label`, `online_status`, `in_yard`, `net_zone`, `sync_ssid`, `v_bat`, `adc_raw_mv`, `rtc_temp_c`, `can_ok`, `rssi`, serta `15` kolom pembacaan OBD-II terakhir.
+3. **Pencatat Urutan Paket Terakhir**: `last_boot`, `last_seq`, `last_ts_epoch`, `net_zone_boot`, `net_zone_seq`, dan `net_zone_ts`. Angka urutan ini mencegah paket lama yang baru terunggah dari buffer menimpa status mobil yang lebih baru.

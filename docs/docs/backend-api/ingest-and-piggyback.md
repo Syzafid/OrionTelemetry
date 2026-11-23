@@ -5,33 +5,33 @@ title: Ingest Data & Protokol Piggyback ACK
 
 # Endpoint Ingest & Protokol Piggyback ACK (`simpan_data.php`)
 
-Endpoint **`POST /dipo_api/simpan_data.php`** ([simpan_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/simpan_data.php)) melayani pengiriman telemetri langsung setiap `5 detik` maupun unggahan massal antrean offline (*Burst Sync*) dari node ESP32.
+Seluruh node ESP32 mengirim datanya ke satu alamat yaitu `POST /dipo_api/simpan_data.php` ([simpan_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/simpan_data.php)). Endpoint ini melayani pengiriman rutin tiap siklus maupun pengurasan antrean luring (*Burst Sync*).
 
-## 1. Header & Validasi Akses Request
+## 1. Header & Bentuk Payload JSON yang Diterima
 
-| Header / Parameter | Wajib | Aturan Validasi |
+| Header HTTP | Sifat | Aturan Pemeriksaan Server |
 | :--- | :--- | :--- |
-| `Content-Type` | Ya | `application/json` |
-| `X-Orion-Node` | Ya | Harus cocok regex `^(MITSUBISHI\|ORION)-[A-Za-z0-9_-]{2,48}$` dan sama persis dengan `unit_id` payload (`HTTP 403 NODE_MISMATCH`). |
-| `X-Burst-Sync` | Opsional | `"true"` menandakan batch pembuangan Two-Tier RTC/LittleFS Buffer (memicu log `BURST_SYNC` ke `system_events`). |
-| `X-Sync-SSID` | Opsional | Nama SSID AP aktif saat pengiriman (disanitasi hingga `32` karakter ASCII aman). |
-| `X-Node-Token` | Opsional (Env) | Wajib cocok dengan `NODE_AUTH_TOKEN` (`hash_equals`) jika variabel environment diset di server (`HTTP 401`). |
+| `Content-Type` | Wajib | Harus bernilai `application/json`. |
+| `X-Orion-Node` | Wajib | Wajib cocok dengan pola `^(MITSUBISHI\|ORION)-[A-Za-z0-9_-]{2,48}$` dan sama persis dengan `unit_id` di isi JSON (jika beda, ditolak dengan `HTTP 403 NODE_MISMATCH`). |
+| `X-Burst-Sync` | Opsional | Bila bernilai `"true"`, server menandai kiriman ini sebagai pengurasan buffer RTC/LittleFS dan menulis jejak `BURST_SYNC` ke `system_events`. |
+| `X-Sync-SSID` | Opsional | Nama SSID AP yang dipakai node saat mengirim (dibersihkan hingga maksimal `32` karakter ASCII aman). |
+| `X-Node-Token` | Opsional (Env) | Bila variabel `NODE_AUTH_TOKEN` diaktifkan pada server, header harus cocok via `hash_equals` atau permintaan ditolak `HTTP 401`. |
 
-Endpoint menerima format payload JSON **Single Object** (`{...}`), **JSON Array** (`[{...}, {...}]`), maupun `{ "records": [...] }` dengan batas maksimum `50` rekaman per transaksi.
+Format isi JSON bersifat ganda (*dual-format*): skrip menerima satu objek JSON tunggal (`{...}`) untuk siklus biasa maupun array JSON (`[{...}, {...}]` atau `{"records": [...]}`) sampai batas `50` rekaman per transaksi.
 
-## 2. Alur Transaksional & State Machine Backend
+## 2. Langkah Kerja di Dalam Transaksi `simpan_data.php`
 
-Di dalam satu transaksi InnoDB yang mengunci baris `vehicles` menggunakan `SELECT ... FOR UPDATE`:
+Bayangkan skenario ketika mobil baru pulang dari uji jalan membawa `15` rekaman luring sekaligus ke AP Gudang. Agar status mobil tetap akurat tanpa menimpa kondisi terbaru, `simpan_data.php` mengunci baris kendaraan lewat `SELECT ... FOR UPDATE` dalam satu transaksi InnoDB lalu menjalankan lima langkah berurutan:
 
-1. **Auto-Provisioning Node Baru**: Bila node yang lolos validasi `X-Orion-Node` belum pernah terdaftar di `vehicles`, backend otomatis menyisipkan baris awal di `vehicles` (`STANDBY`, `UNASSIGNED`) dan `node_configs`, lalu mencatat `NODE_AUTO_DISCOVERED` di `system_events`.
-2. **Pengurutan Kronologis & Deduplikasi Idempoten**: Seluruh rekaman dalam batch diurutkan di memori PHP berdasarkan `(boot ASC, seq ASC, ts_epoch ASC)` sebelum disimpan via `INSERT ... ON DUPLICATE KEY UPDATE` ke `telemetry_logs`.
-3. **Evaluasi Transisi Pergerakan Lintas-Batch**: Membandingkan `net_zone` terhadap pendahulu terdekat (`predecessor`) dan, apabila batch menyisipkan paket historis yang datang terlambat, menghitung ulang penerus langsung (`LIMIT 1 immediate successor`) agar riwayat keluar-masuk tetap akurat tanpa event usang.
-4. **Pembaruan Status Monotonik & Perlindungan Dispatch**: Status live pada `vehicles` hanya diperbarui bila rekaman lebih baru (`boot`, `seq`, `ts_epoch`). Apabila sebelumnya operator baru saja mengirim tugas pemanasan (`Warm-Up Dispatched` kurang dari `45` menit) dan kendaraan masih `STANDBY`, label tersebut dipertahankan agar tidak tertimpa paket standby 5 detik.
-5. **Pembukaan Tiket Kritis / DTC Otomatis**: Ketika paket baru masuk ke status `CRITICAL` atau membawa DTC aktif (`dtc_cnt > 0` dan `dtc != 'NONE'`), jika belum ada tiket `OPEN`/`IN_PROGRESS` pada unit tersebut, sistem membuka atau membuka kembali tiket di `maintenance_tickets` serta mencatat satu log `CRITICAL` (`DTC_ALERT` / `CRITICAL_BATTERY`).
+1. **Mendaftarkan Unit Baru Secara Otomatis**: jika `unit_id` lolos validasi `X-Orion-Node` tetapi belum terdaftar di tabel `vehicles`, PHP otomatis menyisipkan baris awal (`STANDBY`, bay `UNASSIGNED`) dan setelan standar di `node_configs`, lalu mencatat `NODE_AUTO_DISCOVERED`.
+2. **Mengurutkan Kronologi & Menolak Duplikat**: PHP menyusun seluruh rekaman masuk dari yang paling lama hingga paling baru memakai kunci `(boot ASC, seq ASC, ts_epoch ASC)`. Rekaman lalu dimasukkan ke `telemetry_logs` memakai `INSERT ... ON DUPLICATE KEY UPDATE` sehingga pengiriman ulang paket yang sama tidak menciptakan baris ganda.
+3. **Mendeteksi Perpindahan Keluar-Masuk Secara Akurat**: sistem membandingkan `net_zone` setiap rekaman terhadap pendahulu terdekat di database. Apabila paket historis datang belakangan (menyisip di tengah lini masa), backend juga mengevaluasi ulang satu rekaman penerus tepat sesudahnya (`LIMIT 1`) supaya log keluar-masuk tersambung rapi.
+4. **Menjaga Status Terbaru & Label Pemanasan**: tabel `vehicles` hanya diperbarui apabila `(boot, seq, ts_epoch)` paket masuk memang lebih baru daripada paket terakhir yang tercatat. Selain itu, jika operator baru saja mengirim teknisi untuk memanaskan mobil (`status_label = 'Warm-Up Dispatched'` berumur di bawah `45` menit) dan mobil masih dalam posisi standby, paket rutin berikutnya sengaja mempertahankan label tersebut agar instruksi kerja tidak langsung terhapus.
+5. **Membuka Tiket Perawatan Otomatis Saat Kritis atau Ada DTC**: jika paket terbaru melaporkan status aki `CRITICAL` atau kode gangguan aktif (`dtc_cnt > 0` dan `dtc != 'NONE'`) sementara belum ada tiket terbuka pada mobil tersebut, backend membuka tiket baru di `maintenance_tickets` dan mencatat satu entri `CRITICAL` (`CRITICAL_BATTERY` atau `DTC_ALERT`).
 
-## 3. Sekuens Piggyback ACK Satu-Kali
+## 3. Cara Kerja Piggyback ACK (Konfigurasi Menumpang Balasan HTTP)
 
-ESP32 tidak memerlukan endpoint polling tambahan untuk menerima perubahan konfigurasi dari web HMI. Konfigurasi dikirim menumpang respons HTTP `200` `simpan_data.php`:
+Node ESP32 menghemat daya dengan cara tertidur lama dan tidak pernah membuka koneksi tambahan sekadar bertanya apakah operator mengganti pengaturan di web. Sebagai gantinya, perubahan pengaturan dari HMI Modul 06 dititipkan pada balasan `HTTP 200` saat node mengirim data berikutnya:
 
 ```mermaid
 sequenceDiagram
@@ -50,4 +50,4 @@ sequenceDiagram
   API-->>ESP: HTTP 200 {"status":"ok","saved":1,"pending_ack":false}
 ```
 
-Respons dienkode kompak tanpa spasi setelah tanda titik dua agar parser `String::indexOf("\"pending_ack\":true")` di ESP32 bekerja deterministik.
+Seluruh respons JSON diformat rapat tanpa spasi setelah tanda titik dua (`"pending_ack":true`) agar parser ringan `String::indexOf()` di mikrokontroler ESP32 langsung mengenalinya dengan pasti.

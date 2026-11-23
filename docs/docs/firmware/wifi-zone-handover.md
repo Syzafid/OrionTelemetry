@@ -5,14 +5,16 @@ title: State Machine 4-Zona Wi-Fi & NTP Sync
 
 # State Machine 4-Zona Wi-Fi & Sinkronisasi Waktu NTP-RTC
 
-Firmware v1.6.0 mengklasifikasikan lokasi jaringan unit kendaraan ke dalam 4 zona deterministik yang dipertahankan di memori RTC melewati Deep Sleep:
+Sinyal Wi-Fi di lapangan parkir stock yard jarang stabil mulus. Truk angkut yang lewat, pintu besi garasi, atau kap mesin yang dibuka sering membuat sinyal AP gudang hilang sesaat lalu muncul lagi beberapa detik kemudian. Firmware v1.6.0 membagi kondisi jaringan menjadi 4 zona pasti agar gangguan sesaat tidak tercatat sebagai kendaraan keluar gudang.
 
-- `NET_ZONE_UNKNOWN (0)`: nilai default sebelum evaluasi pertama / rekaman lama.
-- `NET_ZONE_YARD (1)`: terhubung atau mendeteksi SSID Gateway Gudang (`DEFAULT_YARD_SSID`, prioritas #1 mutlak).
-- `NET_ZONE_TECH (2)`: unit berada di luar gudang dan terhubung ke Hotspot 2.4 GHz Teknisi (`DEFAULT_TECH_SSID`).
-- `NET_ZONE_OFFLINE (3)`: unit di luar gudang tanpa akses hotspot teknisi (merekam ke Two-Tier Buffer).
+| Kode Zona | Nama Status | Makna di Lapangan |
+| :--- | :--- | :--- |
+| `0` | `NET_ZONE_UNKNOWN` | Status awal sebelum node selesai memindai jaringan pertama kali. |
+| `1` | `NET_ZONE_YARD` | Terhubung atau menangkap sinyal AP Gudang (`DEFAULT_YARD_SSID`, prioritas mutlak). |
+| `2` | `NET_ZONE_TECH` | Berada di luar jangkauan AP gudang dan menumpang ke Hotspot 2.4 GHz HP teknisi (`DEFAULT_TECH_SSID`). |
+| `3` | `NET_ZONE_OFFLINE` | Berada di luar jangkauan Wi-Fi mana pun; seluruh sampel ditabung ke Two-Tier Buffer. |
 
-## 1. Diagram Transisi Zona & Aturan Hysteresis
+## 1. Diagram Perpindahan Zona
 
 ```mermaid
 stateDiagram-v2
@@ -29,15 +31,30 @@ stateDiagram-v2
   OFFLINE --> YARD: yardRssi >= -70 dBm ATAU (yardRssi >= -75 dBm & hit >= 2)
 ```
 
-## 2. Mekanisme Penjagaan Gerbang (*Anti-Flapping* & *Zero-Scan Hold*)
+## 2. Lima Pengaman agar Deteksi Keluar-Masuk Akurat
 
-1. **Zero-Scan Yard Hold**: Selama `WiFi.status() == WL_CONNECTED` ke SSID Gudang dengan RSSI `>= -85 dBm` dan `rtcYardMissCount == 0`, pemindaian 14-channel asinkron **dilewati** untuk menjaga keandalan transmisi data dan menghemat daya.
-2. **Gate Anti-Flapping (`yardRecoveryCount`)**: Apabila `rtcYardMissCount > 0` dan sinyal gudang kembali terdeteksi, counter `rtcYardMissCount` tidak langsung direset sampai minimal `2` scan berturut-turut menunjukkan sinyal gudang stabil.
-3. **Counter Stale Guard (`620 detik`)**: Jika selisih `ts_epoch - rtcFirstMissEpoch > 620 detik` (misalnya sesudah tidur lama), `rtcYardMissCount` di-reset bersih agar sisa kegagalan siklus lampau tidak memicu status keluar gudang palsu pada kendaraan yang diderek dalam keadaan mesin mati.
-4. **Prioritas Override Mutlak Gudang**: Saat unit terhubung ke Hotspot Teknisi (`NET_ZONE_TECH`), begitu AP Gudang terdeteksi `>= -75 dBm`, ESP32 melakukan handover agresif (`forceSwitch = true`) langsung memutus hotspot HP teknisi pada hit pertama.
-5. **Non-Blocking Scan Window**: Pemindaian latar belakang `WiFi.scanNetworks(true, ...)` hanya dipicu tepat sesudah HTTP POST / enqueue selesai jika jendela ke siklus kirim berikutnya masih `>= 1200 ms`, dan ditahan bila sedang jabat tangan DHCP (`wifiConnState != CONN_IDLE`).
+### Penahan Scan Saat Sinyal Gudang Sehat (*Zero-Scan Hold*)
 
-## 3. Pencatatan Exit Lag & Sinkronisasi NTP ke DS3231SN
+Selama `WiFi.status() == WL_CONNECTED` ke SSID Gudang dengan RSSI `>= -85 dBm` dan belum ada hitungan gagal (`rtcYardMissCount == 0`), firmware tidak menjalankan pemindaian 14-channel asinkron. Langkah ini menghemat baterai sekaligus menjaga pengiriman data tidak terpotong oleh proses scan radio.
 
-- **Deferred Exit Lag Calculation (`pendingFirstMissEpoch`)**: Saat debouncing keluar dari `YARD` disahkan, waktu scan gagal pertama (`rtcFirstMissEpoch`) disimpan ke `pendingFirstMissEpoch`. Begitu rekaman pertama di zona luar (`OFFLINE` atau `TECH_HOTSPOT`) dibuat, firmware menghitung lag aktual (dalam satuan `20 detik` / step) dan mengemasnya ke byte `can_ok` sehingga waktu keluar di server (`zone_exit_epoch`) mundur akurat ke momen kendaraan benar-benar meninggalkan area AP gudang.
-- **NTP -> RTC Correction (`checkNtpRtcSync`)**: Diinisialisasi lewat SNTP (`pool.ntp.org`, `time.google.com`). Setiap `30 detik` saat Wi-Fi aktif dan waktu NTP valid (`epoch >= 1700000000`), bila penyimpangan jam RTC DS3231SN lebih dari `5 detik`, register RTC ditulis ulang ke waktu UTC akurat.
+### Penahan Sinyal Goyang (*Anti-Flapping*)
+
+Apabila sebelumnya terjadi sinyal gagal (`rtcYardMissCount > 0`) lalu sinyal gudang kembali terdeteksi tipis, hitungan gagal tidak langsung dihapus. Firmware menunggu minimal `2 kali` hasil scan berturut-turut menunjukkan sinyal stabil sebelum mereset penanda kegagalan.
+
+### Penghapus Hitungan Kedaluwarsa (`620 Detik`)
+
+Jika jarak waktu `ts_epoch - rtcFirstMissEpoch > 620 detik` (misalnya setelah node bangun dari Deep Sleep panjang), hitungan `rtcYardMissCount` direset otomatis ke `0`. Tujuannya agar sisa kegagalan sinyal beberapa jam lalu tidak bergabung dengan satu kegagalan baru dan membuat sistem mengira mobil meninggalkan gudang.
+
+### Prioritas Mutlak Memindah ke AP Gudang
+
+Saat mobil dipasangi perangkat dan menumpang di hotspot HP teknisi (`NET_ZONE_TECH`) selama uji jalan, begitu ESP32 mendeteksi sinyal AP Gudang di ambang `>= -75 dBm`, firmware langsung memutus koneksi hotspot teknisi dan memaksa pindah ke AP Gudang (`forceSwitch = true`) pada deteksi pertama.
+
+### Jadwal Pemindaian Non-Blocking
+
+Pemindaian latar belakang `WiFi.scanNetworks(true, ...)` hanya boleh berjalan setelah pengiriman HTTP POST atau antrean selesai jika masih ada sisa jeda minimal `1.200 ms` ke siklus berikutnya, dan ditunda selama proses jabat tangan DHCP sedang berlangsung (`wifiConnState != CONN_IDLE`).
+
+## 3. Mencatat Momen Keluar Sebenarnya & Koreksi Jam RTC
+
+Agar jam keluar gudang di laporan sesuai dengan momen nyata mobil melintasi gerbang dan bukan 10-15 detik kemudian setelah 3 kali retry, firmware menyimpan stempel waktu kegagalan scan pertama ke `rtcFirstMissEpoch` lalu meneruskannya ke `pendingFirstMissEpoch` saat status resmi pindah ke luar gudang. Begitu rekaman pertama di zona luar dibuat, selisih waktu itu dibagi `20 detik/step` dan disisipkan ke byte `can_ok` sehingga server bisa memundurkan `zone_exit_epoch` ke detik awal sinyal benar-benar hilang.
+
+Sementara itu, fungsi `checkNtpRtcSync()` memeriksa waktu UTC lewat SNTP (`pool.ntp.org`, `time.google.com`) setiap `30 detik` saat Wi-Fi menyala. Begitu mendapat waktu valid (`epoch >= 1700000000`) dan jam chip `DS3231SN` terpantau selisih lebih dari `5 detik`, ESP32 segera menulis ulang register jam RTC agar seluruh rekaman offline berikutnya memakai waktu yang tepat.
