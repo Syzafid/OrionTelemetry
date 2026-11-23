@@ -4,13 +4,13 @@
  * Firmware Version : v1.6.0 (Dual-SSID Presence Handover + Monotonic Exit Lag)
  * Target Hardware  : ESP32 DevKit V1 + Expansion Base (PCB v1.0 / v3.3 & v2.0)
  * ============================================================================
- * Pinout Summary (PCB v1.0 / v3.3):
- *   - GPIO 21 (SDA), GPIO 22 (SCL) : DS3231SN RTC I2C (0x68)
- *   - GPIO 32                      : DS3231 SQW/INT Wakeup Pin (Active-LOW)
- *   - GPIO 26 (X7)                 : AO3401A CAN Power Switch (Active-LOW: LOW=ON, HIGH=OFF)
- *   - GPIO 27 (X5)                 : 2N3904 + AO3401A ADC Switch (Active-HIGH: HIGH=ON, LOW=OFF)
- *   - GPIO 34 (X6 / ADC1_CH6)      : Battery Voltage Sense Node M
- *   - GPIO 5 (CANTX), GPIO 4 (CANRX): SN65HVD230 (WCMCU-230) TWAI CAN Transceiver
+ * Pinout Summary (PCB v1.0/v3.3 -> PCB v2.0 Step 2.1 Header H kolom c23):
+ *   - GPIO 21 (SDA), GPIO 22 (SCL) : DS3231SN RTC I2C 0x68 (H: c23r15 / c23r16)
+ *   - GPIO 32                      : DS3231 SQW/INT Wakeup Active-LOW (H: c23r17)
+ *   - GPIO 26 (X7)                 : Q1 AO3401A CAN Power Switch Active-LOW (H: c23r8)
+ *   - GPIO 27 (X5)                 : Q3 2N3904 + Q2 AO3401A ADC Switch Active-HIGH (H: c23r12)
+ *   - GPIO 34 (X6 / ADC1_CH6)      : Battery Voltage Sense Node M (H: c23r11)
+ *   - GPIO 5 (CTX), GPIO 4 (CRX)   : SN65HVD230 WCMCU-230 TWAI CAN (H: c23r5 / c23r4)
  * ============================================================================
  */
 

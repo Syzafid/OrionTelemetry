@@ -34,7 +34,7 @@ export const PCB_ADC_PRESETS: Record<PcbVersionKey, PcbAdcPreset> = {
   "2": {
     version: "2",
     label: "PCB v2.0 (R1 100k / R2 27k)",
-    dividerSpec: "Integrated SMD + LittleFS",
+    dividerSpec: "Matriks 70x50mm (24x18) · Adaptor S-D-G + LittleFS",
     slope: 0.0047037,
     offset: 0.16,
     points: [

@@ -1,6 +1,6 @@
 /**
- * Mock telemetry layer. Shapes mirror the ESP32 Master Firmware v1.5.0 JSON contract
- * (20 core fields + 15 Read-Only OBD-II Mode 01/03/07 fields)
+ * Mock telemetry layer. Shapes mirror the ESP32 Master Firmware v1.6.0 JSON contract
+ * (20 core fields + 15 Read-Only OBD-II Mode 01/03 fields; Mode 07 whitelisted in driver)
  * so these can be swapped for real API responses without refactoring the UI.
  */
 
@@ -25,7 +25,7 @@ export interface TelemetryPayload {
   daily_mah: number;
   /** DS3231SN die temperature in °C, still reported in deep sleep */
   rtc_temp_c: number;
-  /** Raw voltage at GPIO34 Node M behind the 300k/68k divider, in mV */
+  /** Raw voltage at GPIO34 Node M behind the 300k/68k (PCB v1.0) or 100k/27k (PCB v2.0 Step 2.1) divider, in mV */
   adc_raw_mv: number;
   /** Deep-sleep quiescent current measured over the 10Ω shunt, in µA (0 when engine on) */
   shunt_sleep_ua: number;

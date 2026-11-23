@@ -61,7 +61,7 @@ flowchart TD
   P6(("6.0 Agregasi Audit & Ekspor Laporan (CSV / Excel)"))
 
   D1[("D1: Tier-1 RTC SRAM (20 Slot)")]
-  D2[("D2: Tier-2 LittleFS /queue.bin (2.000 Slot)")]
+  D2[("D2: Tier-2 LittleFS /tier2_queue.bin (2.000 Slot)")]
   D3[("D3: NVS Flash (orion_nvm)")]
   D4[("D4: MySQL Telemetry & Ops (vehicles, telemetry_logs, movement_events, maintenance_tickets, system_events)")]
   D5[("D5: MySQL node_configs (pending_ack & Parameter)")]
@@ -87,7 +87,7 @@ flowchart TD
   D5 -->|"Konfigurasi Aktif Unit"| P5
   P5 -->|"Status 3D Twin, Prognostik OLS, Peta Kendaraan"| USR
 
-  D4 -->|"Rentang Tanggal + Resolusi raw/15m/1h/1d"| P6
+  D4 -->|"Rentang Tanggal + Resolusi RAW / HOURLY / DAILY_SUMMARY"| P6
   P6 -->|"Berkas Unduhan CSV & Excel 3-Sheet"| USR
 ```
 
@@ -95,14 +95,14 @@ flowchart TD
 
 | Kode | Nama Proses atau Data Store | Lokasi Implementasi | Tugas dan Aliran Masuk/Keluar |
 | :--- | :--- | :--- | :--- |
-| `1.0` | Akuisisi Sinyal & CAN Read-Only | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Menyalakan `GPIO27` (`40 ms`) & `GPIO26` (`20 ms`); mengubah bacaan mentah mV menjadi `v_bat` dan menanyakan PID `0x01`/`0x03`/`0x07`. |
+| `1.0` | Akuisisi Sinyal & CAN Read-Only | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Menyalakan `GPIO27` (`40 ms`) & `GPIO26` (`20 ms`); mengubah bacaan mentah mV menjadi `v_bat` dan menanyakan PID `0x01` dan DTC `0x03` (`0x07` siap di driver). |
 | `2.0` | Evaluasi 4-Zona Wi-Fi & Buffer 2-Tingkat | [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino) | Menentukan zona `YARD`, `TECH_HOTSPOT`, atau `OFFLINE`, mengemas struktur `88 byte`, atau menampung ke `D1`/`D2`. |
 | `3.0` | Ingesti Transaksional & Auto-Tiket | [simpan_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/simpan_data.php) | Mengurutkan batch (`boot, seq, ts_epoch`), membuang duplikat, mencatat perjalanan keluar-masuk, dan membuka tiket kritis otomatis. |
 | `4.0` | Kontrol Konfigurasi & Piggyback ACK | [update_config.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/update_config.php) | Menulis parameter baru ke `node_configs` dengan `pending_ack = 1`, lalu menitipkannya ke balasan `HTTP 200` `simpan_data.php` berikutnya. |
 | `5.0` | Penyajian Live & Prognostik HMI | [get_data.php](file:///d:/magang/v1/pixel-twin-workbench/backend/dipo_api/get_data.php), [TelemetryContext.tsx](file:///d:/magang/v1/pixel-twin-workbench/src/context/TelemetryContext.tsx) | Melayani polling browser dari cache `2,0 detik`, menahan status gudang saat AP mati massal (`>= 66%`), dan menghitung regresi OLS + Arrhenius. |
 | `6.0` | Agregasi Audit & Ekspor Multi-Resolusi | `export_csv.php`, `export_excel.php` | Mengolah data historis per interval (`RAW`, `HOURLY`, `DAILY_SUMMARY`) dan menghasilkan berkas unduhan CSV atau Excel 3 sheet. |
 | `D1` | Tier-1 RTC SRAM | Memori `RTC_DATA_ATTR` | Kapasitas `20` rekaman (`1.760 byte`); bertahan selama Deep Sleep tanpa membuat chip Flash cepat aus. |
-| `D2` | Tier-2 LittleFS Ring Buffer | `/tier2_queue.bin` + `/qmeta.bin` | Kapasitas `2.000` rekaman (`176.000 byte`); menampung limpahan otomatis ketika antrean `D1` sudah penuh. |
+| `D2` | Tier-2 LittleFS Ring Buffer | `/tier2_queue.bin` (pointer di NVS `orion_nvm`) | Kapasitas `2.000` rekaman (`176.000 byte`); menampung limpahan otomatis ketika antrean `D1` sudah penuh. |
 | `D3` | NVS Flash Partition | Namespace `orion_nvm` | Menyimpan `crit_v`, `slope_m`, `offset_c`, `sleep_cfg`, dan epoch terakhir agar selamat meski aki sempat dicabut. |
 | `D4` | MySQL Telemetry & Operasional | 5 tabel relasional InnoDB | Menyimpan kondisi terkini dan riwayat kronologis dengan kunci baris `SELECT ... FOR UPDATE`. |
 | `D5` | MySQL Konfigurasi Node | `node_configs` | Menyimpan target kalibrasi per `unit_id` dan tanda antrean `pending_ack`. |
@@ -120,8 +120,8 @@ flowchart LR
   GATE_ADC --> ADC_READ["16x Sample GPIO34 -> rawMv (mV)"]
   ADC_READ --> CALC_V["v_bat = rawMv * slope_m + offset_c"]
   GATE_ADC -->|"GPIO27 LOW (0 uA)"| GATE_CAN["Set GPIO26 LOW (Q1 -> 3V3_CAN U3 ON 20ms)"]
-  GATE_CAN --> CAN_POLL["Uji Loopback / Baca Mode 01 (15 PID), Mode 03/07 (DTC)"]
-  CAN_POLL -->|"GPIO26 HIGH (0V)"| PACK["Bit-Pack ke TelemetryItem (88-Byte) + CRC8"]
+  GATE_CAN --> CAN_POLL["Uji Loopback / Baca Mode 01 (17 PID), Mode 03 (Stored DTC)"]
+  CAN_POLL -->|"GPIO26 HIGH (0V)"| PACK["Bit-Pack ke TelemetryItem (88-Byte, validasi t2_ssz)"]
   CALC_V --> PACK
 ```
 

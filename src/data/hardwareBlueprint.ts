@@ -865,8 +865,9 @@ export const PCB_ELECTRICAL_GATES: BlueprintVerificationGate[] = [
     kind: "ELEKTRIKAL",
     subject: "Polaritas GPIO27 (ADC_TRIG)",
     criteria: "Perangkat keras Active-HIGH cocok dengan definisi firmware",
-    status: "KONFIRMASI_FIRMWARE",
-    fallbackAction: "Verifikasi baris digitalWrite(PIN_GATE_ADC, HIGH) pada firmware aktif.",
+    status: "LULUS",
+    fallbackAction:
+      "Terkonfirmasi Active-HIGH pada PIN_GATE_ADC (GPIO 27) di sketch_oct16aa.ino v1.6.0.",
   },
   {
     id: "E5",

@@ -297,7 +297,7 @@ Pastikan pasangan di bawah ini **tidak berbunyi (terisolasi)** sebelum papan dib
 | `E1` | Output `MP1584` tanpa beban | Stabil `3,33 V` pada input `3S 11,91 V`; ulangi pada `12,6 V` dan `+/- 14 V`. | Sebagian lulus |
 | `E2` | Sakelar ADC `Q2`/`Q3` + pembagi `R1`/`R2` | OFF: `Node M = 0,00 V`; ON pada v2.0 ditargetkan `Vgs ~ -7,6 V` (`11,9 V`) s/d `-9,1 V` (`14,4 V`). | Ukur ulang di prototipe v2.0 |
 | `E3` | Sakelar CAN `Q1` (`GPIO26 Active-LOW`) | OFF `= 0,00 V`, ON `= 3,33 V`. | Lulus |
-| `E4` | Polaritas `GPIO27` (`ADC_TRIG`) | Perangkat keras bekerja aktif-HIGH; pastikan cocok di [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino). | Konfirmasi firmware |
+| `E4` | Polaritas `GPIO27` (`ADC_TRIG`) | Perangkat keras bekerja aktif-HIGH; terkonfirmasi `PIN_GATE_ADC (27)` Active-HIGH di [sketch_oct16aa.ino](file:///d:/magang/v1/pixel-twin-workbench/firmware/sketch_oct16aa/sketch_oct16aa.ino). | Lulus |
 | `E5` | Arus tidur DevKit + Base lewat shunt `R5` | Mengukur arus gabungan saat `JP` dilepas (`< 500 uA`). | Belum diukur |
 | `E6` | Uji dioda `D1` dan polaritas `TVS P6KE18A` | `1N5819` drop maju `0,15-0,35 V`; pastikan arah pita katoda. | Belum dilaporkan |
 | `E7` | Uji fungsi `Q3` + pembagi gate `R4`/`R6` | Titik `G ~ 4,4 V` saat basis `3,3 V` dan `~ 12 V` saat basis ke `GND`. | Wajib sebelum `Q3` disolder |

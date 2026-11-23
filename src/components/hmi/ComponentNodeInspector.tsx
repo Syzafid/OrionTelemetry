@@ -242,7 +242,8 @@ function buildHarnessSpecs(
     battery: {
       nodeName: `PROBE 01: AKI 12V ${profile.batteryAh} & RESISTOR SHUNT`,
       wireColor: "Merah 16mm² (Terminal B+), Hitam 16mm² (Ground Shunt Return)",
-      pinout: "Terminal M8 B+ -> Pembagi Tegangan 300k/68k -> GPIO34 ADC ESP32",
+      pinout:
+        "Terminal M8 B+ -> Pembagi Tegangan 100k/27k (v2.0) / 300k/68k (v1.0) -> GPIO34 ADC ESP32",
       spec: `${profile.batterySpec}. Shunt 10 Ohm R-Sense arus parasitik.`,
       diagProcedure:
         "Periksa tegangan terminal (>= 12.40V nominal) dan arus deep-sleep (nominal <= 450 uA, waspada > 450 uA).",
@@ -337,8 +338,8 @@ function buildHarnessSpecs(
       ],
     },
     esp32_core: {
-      nodeName: "PROBE 05: ORION IOT GATEWAY v1.0 & RTC DS3231",
-      wireColor: "Kabel Pita Internal PCB v1.0 (Regulasi DC-DC TPS54302 3.3V)",
+      nodeName: "PROBE 05: ORION IOT GATEWAY (PCB v1.0/v2.0) & RTC DS3231",
+      wireColor: "Kabel Pita 4-Kawat J1 & Header c23 (Regulasi DC-DC MP1584 3.3V Fix)",
       pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
       spec: "ESP32 Dual-Core 240MHz, Tier-1 20 RTC SRAM + Tier-2 2.000 LittleFS (176 KB)",
       diagProcedure:
@@ -347,7 +348,7 @@ function buildHarnessSpecs(
         {
           code: "SOP E.1",
           instruction:
-            "Periksa tegangan rel 3.3V keluaran regulator buck TPS54302 saat pemeliharaan PCB (toleransi: 3.28V - 3.34V).",
+            "Periksa tegangan rel 3.3V keluaran regulator buck MP1584 saat pemeliharaan PCB (toleransi: 3.20V - 3.40V).",
         },
         {
           code: "SOP E.2",
@@ -912,7 +913,8 @@ export function ComponentNodeInspector({
                     {t.adc_raw_mv} mV
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
-                    300k/68k · Ambang {critV.toFixed(2)}V
+                    {calSlope < 0.005 ? "100k/27k (v2.0)" : "300k/68k (v1.0)"} · Ambang{" "}
+                    {critV.toFixed(2)}V
                   </div>
                 </div>
                 <div className="rounded border border-border/50 bg-card/60 p-2">

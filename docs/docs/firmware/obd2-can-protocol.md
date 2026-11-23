@@ -40,7 +40,9 @@ Driver hanya menerima balasan *single-frame* ISO 15765-4 pada rentang identifier
 | `0x01 0x06` | `stft_pct` | `(A - 128) * (100 / 128)` | Koreksi bahan bakar jangka pendek Bank 1 (`%`). |
 | `0x01 0x42` | `ecu_v` | `(256*A + B) / 1000` | Tegangan internal ECU (`V`); otomatis memakai `v_bat` jika ECU tidak mengirim PID `0x42`. |
 | `0x01 0x31` | `dist_clr_km` | `(A << 8) \| B` | Jarak tempuh mobil sejak kode gangguan terakhir dihapus (`km`). |
-| `0x03` / `0x07` | `dtc` | `decodeObdDtcBytes(b1, b2)` | Mengubah 2 byte biner ECU menjadi kode huruf standar `P/C/B/U` (contoh `P0133`). |
+| `0x03` | `dtc` | `decodeObdDtcBytes(b1, b2)` | Mengubah 2 byte biner ECU menjadi kode gangguan tersimpan standar `P/C/B/U` (contoh `P0133`). |
+
+Catatan cakupan polling: fungsi pembantu `queryObdPid()` sudah mengizinkan `Mode 0x01`, `0x03`, dan `0x07`, sedangkan siklus aktif `pollRealEcuObd2()` pada firmware v1.6.0 mem-poll `Mode 0x01` (17 PID) serta `Mode 0x03` (*Stored DTC*), sehingga `Mode 0x07` (*Pending DTC*) belum ditarik secara aktif.
 
 ## 3. Membedakan "Kunci Kontak Mati" vs "Chip CAN PCB Rusak" (`runCanTransceiverLoopbackTest`)
 

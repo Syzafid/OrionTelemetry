@@ -13,9 +13,9 @@ Modul 04 ([DiagnosticsModule.tsx](file:///d:/magang/v1/pixel-twin-workbench/src/
 
 Menampilkan dua jarum gauge SVG `270 derajat` untuk putaran mesin (`RPM`) dan suhu air radiator (`Coolant C`). Batas zona merah pada gauge berubah otomatis mengikuti spesifikasi model kendaraan dari [vehicle-topology.ts](file:///d:/magang/v1/pixel-twin-workbench/src/lib/vehicle-topology.ts) (maksimal `7.000 RPM` untuk unit bensin seperti Xforce/Xpander dan `5.000 RPM` untuk unit diesel seperti Pajero Sport/Triton). Di bawah gauge tersedia grafik tren ganda RPM vs Coolant serta kartu seluruh **15 Parameter Live PID Mode `0x01`** (termasuk perkiraan liter sisa bahan bakar dari kapasitas tangki OEM mobil).
 
-### Tab 02: Pembacaan Fault Code (Mode `0x03` / `0x07`)
+### Tab 02: Pembacaan Fault Code (Mode `0x03` Aktif / `0x07` Placeholder)
 
-Menampilkan status lampu **MIL (*Check Engine*)**, jarak tempuh sejak kode kerusakan terakhir dihapus oleh bengkel resmi (`dist_clr_km`), serta daftar kode gangguan aktif maupun *pending* (`DTC` seperti `P0133`) beserta keterangan komponen bermasalah.
+Menampilkan status lampu **MIL (*Check Engine*)**, jarak tempuh sejak kode kerusakan terakhir dihapus oleh bengkel resmi (`dist_clr_km`), serta daftar kode gangguan aktif dari `Mode 0x03` (*Stored DTC*, seperti `P0133`) beserta keterangan komponen bermasalah. Untuk *Pending DTC* (`Mode 0x07`), antarmuka menampilkan status resmi `Belum Dipoling (FW v1.6.0)` hingga fungsi `pollRealEcuObd2()` di firmware ditambahkan permintaan query tambahan.
 
 ### Tab 03: Diagnostik Fisik Jalur Kabel (`W-01` s/d `W-08`)
 
