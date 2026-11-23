@@ -98,3 +98,8 @@ NOTES.md
 TODO.local.md
 .cursor/
 .gemini/
+
+# Docusaurus dependencies and generated build output
+docs/node_modules/
+docs/.docusaurus/
+docs/build/

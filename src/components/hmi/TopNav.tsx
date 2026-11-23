@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Command, Layers, Radio, Settings2, Volume2, VolumeX } from "lucide-react";
+import { BookOpen, Command, Layers, Radio, Settings2, Volume2, VolumeX } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
@@ -254,6 +254,15 @@ export function TopNav() {
               <span className="hidden md:inline">Perintah (Ctrl+K)</span>
               <span className="inline md:hidden">Ctrl+K</span>
             </button>
+
+            <a
+              href="/docs/"
+              title="Buka Dokumentasi Teknis ORION (/docs/)"
+              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
+            >
+              <BookOpen size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+              <span className="hidden lg:inline">Docs</span>
+            </a>
 
             <div className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 sm:gap-2 sm:px-3">
               <Radio

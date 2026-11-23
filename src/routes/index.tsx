@@ -249,6 +249,12 @@ function Landing() {
             >
               Operasional
             </a>
+            <a
+              href="/docs/"
+              className="inline-flex min-h-[44px] items-center px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Dokumentasi
+            </a>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -282,6 +288,12 @@ function Landing() {
             className="inline-flex min-h-[44px] items-center px-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Operasional
+          </a>
+          <a
+            href="/docs/"
+            className="inline-flex min-h-[44px] items-center px-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Dokumentasi
           </a>
         </nav>
       </header>

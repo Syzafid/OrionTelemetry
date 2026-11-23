@@ -6,6 +6,7 @@ const ALLOWED_ROOT_DIRS = new Set([
   ".githooks",
   ".github",
   "backend",
+  "docs",
   "firmware",
   "public",
   "scripts",
@@ -90,6 +91,7 @@ const FORBIDDEN_EXTENSIONS = [
   ".db",
 ];
 
+const SIZE_EXEMPT_BASENAMES = new Set(["package-lock.json"]);
 const MAX_FILE_BYTES = 1536 * 1024;
 const MAX_SECRET_SCAN_BYTES = 512 * 1024;
 
@@ -104,6 +106,17 @@ const SECRET_RULES = [
     name: "Non-localhost DB credential URI",
     re: /\bmysql:\/\/[^:\s/]+:[^@\s/]+@(?!localhost\b|127\.0\.0\.1\b)[^\s/'"]+/i,
   },
+];
+
+const DOCS_FORBIDDEN_RULES = [
+  { name: "Non-project term (anti-ai-slop)", re: /\banti[- ]?ai[- ]?slop\b/i },
+  { name: "Non-project rule reference (anti-slop)", re: /\banti-slop\b/i },
+  { name: "Internal agent rule file (AGENTS.md)", re: /\bAGENTS\.md\b/ },
+  { name: "Internal agent rule file (CLAUDE.md)", re: /\bCLAUDE\.md\b/ },
+  { name: "Internal roadmap file (roadmap.md)", re: /\broadmap\.md\b/i },
+  { name: "Internal prompt design file (DESIGN.md)", re: /\bDESIGN\.md\b/ },
+  { name: "Scratch script reference (test_task14_simulation)", re: /\btest_task14_simulation\b/i },
+  { name: "Scratch workspace reference (scratch/)", re: /(?:^|[\s`"'(])scratch\//i },
 ];
 
 function gitLines(args) {
@@ -165,6 +178,23 @@ function checkForbiddenPath(normPath) {
   return null;
 }
 
+function checkDocsContentHygiene(normPath, text) {
+  const isDocsFile =
+    normPath.startsWith("docs/docs/") ||
+    normPath.startsWith("docs/src/") ||
+    normPath === "docs/docusaurus.config.ts" ||
+    normPath === "docs/sidebars.ts";
+  if (!isDocsFile) return [];
+
+  const issues = [];
+  for (const rule of DOCS_FORBIDDEN_RULES) {
+    if (rule.re.test(text)) {
+      issues.push(`Forbidden non-project/internal reference in docs: ${rule.name}`);
+    }
+  }
+  return issues;
+}
+
 function checkFileSizeAndSecrets(normPath) {
   const fullPath = path.resolve(process.cwd(), normPath);
   if (!existsSync(fullPath)) return [];
@@ -172,7 +202,8 @@ function checkFileSizeAndSecrets(normPath) {
   const stat = statSync(fullPath);
   if (!stat.isFile()) return [];
 
-  if (stat.size > MAX_FILE_BYTES) {
+  const baseName = path.posix.basename(normPath);
+  if (!SIZE_EXEMPT_BASENAMES.has(baseName) && stat.size > MAX_FILE_BYTES) {
     const sizeKb = (stat.size / 1024).toFixed(1);
     issues.push(`File size ${sizeKb} KB exceeds 1536 KB limit.`);
   }
@@ -191,6 +222,7 @@ function checkFileSizeAndSecrets(normPath) {
       issues.push(`Potential secret detected: ${rule.name}`);
     }
   }
+  issues.push(...checkDocsContentHygiene(normPath, text));
   return issues;
 }
 

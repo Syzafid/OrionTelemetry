@@ -101,6 +101,8 @@ jobs:
 
           check_http_200 "https://www.oriontelemetry.tech/"
           check_http_200 "https://www.oriontelemetry.tech/dashboard"
+          check_http_200 "https://www.oriontelemetry.tech/docs/"
+          check_http_200 "https://www.oriontelemetry.tech/docs/hardware/electrical-schematic/"
 
           ROOT_HDR=$(curl -sSI -H "Accept-Encoding: gzip" "https://www.oriontelemetry.tech/")
           if ! echo "$ROOT_HDR" | grep -iq "^content-encoding:.*gzip"; then

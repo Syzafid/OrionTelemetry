@@ -6,3 +6,6 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+docs/node_modules
+docs/.docusaurus
+docs/build

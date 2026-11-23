@@ -160,9 +160,14 @@ jobs:
           node -e '
             const fs = require("node:fs");
 
-            for (const rel of [".output/public/index.html", ".output/public/dashboard/index.html"]) {
+            for (const rel of [
+              ".output/public/index.html",
+              ".output/public/dashboard/index.html",
+              ".output/public/docs/index.html",
+            ]) {
               const html = fs.readFileSync(rel, "utf8");
-              if (!html.includes("<html lang=\"id\"") || !html.includes("<main")) {
+              const isDocs = rel.endsWith("/docs/index.html");
+              if (!html.includes("<html lang=\"id\"") || (!isDocs && !html.includes("<main")) || (isDocs && !html.includes("ORION Telemetry"))) {
                 throw new Error(`Invalid prerendered HTML in ${rel}`);
               }
             }
@@ -174,6 +179,7 @@ jobs:
               "X-Content-Type-Options",
               "AddOutputFilterByType DEFLATE",
               "max-age=31536000, immutable",
+              "RewriteRule ^docs/?$ /docs/index.html [L]",
               "^dipo_api/(?:db\\.php|migrate\\.php|.*\\.sql|\\..*)$ - [F,L]",
             ];
             for (const snippet of requiredHtaccessSnippets) {

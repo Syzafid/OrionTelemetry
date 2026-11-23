@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -7,6 +8,8 @@ const outputPublicDir = path.join(rootDir, ".output", "public");
 const serverEntryPath = path.join(rootDir, ".output", "server", "index.mjs");
 const backendSrcDir = path.join(rootDir, "backend", "dipo_api");
 const backendDestDir = path.join(outputPublicDir, "dipo_api");
+const docsBuildDir = path.join(rootDir, "docs", "build");
+const docsDestDir = path.join(outputPublicDir, "docs");
 
 const PUBLIC_PHP_FILES = new Set([
   "db.php",
@@ -72,6 +75,12 @@ Options -Indexes
   # Serve PHP backend endpoints directly
   RewriteRule ^dipo_api/ - [L]
 
+  # Serve Docusaurus static documentation under /docs/
+  RewriteRule ^docs/?$ /docs/index.html [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/docs/$1/index.html -f
+  RewriteRule ^docs/(.+?)/?$ /docs/$1/index.html [L]
+
   # Serve static assets directly
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
@@ -119,6 +128,19 @@ async function main() {
   });
   console.log(
     `[heroku-prep] Copied ${PUBLIC_PHP_FILES.size} whitelisted PHP files -> ${path.relative(rootDir, backendDestDir)}`,
+  );
+
+  const docsIndexPath = path.join(docsBuildDir, "index.html");
+  if (!existsSync(docsIndexPath)) {
+    throw new Error(
+      `Missing built Docusaurus index at ${docsIndexPath}; run "npm run docs:build" first.`,
+    );
+  }
+  await rm(docsDestDir, { recursive: true, force: true });
+  await mkdir(docsDestDir, { recursive: true });
+  await cp(docsBuildDir, docsDestDir, { recursive: true, force: true });
+  console.log(
+    `[heroku-prep] Copied Docusaurus static build -> ${path.relative(rootDir, docsDestDir)}`,
   );
 
   const htaccessPath = path.join(outputPublicDir, ".htaccess");
