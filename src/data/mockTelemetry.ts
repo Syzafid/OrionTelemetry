@@ -1096,7 +1096,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-01",
     wire: "OBD PIN 16 (+12V)",
-    path: "1A Fuse -> B2 (Male) -> 1N5819 (C2-G2) + SMBJ15A TVS (F4-F17)",
+    path: "Fuse 500mA/1A -> J1.4 (c2r4) -> D1 1N5819 (c3r4-c3r5) + Ops. TVS P6KE18A (c3r15-c3r16) + Shunt R5 10Ω / JP (c6-c7)",
     signal: "+12V (Protected)",
     status: "OK",
     reading: "12.25 V",
@@ -1104,7 +1104,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-02",
     wire: "OBD PIN 4+5 (GND)",
-    path: "G17 (Female Poka-Yoke) -> Row 17 & Col W Common GND Busbar",
+    path: "J1.1 (c2r1) -> Busbar r1 (22 AWG) -> Cincin c24 -> Busbar r18 (24 AWG) + H.GND1/2/3",
     signal: "Main Ground",
     status: "OK",
     reading: "0.00 Ω",
@@ -1112,7 +1112,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-03",
     wire: "BUCK MP1584 (3.30V)",
-    path: "G3 (IN+) / D16 (IN-) -> Off-Board MP1584 -> I6 (OUT+) + 220µF/100nF (H11/I11) -> X3",
+    path: "U4 IN+ (c8r7) -> MP1584 3.3V Fix (c16r7) -> JV1 (40mm) -> H.3V3 (c23r14) + C2 100µF (ESP32 Base)",
     signal: "3.3V System",
     status: "OK",
     reading: "3.30 V",
@@ -1120,7 +1120,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-04",
     wire: "GPIO27 (ADC TRIG)",
-    path: "X5 -> R_BASE 10k (N12) + R_PD 100k (N17) -> 2N3904 (L10-N10) -> AO3401A #1 (L4-N4-M2) + Zener 10V (K6-N6)",
+    path: "H.ADC_TRIG (c23r12) -> R7 10k / R8 100k (c5) -> Q3 2N3904 (c4r11-r13) -> R6 27k / R4 47k -> Q2 AO3401A S-D-G (c4r6-r8)",
     signal: "D27 Trigger",
     status: "OK",
     reading: "PULSED 40ms",
@@ -1128,7 +1128,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-05",
     wire: "GPIO34 (ADC1_CH6)",
-    path: "M2 -> R1 300k (P1-P4) + R2 68k (P5-P8) + C_ADC 100nF (Q6) -> X6 Node M",
+    path: "Q2.D (c4r7) -> R1 100k (c7r7-r8) -> Node M (r11) -> C1 100nF (c20r10-r11) + R2 27k 1/8W (c22r10-r11) -> H.ADC_OUT (c23r11)",
     signal: "Battery Sense",
     status: "OK",
     reading: "2262 mV",
@@ -1136,7 +1136,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-06",
     wire: "GPIO26 (CAN GATE)",
-    path: "X7 -> R_GS2 100k (S6-S9) + AO3401A #2 (S3-S5-U4) -> U8/V8 (10µF/100nF) -> X8",
+    path: "H.CAN_EN (c23r8) -> R3 47k rebah (c20r8-c22r8) -> Q1 AO3401A S-D-G (c17-c19 r9) -> C3 100nF (c15-c16 r10) -> U3.3V3 (c22r7)",
     signal: "3.3V CAN",
     status: "OK",
     reading: "GATED / 3.3V",
@@ -1144,7 +1144,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-07",
     wire: "GPIO5 / GPIO4 (TWAI)",
-    path: "ESP32 D5 (TX->CTX) & D4 (RX<-CRX) -> WCMCU-230 SN65HVD230 -> OBD Pin 6/14",
+    path: "H.CTX (c23r5) & H.CRX (c23r4) -> WCMCU-230 SN65HVD230 180° (c22r2-r7) -> J1.2/J1.3 (CANL/CANH)",
     signal: "CAN 500 kbps",
     status: "OK",
     reading: "500 kbps",
@@ -1152,7 +1152,7 @@ export const WIRING: WiringNode[] = [
   {
     id: "W-08",
     wire: "GPIO21 / GPIO22 (I2C)",
-    path: "ESP32 D21 (SDA) & D22 (SCL) -> ZS-042 DS3231SN RTC (0x68) + CR2032",
+    path: "H.SDA (c23r15) & H.SCL (c23r16) + H.RTC_INT (c23r17<-c7r16) -> ZS-042 DS3231SN 180° + CR2032",
     signal: "I2C RTC",
     status: "OK",
     reading: "31.2 °C",

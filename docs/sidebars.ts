@@ -8,10 +8,17 @@ const sidebars: SidebarsConfig = {
       label: "1. Ikhtisar Sistem ORION",
     },
     {
+      type: "doc",
+      id: "architecture/data-flow-dfd",
+      label: "1.2 Diagram Alir Data (DFD)",
+    },
+    {
       type: "category",
       label: "2. Hardware & Kelistrikan PCB",
       collapsed: false,
       items: [
+        "hardware/pcb-v2-blueprint-layout",
+        "hardware/electrical-flow",
         "hardware/electrical-schematic",
         "hardware/pinout-and-wiring",
         "hardware/power-budget",
