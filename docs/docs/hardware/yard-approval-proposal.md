@@ -7,7 +7,7 @@ import useBaseUrl from "@docusaurus/useBaseUrl";
 
 # Dokumen Teknis Uji Coba Kendaraan Gudang (PDF Monokrom)
 
-Halaman ini menyediakan dokumen teknis resmi dalam format **PDF monokrom 7 halaman A4** (3 halaman utama dan 4 halaman lampiran) sebagai acuan kerja dan keselamatan sebelum pelaksanaan uji coba terbatas perangkat ORION v2.0 pada unit kendaraan operasional di area gudang. Dokumen memisahkan secara tegas hasil pengukuran meja (*bench test*) yang sudah tercatat dari parameter wajib uji **Tahap C**, tanpa kolom tanda tangan maupun klaim tanpa data ukur.
+Halaman ini menyediakan dokumen teknis resmi dalam format **PDF monokrom 8 halaman A4** (4 halaman utama dan 4 halaman lampiran) sebagai acuan kerja dan keselamatan sebelum pelaksanaan uji coba terbatas perangkat ORION v2.0 pada unit kendaraan operasional di area gudang. Dokumen memisahkan secara tegas hasil pengukuran meja (*bench test*) yang sudah tercatat dari parameter wajib uji **Tahap B dan C**, tanpa kolom tanda tangan maupun klaim tanpa data ukur.
 
 <p>
   <a
@@ -15,16 +15,16 @@ Halaman ini menyediakan dokumen teknis resmi dalam format **PDF monokrom 7 halam
     download="ORION_Dokumen_Izin_Teknis_Gudang.pdf"
     className="orion-export-btn"
   >
-    Unduh Dokumen Teknis Uji Coba (.pdf - 7 Halaman Monokrom)
+    Unduh Dokumen Teknis Uji Coba (.pdf - 8 Halaman Monokrom)
   </a>
 </p>
 
 :::info Memo Revisi & Cara Memperbarui Dokumen PDF
-Seluruh 7 halaman PDF (`ORION-DOC-YARD-02 / Rev 3.1`) dibangkitkan otomatis oleh skrip [generate-yard-approval-pdf.mjs](file:///d:/magang/v1/pixel-twin-workbench/scripts/generate-yard-approval-pdf.mjs) dari objek konfigurasi `APPROVAL_DOC_MEMO` serta aset grafis lokal:
+Seluruh 8 halaman PDF (`ORION-DOC-YARD-02 / Rev 3.2`) dibangkitkan otomatis oleh skrip [generate-yard-approval-pdf.mjs](file:///d:/magang/v1/pixel-twin-workbench/scripts/generate-yard-approval-pdf.mjs) dari objek konfigurasi `APPROVAL_DOC_MEMO` serta aset grafis lokal:
 - Foto PCB tampak atas & tampak bawah cermin: `docs/static/img/pcb-v2-tampak-atas.jpg` dan `docs/static/img/pcb-v2-tampak-bawah-cermin.jpg`.
 - Aset potongan modul fisik monokrom untuk Lampiran C: `docs/static/img/cirkit-modules/*.png` (`obd2-plug`, `fuse-holder`, `mp1584-buck`, `zs042-rtc`, `wcmcu230-can`, `esp32-devkit`).
 
-Jika ada pengukuran Tahap C yang sudah selesai (misalnya hasil ukur arus tidur `E5`, `Vgs Q2`, atau uji MP1584 di `12,6 V` dan sekitar `14 V`), perbarui PDF dengan 2 langkah berikut:
+Jika ada pengukuran Tahap B/C yang sudah selesai (misalnya pengecekan pelepasan resistor `120 Ohm` WCMCU-230, hasil ukur arus tidur `E5`, `Vgs Q2`, atau uji MP1584 di `12,6 V` dan sekitar `14 V`), perbarui PDF dengan 2 langkah berikut:
 1. Ubah angka atau status pengujian pada objek `APPROVAL_DOC_MEMO` di [generate-yard-approval-pdf.mjs](file:///d:/magang/v1/pixel-twin-workbench/scripts/generate-yard-approval-pdf.mjs).
 2. Jalankan `npm run pdf:yard-approval`, lalu verifikasi dengan `npm run check:hygiene` dan `npm run build`.
 
@@ -33,17 +33,18 @@ Jika ada pengukuran Tahap C yang sudah selesai (misalnya hasil ukur arus tidur `
 
 ---
 
-## Ringkasan Struktur 7 Halaman PDF (Rev 3.1 Monokrom)
+## Ringkasan Struktur 8 Halaman PDF (Rev 3.2 Monokrom)
 
 | Halaman | Bagian Isi | Penekanan Informasi |
 | :--- | :--- | :--- |
 | **Halaman 1** | Judul Dokumen Teknis, Ringkasan & Tujuan Non-Invasif, Pinout OBD-II 16-Pin Monokrom, dan Tabel 5 Blok Arsitektur | Menjelaskan tujuan uji coba, aturan keselamatan `H8`, mode baca pasif `WCMCU-230`, penyatuan ground (`common ground`) `MP1584`, modifikasi fisik `ZS-042`, serta sakelar `Q1` & `Q2/Q3`. |
 | **Halaman 2** | Skema Wiring Monokrom Berpanah Arah Input-Output (`Gambar 2`) dan Bagian Awal Tabel Data Pengujian | Memperlihatkan arah aliran daya (`->`), sinyal ADC (`->`), bus dua arah CAN/I2C (`<->`), serta kontrol gate & interupsi bangun (`SQW -> GPIO32`) beserta data uji 1-4. |
-| **Halaman 3** | Lanjutan Tabel Data Pengujian (`Q2/Q3`, `E5`), Matriks Mitigasi Risiko 4 Butir, dan Urutan Verifikasi Tahap C | Memisahkan status `TERUJI MEJA` vs `TARGET UJI TAHAP C`, langkah pencegahan risiko lapangan, serta 4 langkah verifikasi wajib pra-pemasangan unit. |
-| **Halaman 4 (Lampiran A)** | Tata Letak Fisik PCB ORION v2.0 Step 2.1 Tampak Atas (`70 x 50 mm`, penuh 1 halaman) | Menampilkan proyeksi sisi komponen (`c1` kiri ke `c24` kanan), zona *keep-out* `3 x 3` lubang untuk `Q1`/`Q2`, serta 4 sudut dudukan mekanis. |
-| **Halaman 5 (Lampiran B)** | Peta Jalur Solder Sisi Bawah Cermin PCB ORION v2.0 Step 2.1 (penuh 1 halaman) | Menampilkan proyeksi cermin penyolderan (`c24` kiri ke `c1` kanan), ringkasan `22 net` / `237 segmen` / `0` persilangan sisi bawah / `1` jumper `JV1`, dan syarat cek kontinuitas Tahap B. |
-| **Halaman 6 (Lampiran C)** | Diagram Wiring Modular ORION v2.0 Berbasis Aset Modul Fisik Monokrom (penuh 1 halaman) | Merangkai aset fisik `OBD-II`, `Sekring 500 mA`, `MP1584`, `WCMCU-230`, `ZS-042`, dan `ESP32 DevKit` memakai perutean ortogonal berpanah arah lengkap dengan catatan pembacaan pinout & proteksi masuk. |
-| **Halaman 7 (Lampiran D)** | Daftar Komponen Utama (`BOM Step 2.1`), Prosedur Pemasangan/Pelepasan Aman, dan Referensi Daring | Merinci seluruh komponen aktif-pasif, langkah praktis colok-lepas aman (kunci kontak `OFF`, kepatuhan `H8`, kotak pelindung plastik non-konduktif), serta tautan web `oriontelemetry.tech` dan dokumentasi teknis. |
+| **Halaman 3** | Lanjutan Tabel Data Pengujian (termasuk status resistor terminasi `120 Ohm` `WCMCU-230`), dan Matriks Mitigasi Risiko 5 Butir | Memisahkan status teruji meja vs cek wajib Tahap B/C, menegaskan kondisi `WCMCU-230` masih *dry-fit*, pemutusan `Q1 = 0,00 V` agar tidak membangunkan ECU, dan bebas baterai LiPo/Li-Ion. |
+| **Halaman 4** | Skenario, Batas Uji Coba, Kebutuhan Jaringan & Urutan Verifikasi Wajib Tahap B/C | Membatasi tahap awal ke 1 unit terpantau langsung di tempat, memisahkan pengujian parkir lama hingga arus `E5` tercatat, memastikan uji tidak memakai Wi-Fi gudang, dan merangkum 5 cek wajib pra-pasang. |
+| **Halaman 5 (Lampiran A)** | Tata Letak Fisik PCB ORION v2.0 Step 2.1 Tampak Atas (`70 x 50 mm`, penuh 1 halaman) | Menampilkan proyeksi sisi komponen (`c1` kiri ke `c24` kanan), zona *keep-out* `3 x 3` lubang untuk `Q1`/`Q2`, serta 4 sudut dudukan mekanis. |
+| **Halaman 6 (Lampiran B)** | Peta Jalur Solder Sisi Bawah Cermin PCB ORION v2.0 Step 2.1 (penuh 1 halaman) | Menampilkan proyeksi cermin penyolderan (`c24` kiri ke `c1` kanan), ringkasan `22 net` / `237 segmen` / `0` persilangan sisi bawah / `1` jumper `JV1`, dan syarat cek kontinuitas Tahap B. |
+| **Halaman 7 (Lampiran C)** | Diagram Wiring Modular ORION v2.0 Berbasis Aset Modul Fisik Monokrom (penuh 1 halaman) | Merangkai aset fisik `OBD-II`, `Sekring 500 mA`, `MP1584`, `WCMCU-230`, `ZS-042`, dan `ESP32 DevKit` memakai perutean ortogonal berpanah arah lengkap dengan catatan pembacaan pinout & proteksi masuk. |
+| **Halaman 8 (Lampiran D)** | Daftar Komponen Utama (`BOM Step 2.1`), Prosedur Pemasangan, Pelepasan & Henti Darurat, serta Referensi Daring | Merinci seluruh komponen aktif-pasif, prosedur 6 langkah (termasuk batas henti darurat bila muncul MIL/panas/drop aki), kotak pelindung plastik non-konduktif, dan tautan web/docs. |
 
 ---
 

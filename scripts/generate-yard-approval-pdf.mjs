@@ -16,7 +16,7 @@ import path from "node:path";
  *    `docs/static/pdf/ORION_Dokumen_Izin_Teknis_Gudang.pdf`.
  */
 export const APPROVAL_DOC_MEMO = {
-  docCode: "ORION-DOC-YARD-02 / Rev 3.1",
+  docCode: "ORION-DOC-YARD-02 / Rev 3.2",
   dateLabel: "November 2026",
   hardwareRef: "Perangkat Keras PCB ORION v2.0 Step 2.1 (70 x 50 mm) · Firmware v1.6.0",
   title:
@@ -104,6 +104,14 @@ export const APPROVAL_DOC_MEMO = {
         "Pelepasan komponen LED dan charger menghentikan pemborosan daya statis serta arus balik ke baterai koin CR2032 saat papan mendapat suplai 3,3 V.",
     },
     {
+      parameter: "Resistor terminasi 120 Ohm (WCMCU-230)",
+      status: "WAJIB CEK TAHAP B/C",
+      result:
+        "Modul WCMCU-230 masih berada pada tahap dry-fit/persiapan perakitan; pemeriksaan serta pelepasan resistor 120 Ohm bawaan dijadwalkan pada Tahap B/C sebelum uji kendaraan.",
+      meaning:
+        "Bus CAN mobil umumnya sudah memiliki dua resistor 120 Ohm paralel (60 Ohm). Melepas resistor 120 Ohm pada modul tambahan mencegah resistansi bus turun menjadi 40 Ohm.",
+    },
+    {
       parameter: "Sakelar pembagi tegangan ADC (Q2/Q3 / GPIO27)",
       status: "TARGET UJI TAHAP C",
       result:
@@ -127,9 +135,14 @@ export const APPROVAL_DOC_MEMO = {
         "Dipisahkan menjadi dua konektor terkunci (JST-XH 2-pin daya dan JST-XH 2-pin sinyal CAN) dengan pelabelan jelas dan anti-tertukar, serta pemasangan sekring 500 mA pada kabel masuk +12V.",
     },
     {
-      risk: "Penurunan muatan aki berlebih saat kendaraan terparkir di gudang",
+      risk: "Aki tekor atau ECU kendaraan terus terbangun saat parkir",
       mitigation:
-        "Mode tidur berkala disertai pemutusan suplai transceiver CAN via Q1 (teruji 0,00 V saat OFF), pemutusan pembagi tegangan via Q2/Q3, dan modifikasi hemat daya ZS-042. Besaran arus tidur final diukur pada uji E5 Tahap C.",
+        "Saat mode tidur, MOSFET Q1 memutus suplai 3V3_CAN (teruji 0,00 V saat OFF) sehingga transceiver CAN tidak aktif mengirim frame maupun request OBD-II ke ECU. Pembagi ADC juga diputus via Q2/Q3 dan besaran arus tidur aktual diukur pada uji E5 Tahap C.",
+    },
+    {
+      risk: "Suhu panas di dalam kabin kendaraan saat parkir di gudang",
+      mitigation:
+        "Perangkat tidak memakai baterai isi ulang LiPo/Li-Ion dan hanya menggunakan baterai koin CR2032 pada modul RTC ZS-042 (jalur charger dan LED sudah dilepas fisik), sehingga terhindar dari risiko sel lithium menggelembung.",
     },
     {
       risk: "Getaran kabin kendaraan atau kontak pin longgar saat uji jalan",
@@ -140,6 +153,28 @@ export const APPROVAL_DOC_MEMO = {
       risk: "Kesalahan prosedur saat debugging atau pemrograman ulang",
       mitigation:
         "Penerapan aturan keselamatan H8: larangan menyalakan suplai +12V kendaraan/PSU bersamaan dengan kabel USB pemrograman ke ESP32 Base.",
+    },
+  ],
+  scopeItems: [
+    {
+      topic: "Ruang Lingkup & Pendampingan Uji",
+      detail:
+        "Pengujian awal dilakukan pada 1 unit kendaraan di area gudang dalam kondisi kunci kontak ON atau mesin idle di tempat. Penguji turun langsung mendampingi serta memantau perangkat di lokasi selama proses berlangsung.",
+    },
+    {
+      topic: "Batas Pengujian Parkir Lama",
+      detail:
+        "Pengujian parkir jangka panjang atau tanpa pengawasan langsung hanya boleh dilakukan setelah nilai arus tidur aktual (uji E5 pada Tahap C) tercatat aman dan selesai dievaluasi.",
+    },
+    {
+      topic: "Status Pasif CAN & Bebas Baterai LiPo",
+      detail:
+        "Saat tidur, pemutusan 3V3_CAN oleh Q1 (0,00 V) menghentikan aktivitas frame CAN agar tidak membangunkan ECU kendaraan. Perangkat juga tidak membawa baterai LiPo/Li-Ion di dalam kabin.",
+    },
+    {
+      topic: "Kebutuhan Jaringan Wi-Fi / Data",
+      detail:
+        "Pengujian menggunakan penyimpanan lokal perangkat serta hotspot mandiri bila diperlukan, sehingga tidak membutuhkan maupun membebani jaringan Wi-Fi internal gudang.",
     },
   ],
   bomItems: [
@@ -732,10 +767,20 @@ function buildHtmlDocument() {
     )
     .join("\n");
 
+  const scopeRows = APPROVAL_DOC_MEMO.scopeItems
+    .map(
+      (item) => `
+      <tr>
+        <td style="width: 28%;"><strong>${item.topic}</strong></td>
+        <td style="width: 72%;">${item.detail}</td>
+      </tr>`,
+    )
+    .join("\n");
+
   const renderFooter = (pageNum) => `
     <div class="footer-note">
       <span>${APPROVAL_DOC_MEMO.docCode}</span>
-      <span>Halaman ${pageNum} dari 7</span>
+      <span>Halaman ${pageNum} dari 8</span>
     </div>
   `;
 
@@ -869,11 +914,11 @@ function buildHtmlDocument() {
     font-size: 8.2pt;
   }
   .checklist-ul li {
-    margin-bottom: 3px;
+    margin-bottom: 2.5px;
   }
   .bom-table th, .bom-table td {
-    padding: 3.3px 6px;
-    font-size: 7.85pt;
+    padding: 3.0px 6px;
+    font-size: 7.75pt;
   }
   .ref-box {
     border: 0.75pt solid #555555;
@@ -968,7 +1013,7 @@ function buildHtmlDocument() {
     ${renderFooter(2)}
   </section>
 
-  <!-- HALAMAN 3: LANJUTAN TABEL PENGUJIAN, MATRIKS MITIGASI RISIKO & CEK WAJIB TAHAP C -->
+  <!-- HALAMAN 3: LANJUTAN TABEL PENGUJIAN & MATRIKS MITIGASI RISIKO -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -978,7 +1023,7 @@ function buildHtmlDocument() {
     </div>
 
     <div>
-      <h2>3. Data Pengujian (Lanjutan: Sakelar Aktif, Modifikasi RTC &amp; Target Tahap C)</h2>
+      <h2>3. Data Pengujian (Lanjutan: Sakelar Aktif, Terminasi 120 Ohm &amp; Target Tahap C)</h2>
       <table>
         <thead>
           <tr>
@@ -1010,20 +1055,50 @@ function buildHtmlDocument() {
       </table>
     </div>
 
-    <div class="notice-box">
-      <div style="font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">5. Urutan Verifikasi Wajib Sebelum Pemasangan ke Unit Kendaraan (Tahap C)</div>
+    ${renderFooter(3)}
+  </section>
+
+  <!-- HALAMAN 4: SKENARIO UJI, BATAS PENGUJIAN, JARINGAN & DAFTAR VERIFIKASI WAJIB -->
+  <section class="page">
+    <div class="doc-header">
+      <div class="doc-meta-top">
+        <span>${APPROVAL_DOC_MEMO.docCode}</span>
+        <span>Skenario Uji Coba, Kebutuhan Jaringan &amp; Cek Pra-Pemasangan</span>
+      </div>
+    </div>
+
+    <div>
+      <h2>5. Skenario, Batas Uji Coba &amp; Kebutuhan Jaringan</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%;">Aspek Pelaksanaan di Gudang</th>
+            <th>Ketentuan &amp; Batas Pengujian</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scopeRows}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="notice-box" style="margin-top: 2px;">
+      <div style="font-weight: 700; margin-bottom: 5px; text-transform: uppercase;">
+        6. Urutan Verifikasi Wajib Sebelum Pemasangan ke Unit Kendaraan (Tahap B &amp; C)
+      </div>
       <ol class="checklist-ul">
-        <li>Menguji ulang keluaran regulator MP1584 tanpa beban pada tegangan input <strong>12,6 V</strong> dan <strong>sekitar 14 V</strong> menggunakan PSU berbatas arus awal <strong>100 mA</strong>.</li>
+        <li>Memeriksa kondisi resistor terminasi <strong>120 Ohm</strong> bawaan pada modul <strong>WCMCU-230</strong> (tahap <em>dry-fit</em>) dan melepasnya pada Tahap B/C agar resistansi bus CAN kendaraan tetap sekitar <strong>60 Ohm</strong>.</li>
+        <li>Menguji ulang keluaran regulator <strong>MP1584</strong> tanpa beban pada tegangan input <strong>12,6 V</strong> dan <strong>sekitar 14 V</strong> menggunakan PSU berbatas arus awal <strong>100 mA</strong>.</li>
         <li>Menjalankan pemeriksaan kontinuitas serta isolasi penuh antar-jalur PCB dalam kondisi tanpa modul dan tanpa daya sebelum perakitan akhir.</li>
-        <li>Mengukur ulang tegangan gerbang (<strong>Vgs</strong>) Q2 saat aktif pada prototipe v2.0 (target <strong>-7,6 V</strong> di 11,9 V dan <strong>-9,1 V</strong> di 14,4 V), mengukur arus deep sleep aktual (<strong>E5</strong>), dan melakukan kalibrasi ADC 4-titik.</li>
+        <li>Mengukur ulang tegangan gerbang (<strong>Vgs</strong>) <strong>Q2</strong> saat aktif pada prototipe v2.0 (target <strong>-7,6 V</strong> di 11,9 V dan <strong>-9,1 V</strong> di 14,4 V), mencatat arus <em>deep sleep</em> aktual (<strong>E5</strong>), dan melakukan kalibrasi ADC 4-titik.</li>
         <li>Menerapkan aturan keselamatan <strong>H8</strong> selama pengujian bengkel (suplai 12V dan kabel USB pemrograman tidak pernah dihubungkan bersamaan ke ESP32 Base).</li>
       </ol>
     </div>
 
-    ${renderFooter(3)}
+    ${renderFooter(4)}
   </section>
 
-  <!-- HALAMAN 4: LAMPIRAN A - DESAIN PCB TAMPAK ATAS (FULL PAGE) -->
+  <!-- HALAMAN 5: LAMPIRAN A - DESAIN PCB TAMPAK ATAS (FULL PAGE) -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -1069,10 +1144,10 @@ function buildHtmlDocument() {
       </tbody>
     </table>
 
-    ${renderFooter(4)}
+    ${renderFooter(5)}
   </section>
 
-  <!-- HALAMAN 5: LAMPIRAN B - DESAIN PCB TAMPAK BAWAH CERMIN (FULL PAGE) -->
+  <!-- HALAMAN 6: LAMPIRAN B - DESAIN PCB TAMPAK BAWAH CERMIN (FULL PAGE) -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -1118,10 +1193,10 @@ function buildHtmlDocument() {
       </tbody>
     </table>
 
-    ${renderFooter(5)}
+    ${renderFooter(6)}
   </section>
 
-  <!-- HALAMAN 6: LAMPIRAN C - DIAGRAM WIRING REALISTIS BERBASIS ASET MODUL FISIK (FULL PAGE) -->
+  <!-- HALAMAN 7: LAMPIRAN C - DIAGRAM WIRING REALISTIS BERBASIS ASET MODUL FISIK (FULL PAGE) -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -1159,10 +1234,10 @@ function buildHtmlDocument() {
       </tbody>
     </table>
 
-    ${renderFooter(6)}
+    ${renderFooter(7)}
   </section>
 
-  <!-- HALAMAN 7: LAMPIRAN D - DAFTAR KOMPONEN (BOM), SOP AMAN & REFERENSI DARING (FULL PAGE) -->
+  <!-- HALAMAN 8: LAMPIRAN D - DAFTAR KOMPONEN (BOM), SOP AMAN & REFERENSI DARING (FULL PAGE) -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -1190,7 +1265,7 @@ function buildHtmlDocument() {
 
     <div class="notice-box" style="margin-top: 1px;">
       <div style="font-weight: 800; margin-bottom: 4px; text-transform: uppercase;">
-        Lampiran D.2 Prosedur Pemasangan &amp; Pelepasan Aman pada Unit Kendaraan Gudang
+        Lampiran D.2 Prosedur Pemasangan, Pelepasan &amp; Henti Darurat di Kendaraan
       </div>
       <ol class="checklist-ul">
         <li>Matikan mesin, aktifkan rem parkir, dan posisikan kunci kontak di OFF sebelum membuka atau menyentuh port OBD-II di bawah dasbor.</li>
@@ -1198,6 +1273,7 @@ function buildHtmlDocument() {
         <li>Colokkan harness OBD-II secara lurus ke soket 16-pin kendaraan hingga mengunci tanpa memotong, menjepit, atau mengupas kabel bawaan mobil.</li>
         <li>Letakkan kotak pelindung plastik (non-konduktif) ORION v2.0 pada lokasi aman agar tidak mengganggu gerak pedal maupun kemudi, lalu lanjutkan pencatatan uji sesuai skenario Tahap C.</li>
         <li>Saat pengujian selesai atau perangkat perlu diprogram ulang lewat USB (<strong>aturan H8</strong>), cabut soket OBD-II ketika kunci kontak OFF agar sistem kelistrikan kendaraan kembali ke kondisi standar pabrik.</li>
+        <li>Hentikan uji seketika, matikan kunci kontak ke posisi OFF, dan cabut soket OBD-II apabila muncul lampu indikator peringatan (MIL) yang tidak wajar di dasbor, kotak perangkat terasa panas atau berbau tidak normal, maupun terjadi penurunan tegangan aki yang janggal.</li>
       </ol>
     </div>
 
@@ -1209,7 +1285,7 @@ function buildHtmlDocument() {
       </div>
     </div>
 
-    ${renderFooter(7)}
+    ${renderFooter(8)}
   </section>
 
 </body>
