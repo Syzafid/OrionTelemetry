@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cable, CheckCircle2, Cpu, Gauge, Server, Wifi } from "lucide-react";
+import { LandingWelcomeModal } from "@/components/LandingWelcomeModal";
 import { OrionLogo } from "@/components/hmi/OrionLogo";
 import { Button } from "@/components/ui/button";
+import { requestAppFullscreen } from "@/hooks/useFullscreen";
 import { cn } from "@/lib/utils";
 import yard from "@/assets/yard-night.jpg";
 
@@ -207,6 +209,10 @@ const FEATURES = [
 ];
 
 function Landing() {
+  const handleOpenDashboard = () => {
+    void requestAppFullscreen();
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-crimson/30">
       {/* Sticky Header (Sole backdrop-blur element on Landing Page) */}
@@ -264,7 +270,9 @@ function Landing() {
               size="sm"
               className="min-h-[44px] md:min-h-[38px] px-4 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors"
             >
-              <Link to="/dashboard">Buka Dashboard</Link>
+              <Link to="/dashboard" onClick={handleOpenDashboard}>
+                Buka Dashboard
+              </Link>
             </Button>
           </div>
         </div>
@@ -347,7 +355,9 @@ function Landing() {
                 asChild
                 className="min-h-[44px] px-6 font-medium bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors"
               >
-                <Link to="/dashboard">Buka Dashboard</Link>
+                <Link to="/dashboard" onClick={handleOpenDashboard}>
+                  Buka Dashboard
+                </Link>
               </Button>
               <Button
                 asChild
@@ -669,7 +679,9 @@ function Landing() {
                     asChild
                     className="min-h-[44px] w-full justify-center px-5 text-xs font-semibold uppercase tracking-wider bg-foreground hover:bg-foreground/90 text-background rounded-[2px] transition-colors"
                   >
-                    <Link to="/dashboard">Buka Dashboard</Link>
+                    <Link to="/dashboard" onClick={handleOpenDashboard}>
+                      Buka Dashboard
+                    </Link>
                   </Button>
                   <p className="num text-center text-xs text-muted-foreground">
                     Mendukung mode Live MySQL API dan data simulasi lokal.
@@ -718,6 +730,7 @@ function Landing() {
           </p>
         </div>
       </footer>
+      <LandingWelcomeModal />
     </div>
   );
 }

@@ -25,6 +25,8 @@ export interface CommandPaletteModalProps {
   onClose: () => void;
   alarmArmed: boolean;
   onToggleAlarm: () => void;
+  onOpenHelp?: () => void;
+  onStartGuide?: () => void;
 }
 
 interface PaletteItem {
@@ -51,6 +53,8 @@ export function CommandPaletteModal({
   onClose,
   alarmArmed,
   onToggleAlarm,
+  onOpenHelp,
+  onStartGuide,
 }: CommandPaletteModalProps) {
   const {
     allUnits,
@@ -217,6 +221,38 @@ export function CommandPaletteModal({
             },
           ]
         : []),
+      ...(onOpenHelp
+        ? [
+            {
+              id: "act-help",
+              group: "ACTIONS" as const,
+              title: "Buka Bantuan Web",
+              subtitle: "Ringkasan menu, warna status, dan pintasan keyboard",
+              badge: "?",
+              tone: "dim" as const,
+              onSelect: () => {
+                onClose();
+                onOpenHelp();
+              },
+            },
+          ]
+        : []),
+      ...(onStartGuide
+        ? [
+            {
+              id: "act-guide",
+              group: "ACTIONS" as const,
+              title: "Mulai Panduan Interaktif",
+              subtitle: "Tur langkah demi langkah penggunaan dashboard web",
+              badge: "8 Langkah",
+              tone: "emerald" as const,
+              onSelect: () => {
+                onClose();
+                onStartGuide();
+              },
+            },
+          ]
+        : []),
     ];
 
     const actionItems = q
@@ -245,6 +281,8 @@ export function CommandPaletteModal({
     onToggleAlarm,
     selected,
     simulateBurstSync,
+    onOpenHelp,
+    onStartGuide,
   ]);
 
   useEffect(() => {

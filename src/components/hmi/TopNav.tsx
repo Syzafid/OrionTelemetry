@@ -1,13 +1,25 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Command, Layers, Radio, Settings2, Volume2, VolumeX } from "lucide-react";
+import {
+  BookOpen,
+  Command,
+  HelpCircle,
+  Layers,
+  Radio,
+  Settings2,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
 import {
   loadCommandPaletteModal,
+  loadWebGuideOverlay,
+  loadWebHelpModal,
   prefetchCommandPalette,
   prefetchHmiModule,
+  prefetchWebHelp,
 } from "@/lib/hmi-module-loaders";
 import { OrionLogo } from "./OrionLogo";
 import { Led } from "./primitives";
@@ -16,6 +28,8 @@ import * as m from "motion/react-m";
 import { DURATION, EASE_STANDARD } from "@/lib/motion-tokens";
 
 const CommandPaletteModal = lazy(loadCommandPaletteModal);
+const WebHelpModal = lazy(loadWebHelpModal);
+const WebGuideOverlay = lazy(loadWebGuideOverlay);
 
 const MODULES: { id: ModuleId; label: string }[] = [
   { id: "01", label: "Topologi & Transduser" },
@@ -66,7 +80,7 @@ function playIndustrialAlarmChime(mode: "CONFIRM" | "CRITICAL"): void {
     }
 
     setTimeout(() => {
-      void ctx.close().catch(() => {});
+      void ctx.close().catch(() => { });
     }, 500);
   } catch {
     // Ignore audio context blocks in restricted environments
@@ -93,7 +107,22 @@ export function TopNav() {
   const [alarmArmed, setAlarmArmed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandMounted, setCommandMounted] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpMounted, setHelpMounted] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideMounted, setGuideMounted] = useState(false);
   const lastChimeRef = useRef<number>(0);
+
+  const openHelpModal = useCallback(() => {
+    setHelpMounted(true);
+    setHelpOpen(true);
+  }, []);
+
+  const startWebGuide = useCallback(() => {
+    setHelpOpen(false);
+    setGuideMounted(true);
+    setGuideOpen(true);
+  }, []);
 
   const hasCriticalCondition = units.some((u) => {
     const critV = configs[u.unit_id]?.crit_v ?? 11.8;
@@ -125,8 +154,15 @@ export function TopNav() {
     return () => clearInterval(interval);
   }, [alarmArmed, hasCriticalCondition]);
 
-  // Global keyboard shortcuts: Ctrl+K / Cmd+K (Command Palette) & Alt+1..Alt+5 (Switch Module)
+  // Global keyboard shortcuts: Ctrl+K / Cmd+K (Command Palette), ? (Web Help) & Alt+1..Alt+6 (Switch Module)
   useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -135,18 +171,21 @@ export function TopNav() {
         return;
       }
 
+      if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        e.key === "?" &&
+        !isEditableTarget(e.target)
+      ) {
+        e.preventDefault();
+        openHelpModal();
+        return;
+      }
+
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        const target = e.target as HTMLElement | null;
-        if (target) {
-          const tag = target.tagName;
-          if (
-            tag === "INPUT" ||
-            tag === "TEXTAREA" ||
-            tag === "SELECT" ||
-            target.isContentEditable
-          ) {
-            return;
-          }
+        if (isEditableTarget(e.target)) {
+          return;
         }
         const keyMap: Record<string, ModuleId> = {
           "1": "01",
@@ -166,7 +205,7 @@ export function TopNav() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [setActiveModule]);
+  }, [setActiveModule, openHelpModal]);
 
   const live = dataSource === "LIVE_API";
   const statusTone = !live ? "dim" : apiStatus === "CONNECTED" ? "emerald" : "amber";
@@ -184,8 +223,8 @@ export function TopNav() {
   const avgRssi =
     rssiSource.length > 0
       ? Math.round(
-          rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length,
-        )
+        rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length,
+      )
       : null;
 
   const apTone: "emerald" | "amber" | "crimson" =
@@ -236,6 +275,7 @@ export function TopNav() {
             {/* Global Command Palette Trigger (Ctrl+K) */}
             <button
               type="button"
+              data-guide-target="nav-tools"
               onClick={() => {
                 setCommandMounted(true);
                 setCommandOpen(true);
@@ -263,6 +303,19 @@ export function TopNav() {
               <BookOpen size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
               <span className="hidden lg:inline">Docs</span>
             </a>
+
+            <button
+              type="button"
+              onClick={openHelpModal}
+              onMouseEnter={prefetchWebHelp}
+              onFocus={prefetchWebHelp}
+              title="Buka Bantuan Penggunaan Web (?)"
+              aria-label="Buka bantuan penggunaan web"
+              className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
+            >
+              <HelpCircle size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+              <span className="hidden lg:inline">Bantuan</span>
+            </button>
 
             <div className="flex min-h-[44px] items-center gap-1.5 panel px-2.5 py-1.5 sm:gap-2 sm:px-3">
               <Radio
@@ -326,6 +379,7 @@ export function TopNav() {
 
             <button
               type="button"
+              data-guide-target="nav-status"
               onClick={() => setDataSource(live ? "SIMULATOR" : "LIVE_API")}
               title={live ? "Kembali ke simulator sandbox" : "Polling live API setiap 3 detik"}
               className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider transition-colors hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
@@ -416,7 +470,7 @@ export function TopNav() {
           </div>
         </div>
         <div className="relative border-t border-border">
-          <nav className="flex overflow-x-auto border-border">
+          <nav data-guide-target="module-tabs" className="flex overflow-x-auto border-border">
             {MODULES.map((mod) => {
               const on = mod.id === activeModule;
               return (
@@ -459,7 +513,25 @@ export function TopNav() {
             onClose={() => setCommandOpen(false)}
             alarmArmed={alarmArmed}
             onToggleAlarm={toggleAlarm}
+            onOpenHelp={openHelpModal}
+            onStartGuide={startWebGuide}
           />
+        </Suspense>
+      )}
+
+      {helpMounted && (
+        <Suspense fallback={null}>
+          <WebHelpModal
+            open={helpOpen}
+            onClose={() => setHelpOpen(false)}
+            onStartGuide={startWebGuide}
+          />
+        </Suspense>
+      )}
+
+      {guideMounted && (
+        <Suspense fallback={null}>
+          <WebGuideOverlay open={guideOpen} onClose={() => setGuideOpen(false)} />
         </Suspense>
       )}
     </>

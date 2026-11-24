@@ -1,27 +1,58 @@
 import { useState, useCallback, useEffect } from "react";
 
 /**
+ * Checks whether the Fullscreen API is supported in the current browser context.
+ * Safe during SSR where `document` is undefined.
+ */
+export function isFullscreenSupported(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    Boolean(document.fullscreenEnabled) &&
+    typeof document.documentElement?.requestFullscreen === "function"
+  );
+}
+
+/**
+ * Requests fullscreen mode directly from a user click/gesture handler.
+ * Returns `true` when fullscreen is active or successfully requested, `false` otherwise.
+ */
+export async function requestAppFullscreen(): Promise<boolean> {
+  if (!isFullscreenSupported()) return false;
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hook to manage Fullscreen API.
- * Returns the current fullscreen state and functions to enter/exit/toggle.
+ * Returns browser support, current fullscreen state, and functions to enter/exit/toggle.
  */
 export function useFullscreen() {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
 
   useEffect(() => {
-    function onChange() {
-      const active = !!document.fullscreenElement;
+    setIsSupported(isFullscreenSupported());
+
+    function syncState() {
+      const active = Boolean(document.fullscreenElement);
       setIsFullscreen(active);
-      if (typeof document !== "undefined") {
-        document.documentElement.classList.toggle("is-fullscreen", active);
-        if (document.body) {
-          document.body.classList.toggle("is-fullscreen", active);
-        }
+      document.documentElement.classList.toggle("is-fullscreen", active);
+      if (document.body) {
+        document.body.classList.toggle("is-fullscreen", active);
       }
     }
-    document.addEventListener("fullscreenchange", onChange);
+
+    syncState();
+    document.addEventListener("fullscreenchange", syncState);
     return () => {
-      document.removeEventListener("fullscreenchange", onChange);
-      if (typeof document !== "undefined") {
+      document.removeEventListener("fullscreenchange", syncState);
+      if (!document.fullscreenElement) {
         document.documentElement.classList.remove("is-fullscreen");
         if (document.body) {
           document.body.classList.remove("is-fullscreen");
@@ -31,16 +62,11 @@ export function useFullscreen() {
   }, []);
 
   const enter = useCallback(async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      }
-    } catch {
-      // User denied or browser doesn't support: silently ignore
-    }
+    await requestAppFullscreen();
   }, []);
 
   const exit = useCallback(async () => {
+    if (typeof document === "undefined") return;
     try {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
@@ -54,5 +80,5 @@ export function useFullscreen() {
     return isFullscreen ? exit() : enter();
   }, [isFullscreen, enter, exit]);
 
-  return { isFullscreen, enter, exit, toggle } as const;
+  return { isFullscreen, isSupported, enter, exit, toggle } as const;
 }

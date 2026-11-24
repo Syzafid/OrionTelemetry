@@ -21,6 +21,16 @@ export const loadCommandPaletteModal = () =>
     default: m.CommandPaletteModal,
   }));
 
+export const loadWebHelpModal = () =>
+  import("@/components/hmi/WebHelpModal").then((m) => ({
+    default: m.WebHelpModal,
+  }));
+
+export const loadWebGuideOverlay = () =>
+  import("@/components/hmi/WebGuideOverlay").then((m) => ({
+    default: m.WebGuideOverlay,
+  }));
+
 const MODULE_PREFETCH_LOADERS: Partial<
   Record<ModuleId, () => Promise<{ default: ComponentType }>>
 > = {
@@ -50,5 +60,14 @@ export function prefetchCommandPalette(): void {
   prefetchedKeys.add("command-palette");
   void loadCommandPaletteModal().catch(() => {
     prefetchedKeys.delete("command-palette");
+  });
+}
+
+/** Idempotently preloads the web help center modal chunk on button hover or focus. */
+export function prefetchWebHelp(): void {
+  if (prefetchedKeys.has("web-help")) return;
+  prefetchedKeys.add("web-help");
+  void loadWebHelpModal().catch(() => {
+    prefetchedKeys.delete("web-help");
   });
 }

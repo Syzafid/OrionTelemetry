@@ -74,6 +74,7 @@ function Workspace() {
       )}
       {/* Topologi Kelistrikan & Transduser stays mounted; only its opacity fades in. */}
       <m.div
+        data-guide-target="module-01"
         className={activeModule === "01" ? "showroom-host flex-1 min-h-0 flex flex-col" : "hidden"}
         initial={false}
         animate={{ opacity: activeModule === "01" ? 1 : 0 }}
@@ -85,6 +86,7 @@ function Workspace() {
         {activeModule !== "01" && (
           <m.div
             key={activeModule}
+            data-guide-target={`module-${activeModule}`}
             className="module-host flex flex-1 min-h-0 flex-col lg:overflow-hidden"
             initial={{ opacity: 0, y: 6 }}
             animate={{
@@ -115,7 +117,9 @@ function Workspace() {
 }
 
 function FullscreenToggle() {
-  const { isFullscreen, enter, exit } = useFullscreen();
+  const { isFullscreen, isSupported, enter, exit } = useFullscreen();
+
+  if (!isSupported) return null;
 
   return (
     <Button
