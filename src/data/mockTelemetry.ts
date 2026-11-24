@@ -953,7 +953,7 @@ export const AUDIT_LOGS: AuditLogEntry[] = [
     unit_id: "MITSUBISHI-STOCK-03",
     event_type: "WARMUP_DISPATCH",
     severity: "INFO",
-    message: "Operator queued priority 10-minute alternator warm-up inspection",
+    message: "Jadwal pemanasan mesin 10 menit dicatat",
     created_at: "2026-11-04 14:30:00",
   },
   {
@@ -1174,7 +1174,7 @@ export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
       "ECM mendeteksi frekuensi/tegangan sinyal sensor MAF di bawah ambang minimum (< 0.2 V).",
     sopSteps: [
       "Periksa kerapatan konektor soket sensor MAF pada kotak filter udara.",
-      "Cek kebersihan elemen hot-wire MAF dan pastikan saluran intake tidak bocor.",
+      "Cek kebersihan elemen hot-wire MAF serta kerapatan saluran intake agar tidak bocor.",
       "Uji tegangan suplai 5V referensi dan ground sensor saat kontak ON.",
     ],
   },
@@ -1206,9 +1206,9 @@ export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
     detail:
       "ECM mencatat tegangan suplai sistem turun di bawah batas minimum operasi (< 10.5V saat cranking/run).",
     sopSteps: [
-      "Ukur tegangan istirahat aki 12V dan verifikasi sel baterai serta kekencangan klem terminal.",
-      "Jadwalkan pemanasan 10 menit di Menu 03 untuk memastikan output pengisian alternator >= 13.50V.",
-      "Audit nilai arus bocor (shunt_sleep_ua) dan kondisi beban aksesoris tambahan.",
+      "Ukur tegangan istirahat aki 12V serta cek kondisi sel baterai dan kekencangan klem terminal.",
+      "Jadwalkan pemanasan 10 menit di Menu 03 untuk mengecek kestabilan pengisian alternator (>= 13,50 V).",
+      "Cek nilai arus bocor (shunt_sleep_ua) dan kondisi beban aksesoris tambahan.",
     ],
   },
   P0171: {
@@ -1229,7 +1229,7 @@ export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
       "ECM mendeteksi ketidakteraturan kecepatan poros engkol (misfire) pada lebih dari satu silinder.",
     sopSteps: [
       "Inspeksi kondisi busi, koil pengapian, dan soket harness di seluruh silinder.",
-      "Pastikan level dan kualitas bahan bakar di tangki mencukupi serta tekanan injeksi stabil.",
+      "Cek kecukupan level bahan bakar di tangki serta kestabilan tekanan injeksi.",
       "Ukur kompresi silinder apabila misfire tetap terjadi saat mesin pada suhu kerja.",
     ],
   },
@@ -1239,7 +1239,7 @@ export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
     detail:
       "Perbandingan osilasi sensor O2 downstream terlalu mendekati sensor upstream saat kondisi jelajah.",
     sopSteps: [
-      "Pastikan tidak ada kebocoran knalpot antara exhaust manifold dan catalytic converter.",
+      "Periksa sambungan knalpot antara exhaust manifold dan catalytic converter agar tidak bocor.",
       "Evaluasi respons sensor O2 upstream & downstream dengan data closed-loop (PID 0114).",
       "Periksa histori misfire atau pembakaran kaya yang berpotensi merusak katalis.",
     ],
@@ -1260,7 +1260,7 @@ export const DTC_LIBRARY: Record<string, DtcLibraryEntry> = {
     system: "Jaringan CAN Bus ISO 15765-4 (500 kbps)",
     detail: "Tidak ada frame balasan dari ID arbitrasi 0x7E8 meskipun transceiver CAN aktif.",
     sopSteps: [
-      "Pastikan sakelar kontak berada di posisi ON (beberapa ECU memutus CAN saat Key Off).",
+      "Putar sakelar kontak ke posisi ON terlebih dulu (sebagian ECU memutus CAN saat Key Off).",
       "Periksa kontinuitas pin 6 (CAN-H) & pin 14 (CAN-L) konektor J1962 serta status SN65HVD230.",
       "Cek kestabilan suplai 3.3V CAN Gate (GPIO26) dan terminasi bus 60 Ohm pada tab Kelistrikan.",
     ],

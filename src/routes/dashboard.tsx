@@ -30,7 +30,9 @@ function ModuleLoadingFallback() {
       aria-live="polite"
       className="panel flex flex-1 min-h-[320px] items-center justify-center p-6"
     >
-      <span className="num text-xs text-muted-foreground tracking-wider">Memuat modul HMI...</span>
+      <span className="num text-xs text-muted-foreground tracking-wider">
+        Memuat tampilan dashboard...
+      </span>
     </div>
   );
 }
@@ -38,17 +40,17 @@ function ModuleLoadingFallback() {
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "ORION: Konsol Workbench Telemetri & Topologi Stock Yard" },
+      { title: "ORION: Dashboard Pemantauan Aki & Telemetri Stock Yard" },
       {
         name: "description",
         content:
-          "ORION Telemetry Workbench: Monitoring voltase baterai 12V real-time, topologi kelistrikan & transduser armada, antrean pemanasan mesin, dan diagnostik OBD-II stock yard.",
+          "Dashboard pemantauan ORION: kondisi tegangan aki 12V, jalur kelistrikan unit, antrean pemanasan mesin, dan diagnostik OBD-II di area gudang.",
       },
-      { property: "og:title", content: "ORION: Konsol Workbench Telemetri & Topologi Stock Yard" },
+      { property: "og:title", content: "ORION: Dashboard Pemantauan Aki & Telemetri Stock Yard" },
       {
         property: "og:description",
         content:
-          "ORION Fleet Telemetry HMI: electrical topology & transducer inspector, warm-up queue, diagnostics and remote node config.",
+          "Dashboard pemantauan ORION: jalur kelistrikan dan sensor tiap kendaraan, antrean pemanasan mesin, diagnostik OBD-II, dan pengaturan node.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -67,7 +69,7 @@ function Workspace() {
           aria-live="polite"
           className="mb-3 flex shrink-0 items-center justify-between gap-2 rounded-[2px] border border-amber/50 bg-amber/10 px-3 py-2 num text-xs text-amber"
         >
-          <span>Menghubungkan ke ORION Live API (MySQL)... Memuat telemetri unit aktif.</span>
+          <span>Menghubungkan ke server Live API (MySQL)... Mengambil data terbaru.</span>
         </div>
       )}
       {/* Topologi Kelistrikan & Transduser stays mounted; only its opacity fades in. */}

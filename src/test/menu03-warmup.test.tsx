@@ -97,11 +97,11 @@ describe("Menu 03 WarmupQueueModule (UI, Telemetry Honesty & Workflow)", () => {
   it("dispatches warmup staff memo and disables button to prevent duplicate submissions", () => {
     renderWarmup();
 
-    const dispatchBtn = screen.getByRole("button", { name: /Tugaskan Teknisi \(Memo\)/i });
+    const dispatchBtn = screen.getByRole("button", { name: /Catat Jadwal Pemanasan/i });
     expect(dispatchBtn).not.toBeDisabled();
     fireEvent.click(dispatchBtn);
 
-    const disabledBtn = screen.getByRole("button", { name: /Staf Telah Ditugaskan/i });
+    const disabledBtn = screen.getByRole("button", { name: /Jadwal Tercatat/i });
     expect(disabledBtn).toBeDisabled();
   });
 
@@ -177,6 +177,6 @@ describe("Menu 03 WarmupQueueModule (UI, Telemetry Honesty & Workflow)", () => {
     });
     expect(within(logPanel).queryByText("XFORCE")).not.toBeInTheDocument();
     expect(within(logPanel).getByText("14:18 WIB")).toBeInTheDocument();
-    expect(within(logPanel).getByText("Ditugaskan")).toBeInTheDocument();
+    expect(within(logPanel).getByText("Terjadwal")).toBeInTheDocument();
   });
 });

@@ -92,10 +92,10 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     expect(twoCards).toHaveLength(2);
     expect(twoCards[0]!.className).toContain("lg:w-[calc((100%-1rem)/2)]");
     expect(twoCards[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]")).toBeNull();
-    expect(screen.getByText(/Lompat Cepat:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pilih Cepat:/i)).toBeInTheDocument();
     expect(screen.getByText(/Ekspor Excel \(2 Unit\)/i)).toBeInTheDocument();
 
-    // 1 unit ("P0133"): full width + 2-column desktop card body + hidden Lompat Cepat bar
+    // 1 unit ("P0133"): full width + 2-column desktop card body + hidden Pilih Cepat bar
     fireEvent.change(searchInput, { target: { value: "P0133" } });
     const articlesAfterSearch = screen.getAllByRole("article");
     expect(articlesAfterSearch).toHaveLength(1);
@@ -105,7 +105,7 @@ describe("Menu 02 FleetModule (UI, Workflows & Live API Honesty)", () => {
     expect(
       articlesAfterSearch[0]!.querySelector(".lg\\:grid-cols-\\[1\\.15fr_1fr\\]"),
     ).not.toBeNull();
-    expect(screen.queryByText(/Lompat Cepat:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pilih Cepat:/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Ekspor Excel \(1 Unit\)/i)).toBeInTheDocument();
 
     // Cross-module quick buttons navigate to Module 04 & Module 01 with unit selected

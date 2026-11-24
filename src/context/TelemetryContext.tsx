@@ -421,14 +421,14 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
           id,
           "DTC_ALERT",
           "CRITICAL",
-          `OBD-II Mode 03 read-only diagnostic fault code ${code} detected`,
+          `Kode gangguan OBD-II Mode 03 (hanya baca) ${code} terdeteksi`,
         );
       } else {
         appendLocalAudit(
           id,
           "DTC_SANDBOX_PREVIEW",
           "INFO",
-          "Sandbox Mode 03 read preview restored to nominal (100% Read-Only ECU policy)",
+          "Pratinjau simulasi Mode 03 kembali normal (hanya baca ECU)",
         );
       }
     },
@@ -442,7 +442,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         id,
         "BUFFER_FLUSH",
         "INFO",
-        "Operator cleared offline sync badge and acknowledged burst buffer",
+        "Antrean data offline ditandai selesai",
       );
       void sendMutation("FLUSH_BUFFER", { unit_id: id });
     },
@@ -460,7 +460,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         id,
         "BURST_SYNC_SIM",
         "WARN",
-        "Simulated 28-record burst upload (20 RTC SRAM + 8 LittleFS Flash Spillover)",
+        "Simulasi pengiriman 28 data offline (20 RTC SRAM + 8 memori LittleFS)",
       );
     },
     [patchUnit, appendLocalAudit],
@@ -473,7 +473,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
         id,
         "WARMUP_DISPATCH",
         "WARN",
-        "Operator dispatched staff for 10-min engine alternator warm-up",
+        "Jadwal pemanasan mesin 10 menit dicatat",
       );
       void sendMutation("DISPATCH_WARMUP", { unit_id: id });
     },
@@ -493,12 +493,12 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
       );
       const sev: AuditSeverity =
         status === "RESOLVED" ? "INFO" : status === "IN_PROGRESS" ? "WARN" : "CRITICAL";
-      const assigneeText = assignedTo?.trim() || "Field Tech";
+      const assigneeText = assignedTo?.trim() || "Tim Teknisi";
       appendLocalAudit(
         unitId,
         "TICKET_HANDOVER",
         sev,
-        `Maintenance ticket set to ${status} (Assignee: ${assigneeText})${handoverNote ? ` - ${handoverNote}` : ""}`,
+        `Tiket pemeliharaan diubah ke ${status} (PIC: ${assigneeText})${handoverNote ? ` - ${handoverNote}` : ""}`,
       );
       return sendMutation("UPDATE_TICKET", {
         unit_id: unitId,

@@ -123,15 +123,15 @@ describe("Cross-System Live API Honesty & State Isolation", () => {
 
     expect(screen.getByText(/Direktori Armada Stock Yard \(1 Cocok\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/MITSUBISHI-STOCK-08/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Ubah Skala Armada Sandbox/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Simulasi Burst Sync/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ubah Jumlah Unit Simulasi/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Simulasi Data Offline/i)).not.toBeInTheDocument();
 
     // 2. Switch LIVE_API -> SIMULATOR -> LIVE_API again: dummy tickets/audit must be cleared, not stuck by sectionHashesRef
     fireEvent.click(screen.getByRole("button", { name: "Mode Sim" }));
     await waitFor(() => {
       const probe = screen.getByTestId("sync-probe");
       expect(probe.getAttribute("data-tickets")).toContain("TKT-0401");
-      expect(screen.getByText(/Ubah Skala Armada Sandbox/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ubah Jumlah Unit Simulasi/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Mode Live" }));

@@ -601,7 +601,7 @@ export function FleetModule() {
             className="inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/60 bg-background px-3 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RefreshCw size={12} aria-hidden="true" />
-            <span>Poll Ulang</span>
+            <span>Coba Muat Ulang</span>
           </button>
         </div>
       )}
@@ -690,12 +690,12 @@ export function FleetModule() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as FleetSortMode)}
-                aria-label="Urutkan unit armada berdasarkan prioritas triage"
+                aria-label="Urutkan unit kendaraan berdasarkan kondisi aki"
                 className="min-h-[44px] cursor-pointer rounded-[2px] border border-border bg-background pl-8 pr-7 py-1.5 num text-[11px] font-medium uppercase tracking-wider text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="PRIORITY">Urut: Prioritas Triage</option>
+                <option value="PRIORITY">Urut: Prioritas Aki</option>
                 <option value="LOWEST_V">Urut: Voltase Terendah</option>
-                <option value="SHORTEST_TTC">Urut: Estimasi TTC Terdekat</option>
+                <option value="SHORTEST_TTC">Urut: Sisa Waktu Tercepat</option>
                 <option value="BAY">Urut: Lokasi Bay (A-C)</option>
               </select>
             </label>
@@ -740,7 +740,7 @@ export function FleetModule() {
         {filteredUnits.length > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2">
             <div className="flex items-center gap-1.5 overflow-x-auto card-scroll py-0.5 max-w-full">
-              <span className="label-hmi mr-1 shrink-0 text-[11px]">Lompat Cepat:</span>
+              <span className="label-hmi mr-1 shrink-0 text-[11px]">Pilih Cepat:</span>
               {filteredUnits.map((u, idx) => {
                 const crit = configs[u.unit_id]?.crit_v ?? 11.8;
                 const tn = unitTone(u, crit);
@@ -1048,7 +1048,7 @@ export function FleetModule() {
                             className="text-muted-foreground"
                             aria-hidden="true"
                           />
-                          <span>Laju Kuras &amp; Estimasi TTC</span>
+                          <span>Laju Kuras &amp; Sisa Waktu</span>
                         </span>
                         <span
                           className={cn(
@@ -1304,7 +1304,7 @@ export function FleetModule() {
                           <div>
                             PIC:{" "}
                             <span className="font-medium text-foreground">
-                              {unitTicket?.assigned_to ?? "Belum Ditugaskan"}
+                              {unitTicket?.assigned_to ?? "Belum Diisi"}
                             </span>
                           </div>
                           <div
@@ -1328,8 +1328,8 @@ export function FleetModule() {
                                 "IN_PROGRESS",
                                 unitTicket?.assigned_to && unitTicket.assigned_to !== "Unassigned"
                                   ? unitTicket.assigned_to
-                                  : "Teknisi Shift Aktif",
-                                "Tiket diklaim teknisi; sedang dilakukan pemeriksaan di stock yard.",
+                                  : "Tim Teknisi",
+                                "Sedang diperiksa di area gudang.",
                               );
                             }}
                             className="num inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1 rounded-[2px] border border-amber/50 bg-amber/10 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber transition-colors hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
@@ -1376,8 +1376,8 @@ export function FleetModule() {
                       />
                       <span>
                         {u.status_label === "Warm-Up Dispatched"
-                          ? "Staf Telah Ditugaskan"
-                          : "Tugaskan Pemanasan (Memo)"}
+                          ? "Jadwal Tercatat"
+                          : "Catat Jadwal Pemanasan"}
                       </span>
                     </button>
                   )}
@@ -1752,7 +1752,7 @@ function PdiCertificateModal({
             </div>
           </div>
           <div className="num text-right text-[11px]">
-            <div className="text-muted-foreground">Laju Kuras &amp; Estimasi TTC</div>
+            <div className="text-muted-foreground">Laju Kuras &amp; Sisa Waktu</div>
             <div className="font-semibold text-foreground">{prediction.statusText}</div>
           </div>
         </div>

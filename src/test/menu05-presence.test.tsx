@@ -141,7 +141,7 @@ describe("Menu 05 PresenceModule (SIMULATOR Workflows, Queue & Navigation)", () 
   it("renders Indonesian presence workspace without fake 0x3FF0 hex masks and supports filter + empty-state reset", () => {
     renderPresence(false);
 
-    expect(screen.getByText(/Proteksi Mass Disconnect \(AP Outage\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Proteksi Putus Wi-Fi Massal/i)).toBeInTheDocument();
     expect(screen.queryByText(/0x3FF0/i)).not.toBeInTheDocument();
     expect(screen.getByText("01")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe("Menu 05 PresenceModule (SIMULATOR Workflows, Queue & Navigation)", () 
   it("simulates 28-slot LittleFS spillover and resets queue via Konfirmasi / Reset Antrean", () => {
     renderPresence(false);
 
-    const spilloverBtn = screen.getByRole("button", { name: "Simulasi Spillover 28 Slot" });
+    const spilloverBtn = screen.getByRole("button", { name: "Simulasi 28 Data Offline" });
     fireEvent.click(spilloverBtn);
 
     expect(screen.getByText(/\+8 rekaman di LittleFS/i)).toBeInTheDocument();
@@ -323,7 +323,7 @@ describe("Menu 05 PresenceModule (LIVE_API Honesty & Pre-NTP Clock Pairing)", ()
     // Must not falsely raise Proteksi Aktif for 1 node, nor show Sandbox test controls in LIVE_API
     expect(screen.queryByText(/Proteksi Aktif \(Keberangkatan Ditahan\)/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Simulasi Spillover 28 Slot/i }),
+      screen.queryByRole("button", { name: /Simulasi 28 Data Offline/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Simulasikan Keluar Yard/i }),

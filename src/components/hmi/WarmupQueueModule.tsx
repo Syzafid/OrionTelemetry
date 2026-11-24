@@ -371,7 +371,7 @@ export function WarmupQueueModule() {
             className="inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-amber/60 bg-background px-3 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RefreshCw size={12} aria-hidden="true" />
-            <span>Poll Ulang</span>
+            <span>Coba Muat Ulang</span>
           </button>
         </div>
       )}
@@ -569,7 +569,7 @@ export function WarmupQueueModule() {
                       <span>
                         <strong>SOP 10 Menit Terpenuhi!</strong> Alternator telah mengisi baterai
                         optimal selama {formatMmSs(elapsedSec)} pada tegangan {fmtV(t.v_bat)}V.
-                        Mesin siap dimatikan oleh teknisi di lapangan.
+                        Target tercapai, mesin sudah dapat dimatikan.
                       </span>
                     </div>
                   ) : isEngineOn ? (
@@ -581,8 +581,7 @@ export function WarmupQueueModule() {
                       />
                       <span>
                         <strong>Proses Pemanasan Berlangsung:</strong> Alternator aktif mengisi aki.
-                        Butuh {formatMmSs(remainingSec)} lagi untuk mencapai standar minimal SOP
-                        Mitsubishi.
+                        Butuh {formatMmSs(remainingSec)} lagi untuk mencapai target 10 menit.
                       </span>
                     </div>
                   ) : (
@@ -594,9 +593,9 @@ export function WarmupQueueModule() {
                       />
                       <div>
                         <span>
-                          <strong>Sistem Deteksi Pasif Aktif:</strong> Pemanasan akan terdeteksi
-                          otomatis begitu teknisi menyalakan kontak mesin di lapangan (lonjakan
-                          tegangan &ge; {ALT_VERIFY_V.toFixed(2)}V atau sinyal kontak aktif). ·{" "}
+                          <strong>Deteksi Otomatis Aktif:</strong> Stopwatch pemanasan mulai
+                          berjalan otomatis saat mesin dinyalakan (tegangan naik &ge;{" "}
+                          {ALT_VERIFY_V.toFixed(2)}V atau kontak ON). ·{" "}
                           <span className="text-foreground">{prediction.statusText}</span>
                         </span>
                         {selectedLastSession && (
@@ -608,9 +607,9 @@ export function WarmupQueueModule() {
                               : ""}
                             {" · "}Status:{" "}
                             {selectedLastSession.sopStatus === "PASS"
-                              ? "Lolos SOP"
+                              ? "Lolos 10 Menit"
                               : selectedLastSession.sopStatus === "DISPATCHED"
-                                ? "Instruksi Teknisi Tercatat"
+                                ? "Jadwal Pemanasan Tercatat"
                                 : "Belum Tuntas"}
                             .
                           </div>
@@ -704,15 +703,15 @@ export function WarmupQueueModule() {
                     disabled={isDispatched || isEngineOn}
                     onClick={() => handleDispatchStaff(selected.unit_id)}
                     className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/60 px-3 py-1.5 num text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Kirim instruksi penugasan ke server dan log audit untuk memanaskan unit ini"
+                    title="Catat jadwal pemanasan mesin 10 menit ke server dan log aktivitas"
                   >
                     <UserCheck size={13} className="shrink-0" aria-hidden="true" />
                     <span>
                       {isDispatched
-                        ? "Staf Telah Ditugaskan"
+                        ? "Jadwal Tercatat"
                         : isEngineOn
                           ? "Sedang Pemanasan"
-                          : "Tugaskan Teknisi (Memo)"}
+                          : "Catat Jadwal Pemanasan"}
                     </span>
                   </button>
 
@@ -803,10 +802,10 @@ export function WarmupQueueModule() {
                           disabled={unitDispatched}
                           onClick={() => handleDispatchStaff(u.unit_id)}
                           className="num inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Tandai perintah pemanasan untuk teknisi lapangan"
+                          title="Catat jadwal pemanasan 10 menit untuk unit ini"
                         >
                           <UserCheck size={12} aria-hidden="true" />
-                          <span>{unitDispatched ? "Ditugaskan" : "Tugaskan"}</span>
+                          <span>{unitDispatched ? "Terjadwal" : "Jadwalkan"}</span>
                         </button>
                         <button
                           type="button"
@@ -981,8 +980,8 @@ export function WarmupQueueModule() {
                   Belum ada sesi pemanasan mesin tercatat pada shift ini
                 </span>
                 <span className="text-[11px] text-muted-foreground mt-0.5">
-                  Sesi otomatis tercatat saat mesin menyala minimal 5 detik atau saat teknisi
-                  ditugaskan.
+                  Sesi otomatis tercatat saat mesin menyala minimal 5 detik atau saat jadwal
+                  pemanasan dicatat.
                 </span>
               </div>
             ) : (
@@ -1029,7 +1028,7 @@ export function WarmupQueueModule() {
                             {log.sopStatus === "PASS"
                               ? "SOP Lolos"
                               : log.sopStatus === "DISPATCHED"
-                                ? "Ditugaskan"
+                                ? "Terjadwal"
                                 : "Belum Tuntas"}
                           </span>
                         </td>

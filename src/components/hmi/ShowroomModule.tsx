@@ -114,7 +114,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                   )}
                 >
                   <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
-                  <span>Poll Live API ({lastSyncTime ?? "--"})</span>
+                  <span>Segarkan Data ({lastSyncTime ?? "--"})</span>
                 </button>
               )}
               <div className="hidden shrink-0 rounded-[2px] border border-border bg-background/80 px-2.5 py-1 text-right sm:block">
@@ -183,7 +183,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 onClick={() => setActiveModule("06")}
                 className="num inline-flex min-h-[44px] sm:min-h-[34px] cursor-pointer items-center rounded-[2px] border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Kalibrasi &amp; Config (06)
+                Pengaturan &amp; Kalibrasi (06)
               </button>
             </div>
           </div>
@@ -193,15 +193,14 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
               className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber/60 bg-amber/10 px-3 py-1.5 num text-[11px] text-amber"
             >
               <span>
-                Koneksi Live API terputus. Menampilkan cache snapshot terakhir (
-                {lastSyncTime ?? "--"}).
+                Koneksi server terputus. Menampilkan data cache terakhir ({lastSyncTime ?? "--"}).
               </span>
               <button
                 type="button"
                 onClick={pollNow}
                 className="min-h-[36px] cursor-pointer rounded-[2px] border border-amber/60 bg-background px-2.5 py-1 text-[11px] font-semibold uppercase text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Poll Ulang
+                Coba Muat Ulang
               </button>
             </div>
           )}
@@ -234,11 +233,11 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
             <div className="flex items-center gap-1.5">
               <Led tone={t.engine_on ? "emerald" : "dim"} />
               <span className="font-semibold uppercase tracking-wider text-foreground">
-                ECU: {t.engine_on ? "RUN (CRANK ACTIVE)" : "STANDBY (KEY OFF)"}
+                Mesin: {t.engine_on ? "Menyala" : "Mati (Standby)"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
-              <span>Lokasi Node:</span>
+              <span>Lokasi:</span>
               <span
                 className={cn(
                   "font-medium",
@@ -251,15 +250,15 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 )}
               >
                 {selected.in_yard
-                  ? `In Yard (Bay ${selected.bay}${resolvedSsid ? ` · SSID: ${resolvedSsid}` : ""})`
+                  ? `Di Gudang (Bay ${selected.bay}${resolvedSsid ? ` · SSID: ${resolvedSsid}` : ""})`
                   : selected.telemetry?.net_zone === "TECH_HOTSPOT" ||
                       selected.net_zone === "TECH_HOTSPOT"
-                    ? `Hotspot: ${resolvedSsid || "Teknisi"}`
-                    : "Luar Geofence (Offline)"}
+                    ? `Hotspot: ${resolvedSsid || "Lapangan"}`
+                    : "Di Luar Area (Offline)"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 border-l border-border pl-3 text-muted-foreground">
-              <span>Sinkronisasi Data:</span>
+              <span>Status Data:</span>
               <span
                 className={cn(
                   "font-medium",
@@ -271,10 +270,10 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
                 )}
               >
                 {selected.buffer_used > 0
-                  ? `Tertunda (${selected.buffer_used} slot di Buffer)`
+                  ? `Antrean Offline (${selected.buffer_used} data)`
                   : !conn.isOnline
-                    ? `Deep Sleep Hold (${selected.last_seen ? selected.last_seen.slice(11, 19) : formatDurationCompact(conn.lastSeenSec) || "Offline"})`
-                    : `Real-time Uplink (${lastSyncTime ?? "Active"})`}
+                    ? `Mode Tidur (${selected.last_seen ? selected.last_seen.slice(11, 19) : formatDurationCompact(conn.lastSeenSec) || "Offline"})`
+                    : `Tersambung Langsung (${lastSyncTime ?? "Aktif"})`}
               </span>
             </div>
           </div>

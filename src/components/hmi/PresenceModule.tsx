@@ -185,7 +185,7 @@ export function PresenceModule() {
             />
             <div className="min-w-0">
               <div className="font-display text-xs uppercase tracking-[0.08em] text-foreground">
-                Proteksi Mass Disconnect (AP Outage)
+                Proteksi Putus Wi-Fi Massal
               </div>
               <div className="num text-[11px] text-muted-foreground">{guardEval.reasonText}</div>
             </div>
@@ -287,7 +287,7 @@ export function PresenceModule() {
                 className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-background px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" />
-                <span>Poll Live API ({lastSyncTime ?? "--"})</span>
+                <span>Segarkan Data ({lastSyncTime ?? "--"})</span>
               </button>
             )}
           </div>
@@ -347,7 +347,7 @@ export function PresenceModule() {
                   onClick={() => simulateBurstSync(selected.unit_id)}
                   className="min-h-[44px] md:min-h-[36px] cursor-pointer rounded-[2px] border border-amber/50 bg-amber/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber hover:bg-amber/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  Simulasi Spillover 28 Slot
+                  Simulasi 28 Data Offline
                 </button>
               </div>
             )}

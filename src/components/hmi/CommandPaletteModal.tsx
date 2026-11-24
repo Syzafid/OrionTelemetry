@@ -152,7 +152,7 @@ export function CommandPaletteModal({
         id: `mod-${m.id}`,
         group: "ACTIONS" as const,
         title: `Buka Modul ${m.id}: ${m.name}`,
-        subtitle: "Navigasi Ruang Kontrol",
+        subtitle: "Pindah Halaman Dashboard",
         badge: m.shortcut,
         tone: "dim" as const,
         onSelect: () => {
@@ -165,7 +165,7 @@ export function CommandPaletteModal({
             {
               id: "act-scale",
               group: "ACTIONS" as const,
-              title: `Ubah Skala Armada Sandbox (${fleetScale === 3 ? "Pindah ke 12 Unit Yard" : "Kembali ke 3 Unit Inti"})`,
+              title: `Ubah Jumlah Unit Simulasi (${fleetScale === 3 ? "Tampilkan 12 Unit" : "Kembali ke 3 Unit Inti"})`,
               subtitle: `Menampilkan ${fleetScale} unit simulasi`,
               badge: `${fleetScale} -> ${fleetScale === 3 ? 12 : 3}`,
               tone: "dim" as const,
@@ -179,8 +179,8 @@ export function CommandPaletteModal({
       {
         id: "act-excel",
         group: "ACTIONS",
-        title: "Ekspor Laporan Excel Terformat (.xls)",
-        subtitle: "Unduh ringkasan armada & log riwayat berformat tabel",
+        title: "Ekspor Laporan Excel (.xls)",
+        subtitle: "Unduh riwayat armada dan tegangan baterai dalam format tabel",
         badge: "XLS",
         tone: "emerald",
         onSelect: () => {
@@ -191,10 +191,8 @@ export function CommandPaletteModal({
       {
         id: "act-alarm",
         group: "ACTIONS",
-        title: alarmArmed
-          ? "Bisukan Alarm Audio Industri"
-          : "Aktifkan Alarm Audio Industri (880Hz/660Hz)",
-        subtitle: `Status audio saat ini: ${alarmArmed ? "AKTIF" : "SENYAP"}`,
+        title: alarmArmed ? "Bisukan Alarm Suara" : "Aktifkan Alarm Suara (880Hz/660Hz)",
+        subtitle: `Status suara saat ini: ${alarmArmed ? "AKTIF" : "SENYAP"}`,
         badge: alarmArmed ? "BISUKAN" : "AKTIFKAN",
         tone: alarmArmed ? "amber" : "crimson",
         onSelect: () => {
@@ -207,8 +205,8 @@ export function CommandPaletteModal({
             {
               id: "act-burst",
               group: "ACTIONS" as const,
-              title: `Simulasi Burst Sync (${selected.bay})`,
-              subtitle: "Simulasikan 28 rekaman offline (20 RTC SRAM + 8 LittleFS) & buka Presensi",
+              title: `Simulasi Data Offline (${selected.bay})`,
+              subtitle: "Simulasikan 28 data antrean (20 RTC + 8 LittleFS) lalu buka Presensi",
               badge: "+28 REK",
               tone: "amber" as const,
               onSelect: () => {

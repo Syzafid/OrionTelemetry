@@ -518,7 +518,7 @@ export function DiagnosticsModule() {
               className="num inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-background px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span>Poll Live API ({lastSyncTime ?? "--"})</span>
+              <span>Segarkan Data ({lastSyncTime ?? "--"})</span>
             </button>
           )}
         </div>
@@ -566,7 +566,7 @@ export function DiagnosticsModule() {
             {!isLiveApi && (
               <div className="flex flex-wrap items-center gap-1.5 border-r border-border/70 pr-2 mr-0.5">
                 <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Uji Sandbox:
+                  Mode Simulasi:
                 </span>
                 <button
                   type="button"
@@ -777,7 +777,7 @@ export function DiagnosticsModule() {
                   <p className="mt-1 max-w-sm num text-[11px] leading-relaxed text-muted-foreground">
                     {isLiveApi
                       ? "Grafik hanya memetakan aktivitas RPM dan suhu coolant aktual dari MySQL. Saat kontak ON, kurva akan tergambar otomatis."
-                      : "Pada mode Sandbox, klik Simulasikan Mesin ON di bilah atas atau jadwalkan pemanasan untuk melihat kurva aktif."}
+                      : "Pada mode Simulasi, klik Simulasikan Mesin ON di bilah atas atau jadwalkan pemanasan untuk melihat grafik aktif."}
                   </p>
                   <button
                     type="button"

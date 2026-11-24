@@ -224,18 +224,17 @@ function buildHarnessSpecs(
       sopSteps: [
         {
           code: "STEP 01",
-          instruction:
-            "Pastikan baterai berada pada kondisi terisi (>= 12.40V) sebelum melakukan inspeksi.",
+          instruction: "Cek tegangan awal aki dengan multimeter (acuan normal >= 12,40 V).",
         },
         {
           code: "STEP 02",
           instruction:
-            "Verifikasi resistansi terminasi bus CAN sebesar 60 Ohm pada port OBD-II pin 6 dan 14 saat kunci kontak OFF.",
+            "Ukur resistansi bus CAN pada port OBD-II pin 6 dan 14 saat kontak OFF (acuan normal sekitar 60 Ohm).",
         },
         {
           code: "STEP 03",
           instruction:
-            "Pastikan kebocoran arus tidur berada <= 450 uA pada resistor shunt R-Sense saat unit masuk deep sleep.",
+            "Amati arus tidur pada resistor shunt R-Sense saat unit tidur (target <= 450 uA).",
         },
       ],
     },
@@ -246,7 +245,7 @@ function buildHarnessSpecs(
         "Terminal M8 B+ -> Pembagi Tegangan 100k/27k (v2.0) / 300k/68k (v1.0) -> GPIO34 ADC ESP32",
       spec: `${profile.batterySpec}. Shunt 10 Ohm R-Sense arus parasitik.`,
       diagProcedure:
-        "Periksa tegangan terminal (>= 12.40V nominal) dan arus deep-sleep (nominal <= 450 uA, waspada > 450 uA).",
+        "Cek tegangan terminal (acuan normal >= 12,40 V) dan arus deep sleep (normal <= 450 uA, perlu perhatian > 450 uA).",
       sopSteps: [
         {
           code: "SOP B.1",
@@ -256,12 +255,12 @@ function buildHarnessSpecs(
         {
           code: "SOP B.2",
           instruction:
-            "Catat tegangan mentah mV pada ESP32 Node M (GPIO34) untuk verifikasi koefisien OLS.",
+            "Catat tegangan mentah mV pada ESP32 Node M (GPIO34) untuk perhitungan koefisien kalibrasi OLS.",
         },
         {
           code: "SOP B.3",
           instruction:
-            "Matikan kunci kontak, tunggu 120 detik hingga ECU tidur, pastikan shunt membaca <= 450 uA.",
+            "Matikan kunci kontak, tunggu sekitar 120 detik hingga ECU tidur, lalu cek bacaan arus pada shunt (acuan <= 450 uA).",
         },
       ],
     },
@@ -271,21 +270,21 @@ function buildHarnessSpecs(
       pinout: "Terminal B+ (Output Cas), Terminal L (Indikator Speedometer), Terminal S (Sense)",
       spec: `${profile.alternatorSpec} Internal IC Regulator, Cut-in Speed ${profile.cutInRpm}`,
       diagProcedure:
-        "Ukur tegangan saat mesin menyala (13.20V s/d 14.60V). Ripple AC maksimal < 250 mV RMS.",
+        "Ukur tegangan saat mesin menyala (13.20V s/d 14.60V). Ripple AC normal < 250 mV RMS.",
       sopSteps: [
         {
           code: "SOP A.1",
-          instruction: `Hidupkan mesin pada putaran ${profile.idleRpmRange}, periksa lampu peringatan aki padam.`,
+          instruction: `Hidupkan mesin pada putaran ${profile.idleRpmRange}, lalu cek apakah lampu indikator aki padam.`,
         },
         {
           code: "SOP A.2",
           instruction:
-            "Nyalakan beban listrik penuh (lampu utama, AC blower maks), tegangan harus bertahan >= 13.50V.",
+            "Nyalakan beban listrik penuh (lampu utama, AC blower maksimal); tegangan pengisian normal bertahan >= 13,50 V.",
         },
         {
           code: "SOP A.3",
           instruction:
-            "Hubungkan osiloskop ke terminal B+, pastikan pola riak penyearah 3-fase simetris (< 250 mV).",
+            "Hubungkan osiloskop ke terminal B+ untuk mengamati bentuk riak penyearah 3-fase simetris (< 250 mV).",
         },
       ],
     },
@@ -294,7 +293,7 @@ function buildHarnessSpecs(
       wireColor: "Shielded Twisted Pair Kuning/Hitam (CKP), Hijau/Putih (Suhu NTC)",
       pinout: "Sensor CKP 2-pin ke ECU Mesin Pin 12/24; ECT Sensor 2-pin ke ECU Pin 42",
       spec: `Mesin ${profile.engineCode}, Reluctance Wheel 60-2 gigi, Thermistor NTC 82°C-95°C.`,
-      diagProcedure: `Verifikasi kestabilan ${profile.idleRpmRange}. Cek sinyal analog ECT saat suhu naik.`,
+      diagProcedure: `Amati kestabilan ${profile.idleRpmRange}. Cek sinyal analog ECT saat suhu naik.`,
       sopSteps: [
         {
           code: "SOP P.1",
@@ -303,12 +302,12 @@ function buildHarnessSpecs(
         {
           code: "SOP P.2",
           instruction:
-            "Verifikasi kenaikan temperatur bertahap dari kondisi dingin hingga termostat membuka (82°C).",
+            "Amati kenaikan temperatur bertahap dari kondisi dingin hingga termostat membuka (82°C).",
         },
         {
           code: "SOP P.3",
           instruction:
-            "Pastikan putaran mesin stabil tanpa lonjakan sinyal liar pada osiloskop gigi reluktansi.",
+            "Periksa kestabilan putaran mesin pada grafik agar tidak terlihat lonjakan sinyal liar.",
         },
       ],
     },
@@ -318,7 +317,7 @@ function buildHarnessSpecs(
       pinout: "Pin 16 = B+, Pin 4 = Chassis GND, Pin 5 = Signal GND, Pin 6 = CAN-H, Pin 14 = CAN-L",
       spec: "ISO 11898-2 High-Speed 500 kbps, Resistansi Terminasi 120 Ohm antar CAN-H/L",
       diagProcedure:
-        "Ukur resistansi bus saat kontak OFF (harus 60 Ohm). Verifikasi 0 DTC pada sistem TWAI.",
+        "Ukur resistansi bus saat kontak OFF (acuan 60 Ohm) dan cek apakah terdapat kode DTC aktif.",
       sopSteps: [
         {
           code: "SOP C.1",
@@ -343,7 +342,7 @@ function buildHarnessSpecs(
       pinout: "I2C SDA (GPIO21), SCL (GPIO22) -> DS3231 TCXO RTC. CAN RX/TX -> SN65HVD230",
       spec: "ESP32 Dual-Core 240MHz, Tier-1 20 RTC SRAM + Tier-2 2.000 LittleFS (176 KB)",
       diagProcedure:
-        "Verifikasi sinkronisasi epoch RTC, drift TCXO < 2ppm, dan konsumsi harian daya.",
+        "Cek sinkronisasi jam RTC, drift TCXO < 2ppm, serta perkiraan konsumsi daya harian.",
       sopSteps: [
         {
           code: "SOP E.1",
@@ -353,12 +352,12 @@ function buildHarnessSpecs(
         {
           code: "SOP E.2",
           instruction:
-            "Verifikasi jam RTC DS3231 tersinkronisasi dengan NTP saat gateway terhubung ke jaringan gudang.",
+            "Cek sinkronisasi waktu RTC DS3231 dengan NTP ketika perangkat tersambung ke jaringan.",
         },
         {
           code: "SOP E.3",
           instruction:
-            "Uji simulasi offline, pastikan paket telemetri tersimpan rapi ke partisi Two-Tier RTC/LittleFS.",
+            "Jalankan simulasi offline untuk mengamati penyimpanan rekaman pada partisi Two-Tier RTC/LittleFS.",
         },
       ],
     },
@@ -366,9 +365,9 @@ function buildHarnessSpecs(
       nodeName: "PROBE 06: ANTENA RF DUAL-BAND & GEOFENCE",
       wireColor: "Koaksial Mikro U.FL 50 Ohm ke Antena PCB 2.4 GHz",
       pinout: "Transceiver RF 2.4 GHz 802.11 b/g/n, Tx Power +19.5 dBm",
-      spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Teknisi Fallback, Offline Two-Tier Buffer",
+      spec: "Jaringan Gudang Yard AP (WPA2), Hotspot Cadangan, Memori Cadangan Offline",
       diagProcedure:
-        "Ambang batas koneksi real-time: RSSI >= -85 dBm. Buffer ke RTC SRAM + LittleFS jika di luar jangkauan.",
+        "Ambang batas koneksi real-time: RSSI >= -85 dBm. Data dialihkan ke RTC SRAM + LittleFS bila sinyal putus.",
       sopSteps: [
         {
           code: "SOP R.1",
@@ -382,7 +381,7 @@ function buildHarnessSpecs(
         {
           code: "SOP R.3",
           instruction:
-            "Lakukan uji handover: putus koneksi AP gudang dan pastikan gateway beralih ke hotspot teknisi.",
+            "Putus koneksi AP gudang sejenak untuk menguji perpindahan jalur kirim ke hotspot cadangan.",
         },
       ],
     },

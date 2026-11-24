@@ -38,9 +38,9 @@ import { Led, Panel, fmtV } from "./primitives";
 type ConfigSubTab = "ONBOARDING" | "CALIBRATION" | "TICKETS";
 
 const SUB_TABS: Array<{ id: ConfigSubTab; label: string }> = [
-  { id: "ONBOARDING", label: "01. Onboarding & Pairing IoT" },
-  { id: "CALIBRATION", label: "02. Parameter NVS & Kalibrasi ADC" },
-  { id: "TICKETS", label: "03. Tiket Pemeliharaan & Audit" },
+  { id: "ONBOARDING", label: "01. Pendaftaran & Pairing Perangkat" },
+  { id: "CALIBRATION", label: "02. Pengaturan & Kalibrasi Tegangan" },
+  { id: "TICKETS", label: "03. Tiket Penanganan & Log Aktivitas" },
 ];
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
@@ -501,7 +501,7 @@ export function ConfigModule() {
               className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-crimson/60 bg-background/80 px-3 py-1.5 font-semibold uppercase tracking-wider text-crimson transition-colors hover:bg-crimson/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span>Poll Live API</span>
+              <span>Segarkan Data</span>
             </button>
           </div>
         )}
@@ -632,7 +632,7 @@ export function ConfigModule() {
                   className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-background px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" />
-                  <span>Poll Live API ({lastSyncTime ?? "--"})</span>
+                  <span>Segarkan Data ({lastSyncTime ?? "--"})</span>
                 </button>
               )}
               <button
@@ -672,7 +672,7 @@ export function ConfigModule() {
                   onClick={handleLoadSandboxExample}
                   className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer items-center rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1 num text-[11px] font-semibold uppercase tracking-wider text-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  Isi Contoh Data (Sandbox)
+                  Isi Contoh Data
                 </button>
               ) : (
                 <span className="num text-[11px] font-semibold uppercase text-emerald">

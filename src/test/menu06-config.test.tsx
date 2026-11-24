@@ -148,9 +148,9 @@ describe("Menu 06 ConfigModule (ARIA Tabs, Onboarding, NVS/OLS, Tickets & Naviga
   it("supports ARIA tablist keyboard navigation and clean empty onboarding form + Sandbox example + register/unpair/re-pair", async () => {
     renderConfig(false);
 
-    const tab1 = screen.getByRole("tab", { name: /01\. Onboarding/i });
-    const tab2 = screen.getByRole("tab", { name: /02\. Parameter NVS/i });
-    const tab3 = screen.getByRole("tab", { name: /03\. Tiket/i });
+    const tab1 = screen.getByRole("tab", { name: /01\. Pendaftaran/i });
+    const tab2 = screen.getByRole("tab", { name: /02\. Pengaturan & Kalibrasi Tegangan/i });
+    const tab3 = screen.getByRole("tab", { name: /03\. Tiket Penanganan/i });
 
     expect(tab1).toHaveAttribute("aria-selected", "true");
     tab1.focus();
@@ -169,7 +169,7 @@ describe("Menu 06 ConfigModule (ARIA Tabs, Onboarding, NVS/OLS, Tickets & Naviga
     expect(nodeIdInput.value).toBe("");
     expect(vinInput.value).toBe("");
 
-    fireEvent.click(screen.getByRole("button", { name: "Isi Contoh Data (Sandbox)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Isi Contoh Data" }));
     expect(nodeIdInput.value).toBe("MITSUBISHI-STOCK-13");
     expect(vinInput.value).toBe("MMBXFUJ40SH000877");
 
@@ -197,7 +197,7 @@ describe("Menu 06 ConfigModule (ARIA Tabs, Onboarding, NVS/OLS, Tickets & Naviga
   it("stages NVS ACK with 1 Hour sleep preset, rejects invalid crit_v, applies PCB v2.0 OLS calibration, and updates tickets + audit", async () => {
     renderConfig(false);
 
-    fireEvent.click(screen.getByRole("tab", { name: /02\. Parameter NVS/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /02\. Pengaturan & Kalibrasi Tegangan/i }));
 
     // Initially pending_ack is false on DEFAULT_CONFIG
     expect(screen.getByText(/Sinkron \(pending_ack: false\)/i)).toBeInTheDocument();
@@ -242,7 +242,7 @@ describe("Menu 06 ConfigModule (ARIA Tabs, Onboarding, NVS/OLS, Tickets & Naviga
     });
 
     // Sub-Tab 03: Ticket handover & full audit message visibility + cross-nav to Menu 04 & 05
-    fireEvent.click(screen.getByRole("tab", { name: /03\. Tiket Pemeliharaan/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /03\. Tiket Penanganan/i }));
     const assigneeInput = screen.getByLabelText("Nama Teknisi Bertugas") as HTMLInputElement;
     expect(assigneeInput.value).toBe("");
 
@@ -346,11 +346,11 @@ describe("Menu 06 ConfigModule (LIVE_API Honesty & Persistence Contract)", () =>
 
     // Sandbox button must stay hidden in LIVE_API
     expect(
-      screen.queryByRole("button", { name: /Isi Contoh Data \(Sandbox\)/i }),
+      screen.queryByRole("button", { name: /^Isi Contoh Data$/i }),
     ).not.toBeInTheDocument();
 
     // Check Sub-Tab 02 honest wire JSON (pending_ack: false) and POST mutation
-    fireEvent.click(screen.getByRole("tab", { name: /02\. Parameter NVS/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /02\. Pengaturan & Kalibrasi Tegangan/i }));
     expect(screen.getByText(/Sinkron \(pending_ack: false\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/"apply_on"/i)).not.toBeInTheDocument();
 
@@ -372,7 +372,7 @@ describe("Menu 06 ConfigModule (LIVE_API Honesty & Persistence Contract)", () =>
     });
 
     // Check Sub-Tab 03 honest empty tickets state and full BURST_SYNC audit message
-    fireEvent.click(screen.getByRole("tab", { name: /03\. Tiket Pemeliharaan/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /03\. Tiket Penanganan/i }));
     expect(screen.getByText(/Belum ada tiket pemeliharaan aktif/i)).toBeInTheDocument();
     const auditTable = screen.getByRole("table");
     expect(

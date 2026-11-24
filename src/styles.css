@@ -53,13 +53,13 @@
   --orion-text-dark: #f2efe9;
 
   --obsidian: var(--orion-charcoal);
-  --carbon: oklch(0.17 0.008 265);
-  --hairline: #3b4250;
-  --chart-grid: #5a6270;
-  --crimson: #f45b60;
-  --emerald: oklch(0.76 0.155 163);
-  --amber: oklch(0.81 0.165 75);
-  --dim: oklch(0.68 0.012 260);
+  --carbon: oklch(0.205 0.01 265);
+  --hairline: #646e80;
+  --chart-grid: #6b7485;
+  --crimson: #ff6b70;
+  --emerald: oklch(0.78 0.155 163);
+  --amber: oklch(0.83 0.165 75);
+  --dim: oklch(0.74 0.012 260);
 
   --background: var(--orion-charcoal);
   --foreground: var(--orion-text-dark);
@@ -69,16 +69,16 @@
   --popover-foreground: var(--orion-text-dark);
   --primary: var(--crimson);
   --primary-foreground: #0e1116;
-  --secondary: oklch(0.21 0.01 265);
+  --secondary: oklch(0.245 0.012 265);
   --secondary-foreground: var(--orion-text-dark);
-  --muted: oklch(0.2 0.01 265);
-  --muted-foreground: oklch(0.75 0.012 260);
-  --accent: oklch(0.22 0.012 265);
+  --muted: oklch(0.235 0.012 265);
+  --muted-foreground: oklch(0.81 0.012 260);
+  --accent: oklch(0.26 0.014 265);
   --accent-foreground: var(--orion-cream);
   --destructive: var(--crimson);
   --destructive-foreground: #0e1116;
-  --border: #5c6370;
-  --input: #5c6370;
+  --border: #737d90;
+  --input: #737d90;
   --ring: var(--foreground);
 
   --softbox: radial-gradient(ellipse at 50% 0%, oklch(1 0 0 / 0.07), transparent 70%);

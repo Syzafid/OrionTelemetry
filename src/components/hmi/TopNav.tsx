@@ -242,7 +242,7 @@ export function TopNav() {
               }}
               onMouseEnter={prefetchCommandPalette}
               onFocus={prefetchCommandPalette}
-              title="Buka Palet Perintah Global (Ctrl+K / Cmd+K)"
+              title="Buka Pencarian Cepat (Ctrl+K / Cmd+K)"
               className="flex min-h-[44px] cursor-pointer items-center gap-1.5 panel px-2.5 py-1.5 num text-[11px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
             >
               <Command
@@ -251,7 +251,7 @@ export function TopNav() {
                 className="shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="hidden md:inline">Perintah (Ctrl+K)</span>
+              <span className="hidden md:inline">Cari Cepat (Ctrl+K)</span>
               <span className="inline md:hidden">Ctrl+K</span>
             </button>
 
@@ -349,9 +349,9 @@ export function TopNav() {
                   ? apiStatus === "CONNECTING"
                     ? "MENGHUBUNGKAN..."
                     : isOfflineSnapshot
-                      ? "OFFLINE CACHE"
+                      ? "CACHE OFFLINE"
                       : "LIVE API"
-                  : "SIM SANDBOX"}
+                  : "MODE SIMULASI"}
               </m.span>
             </button>
 
@@ -404,7 +404,7 @@ export function TopNav() {
                   onClick={pollNow}
                   className="mt-3 min-h-[44px] w-full cursor-pointer rounded-[2px] border border-border py-2 num text-[11px] uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  UJI KONEKSI API
+                  Cek Koneksi
                 </button>
                 <p className="mt-2 num text-[11px] leading-relaxed text-muted-foreground">
                   {live
