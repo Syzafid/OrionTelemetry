@@ -5,7 +5,7 @@ import path from "node:path";
 
 /**
  * ============================================================================
- * MEMO & SINGLE SOURCE OF TRUTH: DOKUMEN PROPOSAL UJI COBA ORION v2.0 (MONOKROM)
+ * MEMO & SINGLE SOURCE OF TRUTH: DOKUMEN TEKNIS UJI COBA ORION v2.0 (MONOKROM)
  * ============================================================================
  * Cara memperbarui PDF setelah ada revisi data uji atau diagram modul:
  * 1. Aset modul fisik monokrom (OBD-II, Fuse, MP1584, ZS-042, WCMCU-230, ESP32)
@@ -16,19 +16,19 @@ import path from "node:path";
  *    `docs/static/pdf/ORION_Dokumen_Izin_Teknis_Gudang.pdf`.
  */
 export const APPROVAL_DOC_MEMO = {
-  docCode: "ORION-DOC-YARD-02 / Rev 3.0",
+  docCode: "ORION-DOC-YARD-02 / Rev 3.1",
   dateLabel: "November 2026",
   hardwareRef: "Perangkat Keras PCB ORION v2.0 Step 2.1 (70 x 50 mm) · Firmware v1.6.0",
   title:
-    'Proposal Pengajuan Izin Uji Coba Perangkat Telemetri & Diagnostik OBD-II "ORION v2.0" pada Unit Kendaraan Gudang',
+    'Dokumen Teknis Uji Coba Perangkat Pemantau Aki & Diagnostik OBD-II "ORION v2.0" pada Unit Kendaraan Gudang',
   executiveSummary:
-    "Dokumen ini menyajikan informasi teknis dan data pengujian perangkat pemantau kelistrikan serta diagnostik OBD-II ORION v2.0 untuk keperluan izin uji coba terbatas pada unit kendaraan operasional di gudang. Uji coba bertujuan memverifikasi pembacaan data diagnostik CAN bus / OBD-II, pemantauan tegangan aki 12V, dan manajemen daya hemat energi (deep sleep) secara non-invasif tanpa memotong atau mengubah kabel asli kendaraan. Seluruh angka di dalam dokumen ini dipisahkan secara tegas antara hasil pengukuran meja (bench test) yang sudah tercatat dan parameter yang wajib diukur saat integrasi Tahap C.",
+    "Dokumen ini merangkum cara kerja, jalur kabel, hasil pengujian meja, dan langkah keselamatan perangkat ORION v2.0 sebelum uji coba terbatas pada unit kendaraan operasional di gudang. Uji coba bertujuan memverifikasi pembacaan data diagnostik CAN bus / OBD-II, pemantauan tegangan aki 12V, serta mode tidur hemat daya (deep sleep) secara non-invasif tanpa memotong atau mengubah kabel asli kendaraan. Seluruh angka di bawah dipisahkan tegas antara hasil pengukuran meja (bench test) yang sudah tercatat dan parameter yang wajib diukur saat integrasi Tahap C.",
   architectureItems: [
     {
       block: "Mikrokontroler Utama",
       spec: "ESP32 DevKit V1 (30-Pin Base)",
       detail:
-        "Mengelola pencuplikan tegangan aki, komunikasi I2C/CAN, penyimpanan cadangan offline, serta aturan keselamatan H8: suplai +12V kendaraan/PSU dan kabel USB pemrograman ke ESP32 Base dilarang terpasang bersamaan.",
+        "Mengelola pembacaan berkala tegangan aki, komunikasi I2C/CAN, penyimpanan data cadangan lokal, serta aturan keselamatan H8: suplai +12V kendaraan/PSU dan kabel USB pemrograman ke ESP32 Base dilarang terpasang bersamaan.",
     },
     {
       block: "Transceiver CAN Bus",
@@ -40,7 +40,7 @@ export const APPROVAL_DOC_MEMO = {
       block: "Regulator Daya",
       spec: "Buck Converter MP1584 (+12V ke +3,3V)",
       detail:
-        "Menggunakan konfigurasi common ground yang menyatukan GND pin 4 dan 5 soket OBD-II serta ground seluruh modul (bukan isolasi galvanik).",
+        "Jalur ground disatukan (common ground) dari pin 4 dan 5 soket OBD-II ke seluruh modul (tidak memakai isolasi terpisah).",
     },
     {
       block: "Real-Time Clock (RTC)",
@@ -60,32 +60,32 @@ export const APPROVAL_DOC_MEMO = {
       parameter: "Output MP1584 tanpa beban",
       status: "TERUJI MEJA + TAHAP C",
       result:
-        "Terukur 3,33 V pada input 11,91 V (masuk rentang toleransi 3,2-3,4 V). Rencana verifikasi lanjutan di 12,6 V dan +/- 14 V dengan batas arus awal 100 mA dijadwalkan sebelum integrasi unit.",
+        "Terukur 3,33 V pada input 11,91 V (masuk rentang toleransi 3,2-3,4 V). Rencana pengujian lanjutan di 12,6 V dan sekitar 14 V dengan batas arus awal 100 mA dijadwalkan sebelum integrasi unit.",
       meaning:
-        "Berdasarkan pengukuran awal, tegangan suplai logika stabil pada 3,33 V. Pengujian pada 12,6 V dan +/- 14 V memverifikasi kestabilan saat alternator pengisian bekerja.",
+        "Tegangan suplai logika tercatat stabil di 3,33 V pada pengukuran awal. Pengujian di 12,6 V dan sekitar 14 V diperlukan untuk mengecek kestabilan saat pengisian alternator bekerja.",
     },
     {
       parameter: "Proteksi arus lebih (sekring)",
       status: "DESAIN / SIAP PASANG",
       result:
-        "Sekring 500 mA time-lag (slow-blow) pada jalur masuk +12V untuk estimasi beban kerja nominal ORION +/- 0,20-0,25 A, atau opsi sekring 500 mA fast-blow / 1 A fast-blow yang tersedia.",
+        "Sekring 500 mA time-lag (slow-blow) pada jalur masuk +12V untuk perkiraan beban kerja nominal ORION sekitar 0,20-0,25 A, atau opsi sekring 500 mA fast-blow / 1 A fast-blow yang tersedia.",
       meaning:
-        "Menyediakan batas pemutusan arus berlebih di atas beban kerja +/- 0,20-0,25 A sehingga gangguan hubung singkat putus di sekring pengaman sebelum membebani jalur mobil.",
+        "Jika terjadi korsleting pada modul, sekring putus di batas pengaman (di atas beban 0,20-0,25 A) sebelum arus berlebih membebani jalur kelistrikan mobil.",
     },
     {
       parameter: "Proteksi polaritas & lonjakan transien",
       status: "TERUJI KOMPONEN",
       result:
-        "Dioda Schottky D1 1N5819 terukur pada uji komponen +/- 0,15-0,35 V untuk proteksi polaritas terbalik, dipasangkan dengan dioda TVS P6KE18A paralel ke GND.",
+        "Dioda Schottky D1 1N5819 terukur pada uji komponen 0,15-0,35 V untuk proteksi polaritas terbalik, dipasangkan dengan dioda TVS P6KE18A paralel ke GND.",
       meaning:
-        "Menahan aliran arus apabila pemasangan +12V dan GND tertukar, sekaligus menyediakan jalur pembuangan lonjakan tegangan transien di atas 18 V menuju ground.",
+        "Dioda D1 menahan aliran arus bila pemasangan +12V dan GND tertukar, sedangkan dioda TVS membuang lonjakan tegangan sesaat di atas 18 V menuju ground.",
     },
     {
       parameter: "Sakelar daya CAN (Q1 / GPIO26)",
       status: "TERUJI MEJA",
       result: "Terukur OFF = 0,00 V dan ON = 3,33 V.",
       meaning:
-        "Berdasarkan pengujian meja, suplai ke chip transceiver WCMCU-230 turun hingga 0,00 V saat GPIO26 nonaktif sehingga tidak membebani bus CAN saat perangkat tidur.",
+        "Berdasarkan pengujian meja, suplai ke chip transceiver WCMCU-230 turun hingga 0,00 V saat GPIO26 nonaktif sehingga tidak membebani bus CAN ketika tidur.",
     },
     {
       parameter: "Integritas MOSFET AO3401A (Q1 & Q2)",
@@ -93,7 +93,7 @@ export const APPROVAL_DOC_MEMO = {
       result:
         "Uji dioda body D-S terbaca ~0,5 V (probe merah di D, hitam di S) dan OL saat dibalik. Terpasang pada adaptor SOT-23 (2-3-1 = S-D-G) tanpa hubung singkat antarkaki.",
       meaning:
-        "Memastikan komponen sakelar elektronik bekerja searah sesuai polaritas sebelum dialiri tegangan kendaraan 12V.",
+        "Mengecek fungsi sakelar elektronik agar bekerja searah sesuai polaritas sebelum dialiri tegangan kendaraan 12V.",
     },
     {
       parameter: "Modifikasi fisik RTC ZS-042",
@@ -101,7 +101,7 @@ export const APPROVAL_DOC_MEMO = {
       result:
         "Jalur LED indikator daya dan rangkaian pengisian baterai koin sudah dilepas secara fisik dari modul.",
       meaning:
-        "Menghilangkan konsumsi LED statis dan menghentikan arus balik ke baterai koin CR2032 saat modul mendapat suplai 3,3 V.",
+        "Pelepasan komponen LED dan charger menghentikan pemborosan daya statis serta arus balik ke baterai koin CR2032 saat papan mendapat suplai 3,3 V.",
     },
     {
       parameter: "Sakelar pembagi tegangan ADC (Q2/Q3 / GPIO27)",
@@ -109,7 +109,7 @@ export const APPROVAL_DOC_MEMO = {
       result:
         "Kontrol aktif-HIGH; jalur pembagi terbuka saat tidur (0 mA bocor). Target Vgs pada v2.0 berada di kisaran -7,6 V pada 11,9 V dan -9,1 V pada 14,4 V (diukur ulang pada v2.0 saat Tahap C).",
       meaning:
-        "Pengukuran ulang Vgs pada Tahap C memverifikasi Q2 beroperasi aman di bawah batas Vgs maksimum +/- 12 V sekaligus mengecek arus pembagi tetap 0 mA saat tidur.",
+        "Pengukuran ulang Vgs pada Tahap C mengecek apakah Q2 beroperasi aman di bawah batas Vgs maksimum +/- 12 V sekaligus membuktikan arus pembagi tetap 0 mA saat tidur.",
     },
     {
       parameter: "Arus tidur (E5) & Kalibrasi ADC",
@@ -117,7 +117,7 @@ export const APPROVAL_DOC_MEMO = {
       result:
         "Pengukuran arus deep sleep gabungan DevKit + Base (melintasi shunt R5 10 Ohm) dan kalibrasi 4-titik ADC dijadwalkan sebagai uji wajib pada Tahap C sebelum/saat pengujian unit.",
       meaning:
-        "Menghasilkan nilai konsumsi arus tidur aktual pada prototipe v2.0 sebelum perangkat ditinggalkan terpasang pada kendaraan parkir.",
+        "Angka konsumsi arus tidur aktual pada prototipe v2.0 dicatat langsung melalui uji E5 sebelum perangkat dipasang lebih lama pada kendaraan parkir.",
     },
   ],
   riskMatrix: [
@@ -129,12 +129,12 @@ export const APPROVAL_DOC_MEMO = {
     {
       risk: "Penurunan muatan aki berlebih saat kendaraan terparkir di gudang",
       mitigation:
-        "Arsitektur deep sleep berkala disertai pemutusan suplai transceiver CAN via Q1 (teruji 0,00 V saat OFF), pemutusan pembagi tegangan via Q2/Q3, dan modifikasi hemat daya ZS-042. Besaran arus tidur final diukur pada uji E5 Tahap C.",
+        "Mode tidur berkala disertai pemutusan suplai transceiver CAN via Q1 (teruji 0,00 V saat OFF), pemutusan pembagi tegangan via Q2/Q3, dan modifikasi hemat daya ZS-042. Besaran arus tidur final diukur pada uji E5 Tahap C.",
     },
     {
       risk: "Getaran kabin kendaraan atau kontak pin longgar saat uji jalan",
       mitigation:
-        "Konektor terkunci, penopang modul non-konduktif, isolasi Kapton pada area rawan, serta pemeriksaan kontinuitas dan isolasi penuh tanpa daya sebelum perangkat dipasang ke unit.",
+        "Konektor terkunci, kotak pelindung plastik (non-konduktif) dengan penopang modul kaku, isolasi Kapton pada area rawan, serta pemeriksaan kontinuitas dan isolasi penuh tanpa daya sebelum perangkat dipasang ke unit.",
     },
     {
       risk: "Kesalahan prosedur saat debugging atau pemrograman ulang",
@@ -144,7 +144,7 @@ export const APPROVAL_DOC_MEMO = {
   ],
   bomItems: [
     { ref: "U1", name: "ESP32 DevKit V1 (30-Pin Base)", qty: "1", role: "Pengendali utama, baca ADC/I2C/CAN, simpan log lokal, patuh aturan H8." },
-    { ref: "U2", name: "Modul RTC DS3231 (ZS-042 Modifikasi)", qty: "1", role: "Pewaktu akurat & interupsi bangun SQW; LED power & charger CR2032 dilepas." },
+    { ref: "U2", name: "Modul RTC DS3231 (ZS-042 Modifikasi)", qty: "1", role: "Pewaktu akurat & sinyal bangun SQW; LED power & charger CR2032 dilepas." },
     { ref: "U3", name: "Transceiver CAN WCMCU-230 (SN65HVD230)", qty: "1", role: "Antarmuka CAN_H/CAN_L 500 kbps mode pemantauan pasif/baca ECU." },
     { ref: "U4", name: "Buck Converter MP1584 (3,3 V Fix)", qty: "1", role: "Penurun tegangan +12V ke 3,33 V dengan konfigurasi common ground." },
     { ref: "J_PWR, J_CAN", name: "Konektor Terkunci JST-XH 2-Pin", qty: "2", role: "Pemisah fisik konektor daya (+12V/GND) dan konektor data CAN anti-tertukar." },
@@ -153,10 +153,14 @@ export const APPROVAL_DOC_MEMO = {
     { ref: "R5, JP1", name: "Resistor Shunt 10 Ohm & Header Jumper 2-Pin", qty: "2", role: "Titik ukur arus deep sleep Tahap C (E5) dan jumper bypass operasi normal." },
     { ref: "Q1, R3", name: "MOSFET Kanal-P AO3401A + Pull-Up 47 kOhm", qty: "2", role: "Sakelar high-side pemutus rel 3V3_CAN via GPIO26 aktif-LOW." },
     { ref: "Q2, Q3", name: "MOSFET AO3401A + NPN 2N3904", qty: "2", role: "Sakelar high-side pemutus jalur pembagi tegangan aki via GPIO27 aktif-HIGH." },
-    { ref: "R4, R6, R7, R8", name: "Jaringan Resistor Bias Gate (47k, 27k, 10k, 100k)", qty: "4", role: "Pengendali bias sakelar Q2/Q3 agar Vgs beroperasi aman di bawah batas +/- 12 V." },
-    { ref: "R1, R2", name: "Pembagi Tegangan Aki (100 kOhm & 27 kOhm)", qty: "2", role: "Penskala tegangan 12-14,4 V agar terbaca aman oleh pin ADC GPIO34." },
-    { ref: "C1, C2, C3", name: "Kapasitor Filter (2x 100 nF Keramik, 1x 100 uF)", qty: "3", role: "Filter ADC (C1), penyangga 3V3 ESP32 Base (C2), decoupling 3V3_CAN (C3)." },
-    { ref: "PCB & Pilar", name: "PCB Matriks 70 x 50 mm (24 x 18) + Pilar Non-Konduktif", qty: "1 set", role: "Dudukan kaku tahan getaran dengan isolasi Kapton pada area sambungan." },
+    { ref: "R4, R6, R7, R8", name: "Jaringan Resistor Bias Gate (47k, 27k, 10k, 100k)", qty: "4", role: "Pengendali bias sakelar Q2/Q3 agar Vgs bekerja aman di bawah batas +/- 12 V." },
+    { ref: "R1, R2", name: "Pembagi Tegangan Aki (100 kOhm & 27 kOhm)", qty: "2", role: "Penurun skala tegangan 12-14,4 V agar aman dibaca pin ADC GPIO34." },
+    { ref: "C1, C2, C3", name: "Kapasitor Filter (2x 100 nF Keramik, 1x 100 uF)", qty: "3", role: "Filter ADC (C1), penyangga 3V3 ESP32 Base (C2), peredam riak 3V3_CAN (C3)." },
+    { ref: "PCB & Kotak", name: "PCB Matriks 70 x 50 mm (24 x 18) + Kotak Pelindung", qty: "1 set", role: "Dudukan kaku tahan getaran di dalam kotak pelindung plastik non-konduktif." },
+  ],
+  onlineRefs: [
+    { label: "Dashboard & Aplikasi Web", url: "https://www.oriontelemetry.tech" },
+    { label: "Dokumentasi Teknis Lengkap", url: "https://www.oriontelemetry.tech/docs/" },
   ],
 };
 
@@ -393,7 +397,7 @@ function buildMonochromeWiringSvg() {
       <rect x="366" y="18" width="138" height="64" rx="3" fill="#ffffff" stroke="#111111" stroke-width="1.4" />
       <text x="435" y="33" text-anchor="middle" font-size="8.1" font-weight="700" fill="#111111">REGULATOR MP1584</text>
       <text x="435" y="46" text-anchor="middle" font-size="7.5" fill="#111111">+12V -&gt; 3,33 V (Teruji Meja)</text>
-      <text x="435" y="59" text-anchor="middle" font-size="7.1" fill="#333333">Uji Lanjut: 12,6V &amp; +/-14V</text>
+      <text x="435" y="59" text-anchor="middle" font-size="7.1" fill="#333333">Uji Lanjut: 12,6V &amp; ~14V</text>
       <text x="435" y="71" text-anchor="middle" font-size="6.9" fill="#555555">Kapasitor C2 100uF ESP32 Base</text>
 
       <!-- Block 2: High-Side ADC Gate -->
@@ -652,7 +656,7 @@ function buildRealisticCirkitSvg(moduleUris) {
 
       <rect x="580" y="354" width="158" height="32" rx="2" fill="#f9f9f9" stroke="#555555" stroke-width="0.8" />
       <text x="586" y="368" font-size="7.3" font-weight="700" fill="#111111">[I/O] GPIO4 / GPIO5</text>
-      <text x="586" y="379" font-size="6.3" fill="#444444">CRX / CTX -&gt; WCMCU-230</text>
+      <text x="586" y="379" font-size="6.3" fill="#444444">CRX / CTX &lt;-&gt; WCMCU-230</text>
 
       <rect x="580" y="458" width="158" height="30" rx="2" fill="#f9f9f9" stroke="#555555" stroke-width="0.8" />
       <text x="586" y="471" font-size="7.3" font-weight="700" fill="#111111">[I/O] GPIO21 / GPIO22</text>
@@ -867,6 +871,17 @@ function buildHtmlDocument() {
   .checklist-ul li {
     margin-bottom: 3px;
   }
+  .bom-table th, .bom-table td {
+    padding: 3.3px 6px;
+    font-size: 7.85pt;
+  }
+  .ref-box {
+    border: 0.75pt solid #555555;
+    background: #ffffff;
+    padding: 5px 8px;
+    font-size: 7.9pt;
+    line-height: 1.35;
+  }
   .footer-note {
     border-top: 0.6pt solid #999999;
     padding-top: 3px;
@@ -880,7 +895,7 @@ function buildHtmlDocument() {
 </head>
 <body>
 
-  <!-- HALAMAN 1: JUDUL, RINGKASAN EKSEKUTIF NON-INVASIF & ARSITEKTUR 5 BLOK -->
+  <!-- HALAMAN 1: JUDUL, RINGKASAN NON-INVASIF & ARSITEKTUR 5 BLOK -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
@@ -891,7 +906,7 @@ function buildHtmlDocument() {
     </div>
 
     <div>
-      <h2>1. Ringkasan Eksekutif &amp; Tujuan Uji Coba</h2>
+      <h2>1. Ringkasan &amp; Tujuan Uji Coba</h2>
       <p>${APPROVAL_DOC_MEMO.executiveSummary}</p>
       <div class="figure-box">
         ${buildMonochromeObdSvg()}
@@ -998,10 +1013,10 @@ function buildHtmlDocument() {
     <div class="notice-box">
       <div style="font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">5. Urutan Verifikasi Wajib Sebelum Pemasangan ke Unit Kendaraan (Tahap C)</div>
       <ol class="checklist-ul">
-        <li>Menguji ulang keluaran regulator MP1584 tanpa beban pada tegangan input <strong>12,6 V</strong> dan <strong>+/- 14 V</strong> menggunakan PSU berbatas arus awal <strong>100 mA</strong>.</li>
+        <li>Menguji ulang keluaran regulator MP1584 tanpa beban pada tegangan input <strong>12,6 V</strong> dan <strong>sekitar 14 V</strong> menggunakan PSU berbatas arus awal <strong>100 mA</strong>.</li>
         <li>Menjalankan pemeriksaan kontinuitas serta isolasi penuh antar-jalur PCB dalam kondisi tanpa modul dan tanpa daya sebelum perakitan akhir.</li>
         <li>Mengukur ulang tegangan gerbang (<strong>Vgs</strong>) Q2 saat aktif pada prototipe v2.0 (target <strong>-7,6 V</strong> di 11,9 V dan <strong>-9,1 V</strong> di 14,4 V), mengukur arus deep sleep aktual (<strong>E5</strong>), dan melakukan kalibrasi ADC 4-titik.</li>
-        <li>Memastikan kepatuhan aturan <strong>H8</strong> selama pengujian bengkel (suplai 12V dan kabel USB pemrograman tidak pernah dihubungkan bersamaan ke ESP32 Base).</li>
+        <li>Menerapkan aturan keselamatan <strong>H8</strong> selama pengujian bengkel (suplai 12V dan kabel USB pemrograman tidak pernah dihubungkan bersamaan ke ESP32 Base).</li>
       </ol>
     </div>
 
@@ -1128,18 +1143,18 @@ function buildHtmlDocument() {
     <table>
       <thead>
         <tr>
-          <th style="width: 30%;">Penyelarasan dari Skema Otomatis Awal</th>
-          <th>Koreksi Teknis yang Diterapkan pada Gambar C.1</th>
+          <th style="width: 30%;">Catatan Pembacaan Diagram Wiring (Gambar C.1)</th>
+          <th>Penjelasan Jalur &amp; Susunan Modul</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Proteksi Input &amp; Kapasitor BOM</strong></td>
-          <td>Menampilkan tepat 1x D1 1N5819 (seri anti-balik) + 1x TVS P6KE18A (paralel ke GND) + R5 10 Ohm // JP1, serta hanya 3 kapasitor resmi BOM (C1 100 nF, C2 100 uF, C3 100 nF).</td>
+          <td><strong>Alur Proteksi &amp; Pemisahan Konektor</strong></td>
+          <td>Konektor J_PWR (+12V/GND) dan J_CAN (CAN_H/CAN_L) dipisahkan pada dua soket terkunci JST-XH 2-pin. Sisi proteksi masuk memakai D1 1N5819, TVS P6KE18A ke ground, shunt R5 10 Ohm // JP1, serta tiga kapasitor filter C1, C2, dan C3.</td>
         </tr>
         <tr>
-          <td><strong>Pemisahan Konektor &amp; Pinout RTC ZS-042</strong></td>
-          <td>Memisahkan J_PWR dan J_CAN ke dua konektor terkunci JST-XH 2-pin, serta menghubungkan header 4-pin kanan ZS-042 (VCC, GND, SDA, SCL) dan SQW kiri ke GPIO32.</td>
+          <td><strong>Susunan Pin RTC ZS-042 &amp; Sakelar CAN Q1</strong></td>
+          <td>Modul ZS-042 terhubung ke bus I2C ESP32 melalui header 4-pin kanan (VCC, GND, SDA, SCL), sedangkan interupsi bangun SQW diambil dari header 6-pin kiri ke GPIO32. Suplai transceiver CAN diputus penuh oleh MOSFET Q1 melalui GPIO26.</td>
         </tr>
       </tbody>
     </table>
@@ -1147,18 +1162,18 @@ function buildHtmlDocument() {
     ${renderFooter(6)}
   </section>
 
-  <!-- HALAMAN 7: LAMPIRAN D - DAFTAR KOMPONEN (BOM) & SOP PEMASANGAN/PELEPASAN AMAN (FULL PAGE) -->
+  <!-- HALAMAN 7: LAMPIRAN D - DAFTAR KOMPONEN (BOM), SOP AMAN & REFERENSI DARING (FULL PAGE) -->
   <section class="page">
     <div class="doc-header">
       <div class="doc-meta-top">
         <span>${APPROVAL_DOC_MEMO.docCode}</span>
-        <span>Lampiran D · Daftar Komponen (BOM) &amp; SOP Pemasangan/Pelepasan Aman</span>
+        <span>Lampiran D · Daftar Komponen (BOM), SOP Pemasangan &amp; Referensi Daring</span>
       </div>
     </div>
 
     <div>
       <h2>Lampiran D.1 Daftar Komponen Utama (Bill of Materials - PCB v2.0 Step 2.1)</h2>
-      <table>
+      <table class="bom-table">
         <thead>
           <tr>
             <th style="width: 14%;">Ref</th>
@@ -1173,17 +1188,25 @@ function buildHtmlDocument() {
       </table>
     </div>
 
-    <div class="notice-box" style="margin-top: 2px;">
-      <div style="font-weight: 800; margin-bottom: 5px; text-transform: uppercase;">
-        Lampiran D.2 SOP Pemasangan &amp; Pelepasan Aman pada Unit Kendaraan Gudang
+    <div class="notice-box" style="margin-top: 1px;">
+      <div style="font-weight: 800; margin-bottom: 4px; text-transform: uppercase;">
+        Lampiran D.2 Prosedur Pemasangan &amp; Pelepasan Aman pada Unit Kendaraan Gudang
       </div>
       <ol class="checklist-ul">
-        <li><strong>Matikan Mesin &amp; Kunci Kontak OFF:</strong> Pastikan tuas rem parkir aktif dan kunci kontak berada pada posisi OFF sebelum mengakses port OBD-II di bawah dasbor unit.</li>
-        <li><strong>Inspeksi Fisik Pra-Pasang (Tahap B/C Selesai):</strong> Pastikan kabel USB komputer tidak tertancap ke ESP32 Base (kepatuhan aturan <strong>H8</strong>), sekring pengaman 500 mA terpasang di dudukan in-line, dan kedua konektor JST-XH Daya vs CAN terpasang sesuai label.</li>
-        <li><strong>Koneksi Non-Invasif pada Soket OBD-II:</strong> Colokkan harness OBD-II secara lurus ke soket 16-pin kendaraan hingga mengunci tanpa memotong, menjepit, atau memodifikasi kabel bawaan mobil.</li>
-        <li><strong>Penempatan Enklosur &amp; Uji Awal:</strong> Tempatkan boks non-konduktif ORION v2.0 pada titik aman agar tidak mengganggu gerak pedal maupun kemudi, lalu lanjutkan verifikasi log sesuai rencana uji Tahap C.</li>
-        <li><strong>Pelepasan Bersih Setelah Pengujian:</strong> Saat pengujian selesai atau saat perangkat perlu diprogram ulang lewat USB (<strong>aturan H8</strong>), cabut soket OBD-II ketika kunci kontak OFF sehingga kelistrikan kendaraan kembali dalam kondisi standar pabrik.</li>
+        <li>Matikan mesin, aktifkan rem parkir, dan posisikan kunci kontak di OFF sebelum membuka atau menyentuh port OBD-II di bawah dasbor.</li>
+        <li>Periksa ulang fisik perangkat sebelum dipasang: kabel USB komputer sudah dilepas dari ESP32 Base (aturan <strong>H8</strong>), sekring 500 mA terpasang baik, dan dua konektor JST-XH Daya vs CAN tidak tertukar.</li>
+        <li>Colokkan harness OBD-II secara lurus ke soket 16-pin kendaraan hingga mengunci tanpa memotong, menjepit, atau mengupas kabel bawaan mobil.</li>
+        <li>Letakkan kotak pelindung plastik (non-konduktif) ORION v2.0 pada lokasi aman agar tidak mengganggu gerak pedal maupun kemudi, lalu lanjutkan pencatatan uji sesuai skenario Tahap C.</li>
+        <li>Saat pengujian selesai atau perangkat perlu diprogram ulang lewat USB (<strong>aturan H8</strong>), cabut soket OBD-II ketika kunci kontak OFF agar sistem kelistrikan kendaraan kembali ke kondisi standar pabrik.</li>
       </ol>
+    </div>
+
+    <div class="ref-box">
+      <div style="font-weight: 700; margin-bottom: 2px; text-transform: uppercase;">Referensi Daring (Opsional)</div>
+      <div>
+        Dashboard &amp; Aplikasi Web: <strong>${APPROVAL_DOC_MEMO.onlineRefs[0].url}</strong> &nbsp;|&nbsp;
+        Dokumentasi Teknis Lengkap: <strong>${APPROVAL_DOC_MEMO.onlineRefs[1].url}</strong>
+      </div>
     </div>
 
     ${renderFooter(7)}
