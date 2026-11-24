@@ -80,7 +80,7 @@ function playIndustrialAlarmChime(mode: "CONFIRM" | "CRITICAL"): void {
     }
 
     setTimeout(() => {
-      void ctx.close().catch(() => { });
+      void ctx.close().catch(() => {});
     }, 500);
   } catch {
     // Ignore audio context blocks in restricted environments
@@ -171,13 +171,7 @@ export function TopNav() {
         return;
       }
 
-      if (
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        e.key === "?" &&
-        !isEditableTarget(e.target)
-      ) {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === "?" && !isEditableTarget(e.target)) {
         e.preventDefault();
         openHelpModal();
         return;
@@ -223,8 +217,8 @@ export function TopNav() {
   const avgRssi =
     rssiSource.length > 0
       ? Math.round(
-        rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length,
-      )
+          rssiSource.reduce((acc, u) => acc + (u.telemetry?.rssi ?? -90), 0) / rssiSource.length,
+        )
       : null;
 
   const apTone: "emerald" | "amber" | "crimson" =

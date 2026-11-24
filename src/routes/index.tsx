@@ -101,7 +101,11 @@ const HARDWARE_PIPELINE: PipelineStage[] = [
     hardware: "MySQL Server (dipo_telemetry) + Dashboard Web",
     pinout: "Endpoint simpan_data.php & get_data.php",
     protocol: "Sinkronisasi REST JSON Dua Arah",
-    signals: ["Peta Kelistrikan & Sensor", "Antrean Pemanasan Mesin", "Pembaruan Setelan Jarak Jauh"],
+    signals: [
+      "Peta Kelistrikan & Sensor",
+      "Antrean Pemanasan Mesin",
+      "Pembaruan Setelan Jarak Jauh",
+    ],
     description:
       "Server menyimpan riwayat bacaan ke basis data MySQL, memperbarui peta kelistrikan tiap unit, melacak posisi bay parkir, dan menampilkan peringatan saat tegangan aki turun di bawah batas.",
     Icon: Server,
@@ -525,8 +529,8 @@ function Landing() {
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Klasifikasi status tegangan aki 12V untuk inspeksi stok gudang (toleransi kalibrasi
-                ±0,02 V). Angka kendaraan di bawah ini adalah contoh acuan skenario pengecekan, bukan
-                pembacaan unit yang sedang terpasang.
+                ±0,02 V). Angka kendaraan di bawah ini adalah contoh acuan skenario pengecekan,
+                bukan pembacaan unit yang sedang terpasang.
               </p>
             </div>
 
@@ -594,7 +598,9 @@ function Landing() {
                         <div className="num text-xs font-medium text-foreground">
                           {row.shuntCurrent}
                         </div>
-                        <div className="num text-xs text-muted-foreground">Batas Acuan: &lt; 500 µA</div>
+                        <div className="num text-xs text-muted-foreground">
+                          Batas Acuan: &lt; 500 µA
+                        </div>
                       </div>
 
                       {/* Field SOP Action */}

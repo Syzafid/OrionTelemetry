@@ -438,12 +438,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const flushBuffer = useCallback(
     (id: string) => {
       patchUnit(id, (u) => ({ ...u, buffer_used: 0 }));
-      appendLocalAudit(
-        id,
-        "BUFFER_FLUSH",
-        "INFO",
-        "Antrean data offline ditandai selesai",
-      );
+      appendLocalAudit(id, "BUFFER_FLUSH", "INFO", "Antrean data offline ditandai selesai");
       void sendMutation("FLUSH_BUFFER", { unit_id: id });
     },
     [patchUnit, appendLocalAudit, sendMutation],
@@ -469,12 +464,7 @@ export function TelemetryProvider({ children }: { children: ReactNode }) {
   const dispatchWarmup = useCallback(
     (id: string) => {
       patchUnit(id, (u) => ({ ...u, status_label: "Warm-Up Dispatched" }));
-      appendLocalAudit(
-        id,
-        "WARMUP_DISPATCH",
-        "WARN",
-        "Jadwal pemanasan mesin 10 menit dicatat",
-      );
+      appendLocalAudit(id, "WARMUP_DISPATCH", "WARN", "Jadwal pemanasan mesin 10 menit dicatat");
       void sendMutation("DISPATCH_WARMUP", { unit_id: id });
     },
     [patchUnit, appendLocalAudit, sendMutation],

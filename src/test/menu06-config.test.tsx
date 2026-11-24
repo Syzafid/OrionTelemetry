@@ -345,9 +345,7 @@ describe("Menu 06 ConfigModule (LIVE_API Honesty & Persistence Contract)", () =>
     expect(screen.getAllByText(/0\.0690/i).length).toBeGreaterThan(0);
 
     // Sandbox button must stay hidden in LIVE_API
-    expect(
-      screen.queryByRole("button", { name: /^Isi Contoh Data$/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Isi Contoh Data$/i })).not.toBeInTheDocument();
 
     // Check Sub-Tab 02 honest wire JSON (pending_ack: false) and POST mutation
     fireEvent.click(screen.getByRole("tab", { name: /02\. Pengaturan & Kalibrasi Tegangan/i }));
