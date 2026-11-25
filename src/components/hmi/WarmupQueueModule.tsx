@@ -419,7 +419,10 @@ export function WarmupQueueModule() {
       </div>
 
       {/* Target Node Quick-Selection Bar (Horizontal Scrollable Strip) */}
-      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto card-scroll rounded-[2px] border border-border bg-card/75 px-3 py-1.5 min-w-0">
+      <div
+        data-guide-target="m03-unit-strip"
+        className="flex shrink-0 items-center gap-1.5 overflow-x-auto card-scroll rounded-[2px] border border-border bg-card/75 px-3 py-1.5 min-w-0"
+      >
         <span className="label-hmi mr-1 shrink-0 text-[11px]">Pilih Unit ({units.length}):</span>
         {units.map((u) => {
           const isSelected = u.unit_id === selected.unit_id;

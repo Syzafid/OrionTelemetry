@@ -111,7 +111,8 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
             Bantuan Penggunaan Web ORION
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
-            Panduan fungsi tiap menu di browser, arti warna indikator, dan pintasan keyboard.
+            Panduan fungsi tiap menu di browser, arti warna indikator, dan pintasan keyboard. Saat
+            panduan sorotan berjalan, fitur di layar tetap bisa diklik dan digulir langsung.
           </DialogDescription>
         </DialogHeader>
 

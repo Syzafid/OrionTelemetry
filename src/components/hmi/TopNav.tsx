@@ -306,6 +306,7 @@ export function TopNav() {
 
             <button
               type="button"
+              data-guide-target="nav-docs-help"
               onClick={openHelpModal}
               onMouseEnter={prefetchWebHelp}
               onFocus={prefetchWebHelp}

@@ -544,7 +544,10 @@ export function DiagnosticsModule() {
         </div>
 
         {/* Unit Specification & Action Shortcuts Row */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 num text-[11px]">
+        <div
+          data-guide-target="m04-sim-controls"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 num text-[11px]"
+        >
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
             <span className="font-semibold text-foreground">
               {selected.bay} · {selected.model}
@@ -889,6 +892,7 @@ export function DiagnosticsModule() {
           <Panel
             title="8 Parameter Powertrain (Mode 01 Read-Only)"
             code="PWR"
+            guideTarget="m04-powertrain"
             right={
               <span
                 className={cn(
@@ -1305,6 +1309,7 @@ export function DiagnosticsModule() {
       {activeSubTab === "ELECTRICAL" && (
         <div
           id="diag-panel-ELECTRICAL"
+          data-guide-target="m04-electrical"
           role="tabpanel"
           aria-labelledby="diag-tab-ELECTRICAL"
           className="flex flex-col gap-3 flex-1 min-h-0"

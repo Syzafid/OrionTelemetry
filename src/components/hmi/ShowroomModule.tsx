@@ -57,7 +57,10 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
       {/* Main Telemetry & Electrical Topology Workbench */}
       <section className="showroom-stage panel relative order-1 flex min-h-[400px] flex-col overflow-hidden md:order-2 lg:min-h-0">
         {/* Stage Heading (Compact 2-Row HMI Header) */}
-        <div className="stage-heading relative z-10 flex shrink-0 flex-col border-b border-border/80 px-3.5 py-2.5 sm:px-4">
+        <div
+          data-guide-target="m01-header"
+          className="stage-heading relative z-10 flex shrink-0 flex-col border-b border-border/80 px-3.5 py-2.5 sm:px-4"
+        >
           {/* Quick unit switcher pill row for mobile screens */}
           <div
             data-guide-target="m01-unit-list"

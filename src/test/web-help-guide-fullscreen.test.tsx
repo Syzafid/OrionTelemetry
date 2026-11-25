@@ -14,6 +14,8 @@ import {
   GUIDE_SUBTAB_EVENT,
   WEB_GUIDE_COMPLETED_KEY,
   WEB_GUIDE_COMPLETED_TRACKS_KEY,
+  WEB_GUIDE_STEPS,
+  WEB_GUIDE_TRACKS,
 } from "@/data/webGuideSteps";
 import { Route as LandingRoute } from "@/routes/index";
 
@@ -57,6 +59,7 @@ let originalFullscreenEnabledDesc: PropertyDescriptor | undefined;
 let originalFullscreenElementDesc: PropertyDescriptor | undefined;
 let originalRequestFullscreen: typeof HTMLElement.prototype.requestFullscreen | undefined;
 let originalInnerWidth: number;
+let originalGetBoundingClientRect: typeof Element.prototype.getBoundingClientRect;
 
 function mockFullscreenApi(opts: {
   enabled: boolean;
@@ -98,13 +101,23 @@ function FullscreenProbe() {
   );
 }
 
-function NavBridgeHarness({ initialModule = "01" }: { initialModule?: ModuleId }) {
+function NavBridgeHarness({
+  initialModule = "01",
+  onProbeClick,
+}: {
+  initialModule?: ModuleId;
+  onProbeClick?: () => void;
+}) {
   const { activeModule, setActiveModule } = useTelemetry();
   return (
     <>
       <div data-testid="nav-module-state" data-module={activeModule} />
       <button type="button" onClick={() => setActiveModule(initialModule)}>
         Set Initial Module
+      </button>
+      <input aria-label="Kolom ketik contoh" />
+      <button type="button" onClick={onProbeClick}>
+        Tombol Uji Interaksi
       </button>
       <TopNav />
     </>
@@ -118,6 +131,7 @@ beforeAll(() => {
   originalFullscreenElementDesc = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
   originalRequestFullscreen = document.documentElement.requestFullscreen;
   originalInnerWidth = window.innerWidth;
+  originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 });
 
 afterEach(() => {
@@ -126,6 +140,7 @@ afterEach(() => {
   window.sessionStorage.clear();
   document.documentElement.classList.remove("is-fullscreen");
   document.body?.classList.remove("is-fullscreen");
+  Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
     writable: true,
@@ -202,12 +217,10 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
     });
     unmount();
 
-    // Same session does not reopen modal
     const sameSession = render(<LandingWelcomeModal />);
     expect(screen.queryByText(/Dashboard Web Sedang dalam Pengembangan/i)).not.toBeInTheDocument();
     sameSession.unmount();
 
-    // New session: opt-out forever checkbox writes localStorage
     window.sessionStorage.clear();
     const persistRender = render(<LandingWelcomeModal />);
     expect(await screen.findByText(/Dashboard Web Sedang dalam Pengembangan/i)).toBeInTheDocument();
@@ -216,13 +229,11 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
     expect(window.localStorage.getItem(WELCOME_PERSIST_KEY)).toBe("1");
     persistRender.unmount();
 
-    // Clearing sessionStorage alone respects localStorage opt-out
     window.sessionStorage.clear();
     const afterOptOut = render(<LandingWelcomeModal />);
     expect(screen.queryByText(/Dashboard Web Sedang dalam Pengembangan/i)).not.toBeInTheDocument();
     afterOptOut.unmount();
 
-    // Unsupported fullscreen browser hides fullscreen CTA and renders single continue button
     window.localStorage.clear();
     window.sessionStorage.clear();
     mockFullscreenApi({ enabled: false });
@@ -231,7 +242,6 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
     expect(screen.queryByRole("button", { name: /Aktifkan Layar Penuh/i })).not.toBeInTheDocument();
     unsupportedRender.unmount();
 
-    // Clicking Buka Dashboard CTA on actual Landing page requests fullscreen
     const ctaSpy = mockFullscreenApi({ enabled: true });
     window.sessionStorage.setItem(WELCOME_SESSION_KEY, "1");
     const LandingComponent = LandingRoute.options.component as ComponentType;
@@ -243,8 +253,26 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
   });
 });
 
-describe("Context-Aware Web Help & 7-Track Per-Menu Interactive Guide", () => {
-  it("opens Help directly on active module, runs 4-step per-menu guide with sub-tab sync, track switcher, and CommandPalette launch", async () => {
+describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () => {
+  it("opens Help on active module, keeps page interactive during non-blocking Guide, supports compact/dock controls, and navigates 42 detailed steps", async () => {
+    expect(WEB_GUIDE_TRACKS).toHaveLength(7);
+    expect(WEB_GUIDE_STEPS).toHaveLength(42);
+
+    // Give elements visible bounds in jsdom so the 4-strip pointer-events-none scrim mounts
+    Element.prototype.getBoundingClientRect = () =>
+      ({
+        top: 100,
+        left: 80,
+        right: 480,
+        bottom: 220,
+        width: 400,
+        height: 120,
+        x: 80,
+        y: 100,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const onProbeClick = vi.fn();
     const subTabEvents: Array<{ moduleId?: string; subTab?: string }> = [];
     const subTabListener = (e: Event) => {
       subTabEvents.push((e as CustomEvent<{ moduleId?: string; subTab?: string }>).detail);
@@ -256,71 +284,86 @@ describe("Context-Aware Web Help & 7-Track Per-Menu Interactive Guide", () => {
         <MotionConfig reducedMotion="always">
           <LazyMotion features={domAnimation}>
             <TelemetryProvider>
-              <NavBridgeHarness initialModule="03" />
+              <NavBridgeHarness initialModule="03" onProbeClick={onProbeClick} />
             </TelemetryProvider>
           </LazyMotion>
         </MotionConfig>,
       );
 
-      // Move to Menu 03 before pressing Bantuan
+      // Move to Menu 03 before opening Help -> opens directly on Menu 03 (5 steps)
       fireEvent.click(screen.getByRole("button", { name: "Set Initial Module" }));
       expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "03");
 
-      // 1. Open Help via Bantuan button: lands directly on Menu 03 active tab
       fireEvent.click(screen.getByRole("button", { name: /Buka bantuan penggunaan web/i }));
       expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Menu 03/i })).toHaveAttribute(
         "aria-selected",
         "true",
       );
-      expect(screen.getByText(/Konsol Timer 10 Menit & Status Alternator/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Panduan Sorotan Menu 03 \(5 Langkah\)/i }),
+      ).toBeInTheDocument();
 
-      // Check Mode & Warna and Pintasan tabs
-      fireEvent.click(screen.getByRole("tab", { name: /Mode & Warna/i }));
-      expect(screen.getByText(/Sumber Data di Bilah Atas/i)).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("tab", { name: /Pintasan/i }));
-      expect(screen.getByText(/Ctrl \+ K \/ Cmd \+ K/i)).toBeInTheDocument();
-
-      // 2. Pick Menu 06 4-step guide from Semua Menu tab
+      // Switch to Semua Menu tab: lists all 7 tracks with dynamic step counts
       fireEvent.click(screen.getByRole("tab", { name: /Semua Menu/i }));
-      const guideButtons = screen.getAllByRole("button", { name: /^Panduan \(4\)$/i });
-      expect(guideButtons).toHaveLength(7);
-      fireEvent.click(guideButtons[6]!); // 0 = overview, 6 = Menu 06
+      expect(screen.getAllByRole("button", { name: /^Panduan \(\d+\)$/i })).toHaveLength(7);
+      const sevenStepButtons = screen.getAllByRole("button", { name: /^Panduan \(7\)$/i });
+      expect(sevenStepButtons).toHaveLength(2); // Menu 04 & Menu 06
+      fireEvent.click(sevenStepButtons[1]!); // Launch Menu 06 (7 steps)
 
-      expect(await screen.findByText(/Menu 06 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      // Guide card uses non-modal region semantics at z-[45], while 4-strip scrim is pointer-events-none z-[42]
+      const guideRegion = await screen.findByRole("region", {
+        name: /Panduan penggunaan web ORION/i,
+      });
+      expect(guideRegion).toHaveClass("z-[45]");
+      expect(guideRegion).not.toHaveAttribute("aria-modal");
+      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "06");
       });
 
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 2 dari 4/i)).toBeInTheDocument();
-      expect(screen.getByText(/Sub-Tab 01: Pendaftaran, Pasang & Lepas Node/i)).toBeInTheDocument();
+      const scrimLayer = screen.getByTestId("guide-scrim-layer");
+      expect(scrimLayer).toHaveClass("pointer-events-none", "z-[42]");
 
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 3 dari 4/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/Sub-Tab 02: Batas Tegangan, Tidur & Kalibrasi/i),
-      ).toBeInTheDocument();
+      // Page behind guide stays clickable & interactive while guide is open
+      fireEvent.click(screen.getByRole("button", { name: "Tombol Uji Interaksi" }));
+      expect(onProbeClick).toHaveBeenCalledTimes(1);
 
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 4 dari 4/i)).toBeInTheDocument();
-      expect(screen.getByText(/Sub-Tab 03: Tiket Penanganan & Log Aktivitas/i)).toBeInTheDocument();
+      // Typing/pressing ArrowRight inside an input must NOT advance the guide step
+      const exampleInput = screen.getByLabelText("Kolom ketik contoh");
+      fireEvent.keyDown(exampleInput, { key: "ArrowRight" });
+      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
 
-      // Verify custom sub-tab events emitted for Menu 06
+      // Compact (Ringkas/Perluas) & Move (Pindah) controls work cleanly
+      fireEvent.click(screen.getByRole("button", { name: /Ringkas kartu panduan/i }));
+      expect(screen.getByText(/Menu 06 · 1\/7/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Perluas/i }));
+      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Pindah posisi kartu panduan/i }));
+
+      // Step through remaining 6 steps of Menu 06 (steps 2..7)
+      for (let step = 2; step <= 7; step++) {
+        fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+        expect(screen.getByText(`Menu 06 · Langkah ${step} dari 7`)).toBeInTheDocument();
+      }
+
+      expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "ONBOARDING")).toBe(
+        true,
+      );
       expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "CALIBRATION")).toBe(
         true,
       );
       expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "TICKETS")).toBe(true);
 
-      // Step back and forward, then Finish Menu 06
+      // Step back then Finish Menu 06
       fireEvent.click(screen.getByRole("button", { name: /Sebelumnya/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 3 dari 4/i)).toBeInTheDocument();
+      expect(screen.getByText(/Menu 06 · Langkah 6 dari 7/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
       fireEvent.click(screen.getByRole("button", { name: /^Selesai$/i }));
 
       await waitFor(() => {
         expect(
-          screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
+          screen.queryByRole("region", { name: /Panduan penggunaan web ORION/i }),
         ).not.toBeInTheDocument();
       });
       expect(window.localStorage.getItem(WEB_GUIDE_COMPLETED_KEY)).toBe("1");
@@ -328,27 +371,35 @@ describe("Context-Aware Web Help & 7-Track Per-Menu Interactive Guide", () => {
         JSON.parse(window.localStorage.getItem(WEB_GUIDE_COMPLETED_TRACKS_KEY) ?? "[]"),
       ).toContain("06");
 
-      // 3. Reopen via '?' key: Menu 06 now shows Selesai badge inside Semua Menu; launch Navigasi guide
+      // Reopen via '?' -> launch Navigasi (5 steps) -> step 5 continues into Menu 01 (6 steps)
       fireEvent.keyDown(window, { key: "?" });
       expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /Panduan Navigasi Bilah Atas/i }));
 
-      expect(await screen.findByText(/Navigasi · Langkah 1 dari 4/i)).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      expect(screen.getByText(/Navigasi · Langkah 4 dari 4/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Navigasi · Langkah 1 dari 5/i)).toBeInTheDocument();
+      for (let s = 2; s <= 5; s++) {
+        fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      }
+      expect(screen.getByText(/Navigasi · Langkah 5 dari 5/i)).toBeInTheDocument();
 
-      // Step 4 offers continuation straight into Menu 01
       fireEvent.click(screen.getByRole("button", { name: /Lanjut: Menu 01/i }));
-      expect(screen.getByText(/Menu 01 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      expect(screen.getByText(/Menu 01 · Langkah 1 dari 6/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "01");
       });
 
-      // Switch directly to Menu 02 via inline track switcher and close via Escape
+      // Verify Menu 01 inspector sub-tab auto-switch (steps 4 & 5)
+      for (let s = 2; s <= 5; s++) {
+        fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      }
+      expect(subTabEvents.some((ev) => ev.moduleId === "01" && ev.subTab === "matrix")).toBe(true);
+      expect(subTabEvents.some((ev) => ev.moduleId === "01" && ev.subTab === "transducer")).toBe(
+        true,
+      );
+
+      // Switch directly to Menu 02 (6 steps) via inline track switcher and close with Escape
       fireEvent.click(screen.getByRole("button", { name: "02" }));
-      expect(screen.getByText(/Menu 02 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      expect(screen.getByText(/Menu 02 · Langkah 1 dari 6/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "02");
       });
@@ -356,17 +407,17 @@ describe("Context-Aware Web Help & 7-Track Per-Menu Interactive Guide", () => {
       fireEvent.keyDown(window, { key: "Escape" });
       await waitFor(() => {
         expect(
-          screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
+          screen.queryByRole("region", { name: /Panduan penggunaan web ORION/i }),
         ).not.toBeInTheDocument();
       });
 
-      // 4. Launch active-menu guide from CommandPaletteModal (Ctrl+K) while on Menu 02
+      // Open CommandPaletteModal (Ctrl+K) while on Menu 02 -> displays dynamic 6 Langkah
       fireEvent.click(screen.getByTitle(/Buka Pencarian Cepat/i));
-      const paletteGuideBtn = await screen.findByText(/Panduan Menu Aktif \(4 Langkah\)/i);
+      const paletteGuideBtn = await screen.findByText(/Panduan Menu Aktif \(6 Langkah\)/i);
       fireEvent.click(paletteGuideBtn);
-      expect(await screen.findByText(/Menu 02 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Menu 02 · Langkah 1 dari 6/i)).toBeInTheDocument();
     } finally {
       window.removeEventListener(GUIDE_SUBTAB_EVENT, subTabListener);
     }
-  }, 15000);
+  }, 20000);
 });

@@ -740,7 +740,10 @@ export function FleetModule() {
 
         {/* Deck Pagination & Quick-Jump Bay Pills (Hidden when <= 1 unit) */}
         {filteredUnits.length > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2">
+          <div
+            data-guide-target="m02-quickjump"
+            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2"
+          >
             <div className="flex items-center gap-1.5 overflow-x-auto card-scroll py-0.5 max-w-full">
               <span className="label-hmi mr-1 shrink-0 text-[11px]">Pilih Cepat:</span>
               {filteredUnits.map((u, idx) => {
@@ -1266,7 +1269,10 @@ export function FleetModule() {
 
                     {/* Shift Handover & Maintenance Ticket Workflow (Shown for units with active ticket or Critical/Warning state) */}
                     {(unitTicket || isCritical || isWarning) && (
-                      <div className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2">
+                      <div
+                        data-guide-target={idx === 0 ? "m02-card-ticket" : undefined}
+                        className="rounded-[2px] border border-border bg-background/70 p-2.5 space-y-2"
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <span className="label-hmi flex items-center gap-1.5 text-[11px] text-foreground">
                             <Wrench

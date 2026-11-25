@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getUnitConnectionState,
   voltageHistory,
@@ -6,6 +6,7 @@ import {
   type VehicleUnit,
   type VoltagePoint,
 } from "@/data/mockTelemetry";
+import { GUIDE_SUBTAB_EVENT } from "@/data/webGuideSteps";
 import { fmtV, Led, type Tone } from "./primitives";
 import { cn } from "@/lib/utils";
 import {
@@ -398,6 +399,20 @@ export function ComponentNodeInspector({
   className,
 }: ComponentNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"matrix" | "transducer" | "sop">("matrix");
+
+  useEffect(() => {
+    const onGuideSubTab = (e: Event) => {
+      const detail = (e as CustomEvent<{ moduleId?: string; subTab?: string }>).detail;
+      if (
+        detail?.moduleId === "01" &&
+        (detail.subTab === "matrix" || detail.subTab === "transducer" || detail.subTab === "sop")
+      ) {
+        setActiveTab(detail.subTab);
+      }
+    };
+    window.addEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+    return () => window.removeEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+  }, []);
 
   const t = unit.telemetry;
   const profile = getVehicleElectricalProfile(unit.model);

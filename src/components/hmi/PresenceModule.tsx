@@ -208,7 +208,10 @@ export function PresenceModule() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2">
+        <div
+          data-guide-target="m05-filter-row"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 pt-2"
+        >
           <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
             <Search
               size={13}
@@ -517,68 +520,74 @@ export function PresenceModule() {
             </div>
           </div>
 
-          {/* Honest Queue Callout */}
-          <div className="mt-3 rounded-[2px] border border-border bg-background/50 p-3 num text-[11px] leading-relaxed">
-            <div className="flex items-center gap-2">
-              <HardDriveUpload
-                size={14}
-                className={
-                  used > 0 ? "text-amber" : conn.isOnline ? "text-emerald" : "text-muted-foreground"
-                }
-                aria-hidden="true"
-              />
-              <span className="font-semibold text-foreground">
-                {used > 0
-                  ? `Antrean Offline Aktif (${used} Rekaman Menunggu Burst Sync)`
-                  : conn.isOnline
-                    ? "Sinkronisasi Live Penuh (Antrean Kosong)"
-                    : `Unit Sedang Standby / Offline (${conn.badgeText})`}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {used > 0
-                ? "Node menyimpan rekaman di Tier-1 RTC SRAM & Tier-2 LittleFS Flash selama terputus. Firmware ESP32 mengirim batch FIFO per 5 rekaman secara otomatis begitu terhubung ke Wi-Fi gudang atau hotspot teknisi."
-                : conn.isOnline
-                  ? "Seluruh rekaman telah terkirim ke server tanpa penumpukan pada memori flash lokal."
-                  : "Memori antrean di node kosong (0 tertahan). Data akan kembali mengalir saat siklus bangun atau kontak ON berikutnya."}
-            </p>
-          </div>
-
-          {/* Real Burst Sync History from audit_logs */}
-          <div className="mt-3 rounded-[2px] border border-border/80 bg-background/40 p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="label-hmi text-[11px] text-foreground flex items-center gap-1.5">
-                <History
-                  size={12}
-                  strokeWidth={1.75}
-                  className="text-muted-foreground"
+          <div data-guide-target="m05-buffer-actions" className="mt-3 space-y-3">
+            {/* Honest Queue Callout */}
+            <div className="rounded-[2px] border border-border bg-background/50 p-3 num text-[11px] leading-relaxed">
+              <div className="flex items-center gap-2">
+                <HardDriveUpload
+                  size={14}
+                  className={
+                    used > 0
+                      ? "text-amber"
+                      : conn.isOnline
+                        ? "text-emerald"
+                        : "text-muted-foreground"
+                  }
                   aria-hidden="true"
                 />
-                Riwayat Burst Sync Terkirim (Audit Server)
-              </span>
-              <span className="num text-[11px] text-muted-foreground">
-                {burstSyncAuditRows.length} Terbaru
-              </span>
-            </div>
-            {burstSyncAuditRows.length > 0 ? (
-              <ul className="space-y-1.5 num text-[11px]">
-                {burstSyncAuditRows.map((ev) => (
-                  <li
-                    key={ev.id}
-                    className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/40 pt-1.5 first:border-t-0 first:pt-0"
-                  >
-                    <span className="text-foreground/90">{ev.message}</span>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {ev.created_at}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="num text-[11px] text-muted-foreground">
-                Belum ada histori event BURST_SYNC yang tercatat pada sesi audit ini.
+                <span className="font-semibold text-foreground">
+                  {used > 0
+                    ? `Antrean Offline Aktif (${used} Rekaman Menunggu Burst Sync)`
+                    : conn.isOnline
+                      ? "Sinkronisasi Live Penuh (Antrean Kosong)"
+                      : `Unit Sedang Standby / Offline (${conn.badgeText})`}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {used > 0
+                  ? "Node menyimpan rekaman di Tier-1 RTC SRAM & Tier-2 LittleFS Flash selama terputus. Firmware ESP32 mengirim batch FIFO per 5 rekaman secara otomatis begitu terhubung ke Wi-Fi gudang atau hotspot teknisi."
+                  : conn.isOnline
+                    ? "Seluruh rekaman telah terkirim ke server tanpa penumpukan pada memori flash lokal."
+                    : "Memori antrean di node kosong (0 tertahan). Data akan kembali mengalir saat siklus bangun atau kontak ON berikutnya."}
               </p>
-            )}
+            </div>
+
+            {/* Real Burst Sync History from audit_logs */}
+            <div className="rounded-[2px] border border-border/80 bg-background/40 p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="label-hmi text-[11px] text-foreground flex items-center gap-1.5">
+                  <History
+                    size={12}
+                    strokeWidth={1.75}
+                    className="text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  Riwayat Burst Sync Terkirim (Audit Server)
+                </span>
+                <span className="num text-[11px] text-muted-foreground">
+                  {burstSyncAuditRows.length} Terbaru
+                </span>
+              </div>
+              {burstSyncAuditRows.length > 0 ? (
+                <ul className="space-y-1.5 num text-[11px]">
+                  {burstSyncAuditRows.map((ev) => (
+                    <li
+                      key={ev.id}
+                      className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/40 pt-1.5 first:border-t-0 first:pt-0"
+                    >
+                      <span className="text-foreground/90">{ev.message}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        {ev.created_at}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="num text-[11px] text-muted-foreground">
+                  Belum ada histori event BURST_SYNC yang tercatat pada sesi audit ini.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Filtered Fleet Presence Directory */}

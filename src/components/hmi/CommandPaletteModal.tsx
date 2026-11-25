@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
-import { type GuideTrackId } from "@/data/webGuideSteps";
+import { getGuideTrack, type GuideTrackId } from "@/data/webGuideSteps";
 import { resolveExportEndpointUrl } from "@/lib/battery-analytics";
 import { buildFormattedExcelPrettier } from "@/lib/excel-export";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
@@ -62,6 +62,7 @@ export function CommandPaletteModal({
     units,
     selected,
     selectUnit,
+    activeModule,
     setActiveModule,
     fleetScale,
     setFleetScale,
@@ -151,6 +152,9 @@ export function CommandPaletteModal({
           },
         };
       });
+
+    const activeGuideTrack = getGuideTrack(activeModule);
+    const overviewGuideTrack = getGuideTrack("overview");
 
     const rawActions: PaletteItem[] = [
       ...MODULE_META.map((m) => ({
@@ -243,9 +247,9 @@ export function CommandPaletteModal({
             {
               id: "act-guide",
               group: "ACTIONS" as const,
-              title: "Panduan Menu Aktif (4 Langkah)",
-              subtitle: "Sorotan langkah penggunaan halaman yang sedang dibuka",
-              badge: "4 Langkah",
+              title: `Panduan Menu Aktif (${activeGuideTrack.steps.length} Langkah)`,
+              subtitle: `Sorotan interaktif untuk ${activeGuideTrack.title}`,
+              badge: `${activeGuideTrack.steps.length} Langkah`,
               tone: "emerald" as const,
               onSelect: () => {
                 onClose();
@@ -257,7 +261,7 @@ export function CommandPaletteModal({
               group: "ACTIONS" as const,
               title: "Panduan Navigasi Utama",
               subtitle: "Mengenal tab menu, pencarian cepat, alarm, dan mode data",
-              badge: "Navigasi",
+              badge: `${overviewGuideTrack.steps.length} Langkah`,
               tone: "dim" as const,
               onSelect: () => {
                 onClose();
@@ -285,6 +289,7 @@ export function CommandPaletteModal({
     allUnits,
     configs,
     selectUnit,
+    activeModule,
     setActiveModule,
     onClose,
     fleetScale,

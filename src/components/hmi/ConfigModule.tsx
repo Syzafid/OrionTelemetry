@@ -684,6 +684,7 @@ export function ConfigModule() {
           <Panel
             title="Registrasi Node IoT Baru & Penautan Kendaraan"
             code="ONBOARD"
+            guideTarget="m06-onboard-form"
             right={
               !isLiveApi ? (
                 <button
@@ -968,6 +969,7 @@ export function ConfigModule() {
           <Panel
             title="Direktori Node IoT Terdaftar"
             code="DIRECTORY"
+            guideTarget="m06-onboard-dir"
             right={
               <span className="num text-[11px] text-muted-foreground">
                 {filteredUnits.length}/{units.length} Unit
@@ -1289,6 +1291,7 @@ export function ConfigModule() {
           <Panel
             title="Parameter NVS ESP32 & Antrean Piggyback ACK"
             code="NVS"
+            guideTarget="m06-cal-nvs"
             right={
               <span className="num text-[11px] text-muted-foreground">
                 Target: {selected.unit_id} ({selected.bay})
@@ -1499,6 +1502,7 @@ export function ConfigModule() {
           <Panel
             title="Kalibrasi ADC 4-Titik Pin 34 (SOP C.1 Multimeter)"
             code="OLS"
+            guideTarget="m06-cal-ols"
             right={
               <span className="num text-[11px] text-muted-foreground">
                 R² = {fit.rSquared.toFixed(4)}
@@ -1733,6 +1737,7 @@ export function ConfigModule() {
           <Panel
             title="Tiket Pemeliharaan Baterai & Shift Handover"
             code="TICKETS"
+            guideTarget="m06-ticket-panel"
             right={
               <span className="num text-[11px] text-muted-foreground">
                 {activeTicketCount} Tiket Aktif
@@ -1925,6 +1930,7 @@ export function ConfigModule() {
           <Panel
             title="Jejak Audit Operasional & Log Sistem"
             code="AUDIT"
+            guideTarget="m06-audit-panel"
             right={
               <div className="flex items-center gap-1.5 num text-[11px] text-muted-foreground">
                 <History size={12} aria-hidden="true" />
