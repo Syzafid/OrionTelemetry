@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowRight, BookOpen, Compass, Keyboard, Layers } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookOpen, Check, Compass, Keyboard, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,54 +10,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
+import {
+  WEB_GUIDE_TRACKS,
+  getGuideTrack,
+  readCompletedGuideTracks,
+  type GuideTrackId,
+} from "@/data/webGuideSteps";
 import { cn } from "@/lib/utils";
 
 export interface WebHelpModalProps {
   open: boolean;
   onClose: () => void;
-  onStartGuide: () => void;
+  onStartGuide: (trackId?: GuideTrackId) => void;
 }
 
-type HelpTab = "MENU" | "STATUS" | "SHORTCUT";
-
-const HELP_TABS: Array<{ id: HelpTab; label: string; Icon: typeof Layers }> = [
-  { id: "MENU", label: "Menu Dashboard", Icon: Layers },
-  { id: "STATUS", label: "Mode & Warna", Icon: BookOpen },
-  { id: "SHORTCUT", label: "Pintasan", Icon: Keyboard },
-];
-
-const MODULE_SUMMARIES: Array<{ id: ModuleId; name: string; desc: string }> = [
-  {
-    id: "01",
-    name: "Topologi & Transduser",
-    desc: "Pilih unit kendaraan di sidebar kiri dan klik komponen pada gambar untuk memeriksa rincian nilai sensor.",
-  },
-  {
-    id: "02",
-    name: "Armada & PDI",
-    desc: "Saring unit berdasarkan kondisi aki, urutkan prioritas, buka sertifikat PDI, dan ekspor laporan Excel.",
-  },
-  {
-    id: "03",
-    name: "Antrean Pemanasan",
-    desc: "Catat jadwal pemanasan mesin dan pantau timer pemanasan 10 menit beserta riwayat sesinya.",
-  },
-  {
-    id: "04",
-    name: "OBD-II Diagnostik",
-    desc: "Pantau indikator RPM, suhu pendingin, daftar kode gangguan (DTC mode baca saja), dan grafik tren.",
-  },
-  {
-    id: "05",
-    name: "Presensi & Log",
-    desc: "Lihat catatan kendaraan keluar-masuk area gudang serta status antrean data yang tersimpan offline.",
-  },
-  {
-    id: "06",
-    name: "Konfigurasi Node",
-    desc: "Daftarkan unit baru, atur batas tegangan dan kalibrasi di web, serta kelola tiket dan log aktivitas.",
-  },
-];
+type HelpTab = "ACTIVE_MENU" | "ALL_MENUS" | "STATUS" | "SHORTCUT";
 
 const STATUS_BADGES = [
   {
@@ -92,26 +59,43 @@ const SHORTCUTS = [
   },
   {
     keys: "Esc",
-    desc: "Menutup dialog bantuan, Cari Cepat, atau panduan interaktif.",
+    desc: "Menutup dialog bantuan, Cari Cepat, atau panduan sorotan.",
   },
 ];
 
 /**
- * Web-only Help Center modal covering dashboard menus, data modes, color meanings,
- * keyboard shortcuts, and entry point to the 8-step interactive web guide.
+ * Context-aware Web Help Center modal. Opens on the currently active module tab (`01`..`06`)
+ * so users immediately see detailed guidance for the screen they are working on.
  */
 export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps) {
-  const { setActiveModule } = useTelemetry();
-  const [tab, setTab] = useState<HelpTab>("MENU");
+  const { activeModule, setActiveModule } = useTelemetry();
+  const [tab, setTab] = useState<HelpTab>("ACTIVE_MENU");
+  const [completedTracks, setCompletedTracks] = useState<GuideTrackId[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTab("ACTIVE_MENU");
+    setCompletedTracks(readCompletedGuideTracks());
+  }, [open]);
+
+  const activeTrack = getGuideTrack(activeModule);
+  const isActiveTrackCompleted = completedTracks.includes(activeModule);
+
+  const helpTabs: Array<{ id: HelpTab; label: string; Icon: typeof Layers }> = [
+    { id: "ACTIVE_MENU", label: `Menu ${activeModule}`, Icon: Compass },
+    { id: "ALL_MENUS", label: "Semua Menu", Icon: Layers },
+    { id: "STATUS", label: "Mode & Warna", Icon: BookOpen },
+    { id: "SHORTCUT", label: "Pintasan", Icon: Keyboard },
+  ];
 
   const handleOpenModule = (id: ModuleId) => {
     setActiveModule(id);
     onClose();
   };
 
-  const handleLaunchGuide = () => {
+  const handleStartTrack = (trackId: GuideTrackId) => {
     onClose();
-    onStartGuide();
+    onStartGuide(trackId);
   };
 
   return (
@@ -121,14 +105,13 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
         if (!nextOpen) onClose();
       }}
     >
-      <DialogContent className="w-[calc(100%-2rem)] max-w-2xl rounded-[2px] border-border bg-card p-5 sm:p-6 text-foreground max-h-[90vh] flex flex-col">
-        <DialogHeader className="pr-8 text-left">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-2xl rounded-[2px] border-border bg-card p-5 sm:p-6 text-foreground max-h-[90vh] flex flex-col shadow-none">
+        <DialogHeader className="pr-10 text-left">
           <DialogTitle className="font-display text-lg font-semibold tracking-tight text-foreground">
             Bantuan Penggunaan Web ORION
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
-            Ringkasan fitur antarmuka dashboard, arti indikator warna, dan pintasan navigasi di
-            browser.
+            Panduan fungsi tiap menu di browser, arti warna indikator, dan pintasan keyboard.
           </DialogDescription>
         </DialogHeader>
 
@@ -138,7 +121,7 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
           aria-label="Bagian bantuan penggunaan web"
           className="flex flex-wrap gap-1.5 border-b border-border pb-3"
         >
-          {HELP_TABS.map(({ id, label, Icon }) => {
+          {helpTabs.map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
               <button
@@ -150,7 +133,7 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
                 aria-controls={`help-panel-${id}`}
                 onClick={() => setTab(id)}
                 className={cn(
-                  "inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-3 py-1.5 num text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border px-3 py-1.5 num text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active
                     ? "border-foreground bg-foreground/12 text-foreground"
                     : "border-border bg-secondary/40 text-muted-foreground hover:border-foreground/50 hover:text-foreground",
@@ -170,33 +153,116 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
           aria-labelledby={`help-tab-${tab}`}
           className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
         >
-          {tab === "MENU" && (
-            <div className="space-y-2">
-              {MODULE_SUMMARIES.map((mod) => (
-                <div
-                  key={mod.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[2px] border border-border bg-secondary/45 p-3"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="num text-xs font-semibold text-foreground">{mod.id}</span>
-                      <span className="font-display text-sm font-semibold text-foreground">
-                        {mod.name}
+          {tab === "ACTIVE_MENU" && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2 rounded-[2px] border border-border bg-secondary/50 p-3.5">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-display text-sm font-semibold text-foreground">
+                      {activeTrack.title}
+                    </h3>
+                    {isActiveTrackCompleted && (
+                      <span className="inline-flex items-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/15 px-1.5 py-0.5 num text-[11px] font-medium text-emerald">
+                        <Check size={11} aria-hidden="true" />
+                        Selesai
                       </span>
-                    </div>
-                    <p className="text-[13px] leading-relaxed text-muted-foreground">{mod.desc}</p>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenModule(mod.id)}
-                    className="min-h-[38px] shrink-0 rounded-[2px] border-border bg-background text-xs text-foreground hover:bg-secondary cursor-pointer"
-                  >
-                    Buka
-                  </Button>
+                  <p className="text-[13px] leading-relaxed text-muted-foreground">
+                    {activeTrack.summary}
+                  </p>
                 </div>
-              ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleStartTrack("overview")}
+                  className="min-h-[44px] shrink-0 rounded-[2px] border-border bg-background text-xs text-foreground hover:bg-secondary cursor-pointer"
+                >
+                  Panduan Navigasi Bilah Atas
+                </Button>
+              </div>
+
+              {/* 4 Concrete Steps for the Active Module */}
+              <ol className="divide-y divide-border rounded-[2px] border border-border bg-secondary/35">
+                {activeTrack.steps.map((step, idx) => (
+                  <li key={step.id} className="flex items-start gap-3 p-3.5">
+                    <span className="num mt-0.5 shrink-0 rounded-[2px] border border-border bg-background px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <div className="font-display text-sm font-semibold text-foreground">
+                        {step.title}
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-muted-foreground">
+                        {step.description}
+                      </p>
+                      <p className="text-xs leading-relaxed text-foreground/90">
+                        <span className="num font-semibold text-amber mr-1">Tips:</span>
+                        <span className="text-muted-foreground">{step.tip}</span>
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {tab === "ALL_MENUS" && (
+            <div className="divide-y divide-border rounded-[2px] border border-border bg-secondary/35">
+              {WEB_GUIDE_TRACKS.map((track) => {
+                const isDone = completedTracks.includes(track.id);
+                const isCurrent = track.moduleId === activeModule;
+                return (
+                  <div
+                    key={track.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-display text-sm font-semibold text-foreground">
+                          {track.title}
+                        </span>
+                        {isCurrent && (
+                          <span className="rounded-[2px] border border-foreground/50 bg-foreground/10 px-1.5 py-0.5 num text-[11px] text-foreground">
+                            Aktif
+                          </span>
+                        )}
+                        {isDone && (
+                          <span className="inline-flex items-center gap-1 rounded-[2px] border border-emerald/50 bg-emerald/15 px-1.5 py-0.5 num text-[11px] text-emerald">
+                            <Check size={11} aria-hidden="true" />
+                            Selesai
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-muted-foreground">
+                        {track.summary}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {track.moduleId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenModule(track.moduleId!)}
+                          className="min-h-[44px] rounded-[2px] border-border bg-background text-xs text-foreground hover:bg-secondary cursor-pointer"
+                        >
+                          Buka
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleStartTrack(track.id)}
+                        className="min-h-[44px] rounded-[2px] bg-secondary text-xs text-foreground border border-border hover:border-foreground/60 hover:bg-secondary/80 cursor-pointer"
+                      >
+                        Panduan ({track.steps.length})
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -288,12 +354,13 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
           </Button>
           <Button
             type="button"
-            onClick={handleLaunchGuide}
+            onClick={() => handleStartTrack(activeModule)}
             className="min-h-[44px] gap-2 rounded-[2px] bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
           >
             <Compass size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span>Mulai Panduan Interaktif (8 Langkah)</span>
-            <ArrowRight size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>
+              Panduan Sorotan Menu {activeModule} ({activeTrack.steps.length} Langkah)
+            </span>
           </Button>
         </DialogFooter>
       </DialogContent>

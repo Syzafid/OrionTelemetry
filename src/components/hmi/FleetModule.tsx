@@ -608,6 +608,7 @@ export function FleetModule() {
       {/* Sticky Command & Filter Bar (shrink-0) */}
       <section
         aria-label="Fleet Command and Triage Filter Bar"
+        data-guide-target="m02-filter-bar"
         className="panel shrink-0 flex flex-col gap-2.5 p-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -715,6 +716,7 @@ export function FleetModule() {
 
             <button
               type="button"
+              data-guide-target="m02-actions"
               onClick={() => openExportModal("EXCEL", activeExportTarget)}
               className="num inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-[2px] border border-border bg-secondary/50 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:border-foreground/60 hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title={`Konfigurasi & Ekspor Workbook Excel 3-Sheet ber-AutoFilter (${exportUnitCount} unit sesuai filter aktif)`}
@@ -830,6 +832,7 @@ export function FleetModule() {
           onScroll={handleCarouselScroll}
           tabIndex={0}
           aria-label="Daftar kartu kesehatan baterai armada"
+          data-guide-target="m02-cards"
           className="fleet-carousel-track flex flex-nowrap gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth card-scroll flex-1 min-h-0 pb-1 [&>*]:min-w-0"
         >
           {filteredUnits.map((u, idx) => {
@@ -1356,7 +1359,10 @@ export function FleetModule() {
                 </div>
 
                 {/* 3. LOCKED CARD FOOTER (shrink-0) */}
-                <footer className="shrink-0 border-t border-border bg-card/95 p-3 space-y-2">
+                <footer
+                  data-guide-target={idx === 0 ? "m02-card-actions" : undefined}
+                  className="shrink-0 border-t border-border bg-card/95 p-3 space-y-2"
+                >
                   {!t.engine_on && u.in_yard && t.v_bat < 12.4 && (
                     <button
                       type="button"

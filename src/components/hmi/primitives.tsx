@@ -36,17 +36,20 @@ export function Panel({
   right,
   children,
   className,
+  guideTarget,
 }: {
   title: string;
   code?: string;
   right?: ReactNode;
   children: ReactNode;
   className?: string;
+  guideTarget?: string;
 }) {
   return (
     <section
       className={cn("hmi-panel panel relative flex min-w-0 flex-col", className)}
       aria-label={title}
+      data-guide-target={guideTarget}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2.5 min-w-0">

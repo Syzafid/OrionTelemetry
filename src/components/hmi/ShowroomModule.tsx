@@ -59,7 +59,10 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
         {/* Stage Heading (Compact 2-Row HMI Header) */}
         <div className="stage-heading relative z-10 flex shrink-0 flex-col border-b border-border/80 px-3.5 py-2.5 sm:px-4">
           {/* Quick unit switcher pill row for mobile screens */}
-          <div className="card-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
+          <div
+            data-guide-target="m01-unit-list"
+            className="card-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden"
+          >
             <span className="label-hmi mr-0.5 shrink-0 text-[11px]">UNIT:</span>
             {units.map((u) => {
               const on = u.unit_id === selected.unit_id;
@@ -208,23 +211,27 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
 
         {/* Viewport: Orthographic Topology Blueprint & Component Diagnostic Inspector */}
         <div className="card-scroll relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2 sm:p-3">
-          <VehicleTopologyMap
-            unit={selected}
-            activeNode={activeTopologyNode}
-            onSelectNode={setActiveTopologyNode}
-            config={selectedConfig}
-            isLiveApi={dataSource === "LIVE_API"}
-            className="shrink-0"
-          />
-          <ComponentNodeInspector
-            unit={selected}
-            activeNode={activeTopologyNode}
-            onSelectNode={setActiveTopologyNode}
-            config={selectedConfig}
-            historyPoints={history[selected.unit_id]}
-            isLiveApi={dataSource === "LIVE_API"}
-            className="shrink-0"
-          />
+          <div data-guide-target="m01-stage" className="shrink-0">
+            <VehicleTopologyMap
+              unit={selected}
+              activeNode={activeTopologyNode}
+              onSelectNode={setActiveTopologyNode}
+              config={selectedConfig}
+              isLiveApi={dataSource === "LIVE_API"}
+              className="shrink-0"
+            />
+          </div>
+          <div data-guide-target="m01-inspector" className="shrink-0">
+            <ComponentNodeInspector
+              unit={selected}
+              activeNode={activeTopologyNode}
+              onSelectNode={setActiveTopologyNode}
+              config={selectedConfig}
+              historyPoints={history[selected.unit_id]}
+              isLiveApi={dataSource === "LIVE_API"}
+              className="shrink-0"
+            />
+          </div>
         </div>
 
         {/* Telemetry Link & Node Heartbeat Ribbon */}
@@ -297,6 +304,7 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
         {/* Unit List: Shown on desktop; hidden on mobile where top switcher is used */}
         <section
           aria-label="Unit Stock Yard"
+          data-guide-target="m01-unit-list"
           className="panel hidden lg:flex min-h-0 flex-1 flex-col overflow-hidden"
         >
           <header className="shrink-0 border-b border-border p-3 space-y-2">
@@ -411,7 +419,12 @@ export function ShowroomModule({ active: _active }: { active: boolean }) {
         </section>
 
         {/* Ringkasan OBD-II & Node (Pelengkap Peta Topologi) */}
-        <Panel title="Ringkasan OBD-II & Node" code="PID" className="shrink-0">
+        <Panel
+          title="Ringkasan OBD-II & Node"
+          code="PID"
+          guideTarget="m01-summary"
+          className="shrink-0"
+        >
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-y-1.5">
             <Stat
               label="Kecepatan / Beban"

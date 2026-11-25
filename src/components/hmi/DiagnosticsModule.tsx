@@ -25,6 +25,7 @@ import {
 import { useSpring } from "motion/react";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { DTC_LIBRARY, getUnitConnectionState, voltageHistory } from "@/data/mockTelemetry";
+import { GUIDE_SUBTAB_EVENT } from "@/data/webGuideSteps";
 import { computeBatteryPrediction } from "@/lib/battery-analytics";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
 import { SPRING_GAUGE, prefersReducedMotion } from "@/lib/motion-tokens";
@@ -199,6 +200,22 @@ export function DiagnosticsModule() {
   const [liveSamplesMap, setLiveSamplesMap] = useState<Record<string, DiagnosticsChartPoint[]>>({});
   const tabRefs = useRef<Partial<Record<DiagSubTab, HTMLButtonElement | null>>>({});
   const chartIntro = useChartIntroOnly();
+
+  useEffect(() => {
+    const onGuideSubTab = (e: Event) => {
+      const detail = (e as CustomEvent<{ moduleId?: string; subTab?: string }>).detail;
+      if (
+        detail?.moduleId === "04" &&
+        (detail.subTab === "POWERTRAIN" ||
+          detail.subTab === "EMISSIONS" ||
+          detail.subTab === "ELECTRICAL")
+      ) {
+        setActiveSubTab(detail.subTab);
+      }
+    };
+    window.addEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+    return () => window.removeEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+  }, []);
 
   const isLiveApi = dataSource === "LIVE_API";
   const t = selected.telemetry;
@@ -434,7 +451,10 @@ export function DiagnosticsModule() {
       )}
 
       {/* Target Unit Command & Context Strip (shrink-0) */}
-      <div className="flex shrink-0 flex-col gap-2 rounded-[2px] border border-border bg-card/80 px-3 py-2">
+      <div
+        data-guide-target="m04-toolbar"
+        className="flex shrink-0 flex-col gap-2 rounded-[2px] border border-border bg-card/80 px-3 py-2"
+      >
         <h1 className="sr-only">Diagnostik OBD-II &amp; Powertrain Stock Yard</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className="label-hmi mr-1 shrink-0">Target Unit</span>
@@ -625,7 +645,10 @@ export function DiagnosticsModule() {
       </div>
 
       {/* Sub-Menu Navigation Bar (Accessible Segmented Control: role="tablist") */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 rounded-[2px] border border-border bg-card/90 px-3 py-2">
+      <div
+        data-guide-target="m04-subtabs"
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 rounded-[2px] border border-border bg-card/90 px-3 py-2"
+      >
         <div
           role="tablist"
           aria-label="Kategori Diagnostik OBD-II"
@@ -721,7 +744,10 @@ export function DiagnosticsModule() {
           className="flex flex-col gap-3 flex-1 min-h-0 lg:overflow-y-auto card-scroll pr-0.5"
         >
           {/* Row 1: Dual Analog Gauges + Dual Axis Real-History Trend Chart */}
-          <div className="diagnostics-instruments grid shrink-0 gap-3 [&>*]:min-w-0 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.35fr)]">
+          <div
+            data-guide-target="m04-gauges"
+            className="diagnostics-instruments grid shrink-0 gap-3 [&>*]:min-w-0 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.35fr)]"
+          >
             <Panel title="Putaran Mesin (RPM)" code="010C">
               <Gauge
                 value={!t.engine_on || t.rpm <= 0 ? -1 : t.rpm}
@@ -924,6 +950,7 @@ export function DiagnosticsModule() {
       {activeSubTab === "EMISSIONS" && (
         <div
           id="diag-panel-EMISSIONS"
+          data-guide-target="m04-dtc"
           role="tabpanel"
           aria-labelledby="diag-tab-EMISSIONS"
           className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.1fr_1.35fr]"

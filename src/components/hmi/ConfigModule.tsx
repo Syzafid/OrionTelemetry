@@ -20,6 +20,7 @@ import {
   type AuditSeverity,
   type TicketStatus,
 } from "@/data/mockTelemetry";
+import { GUIDE_SUBTAB_EVENT } from "@/data/webGuideSteps";
 import { olsCalibration } from "@/lib/calibration";
 import {
   PCB_ADC_PRESETS,
@@ -119,6 +120,22 @@ export function ConfigModule() {
   const isLiveApi = dataSource === "LIVE_API";
   const [activeSubTab, setActiveSubTab] = useState<ConfigSubTab>("ONBOARDING");
   const tabRefs = useRef<Partial<Record<ConfigSubTab, HTMLButtonElement | null>>>({});
+
+  useEffect(() => {
+    const onGuideSubTab = (e: Event) => {
+      const detail = (e as CustomEvent<{ moduleId?: string; subTab?: string }>).detail;
+      if (
+        detail?.moduleId === "06" &&
+        (detail.subTab === "ONBOARDING" ||
+          detail.subTab === "CALIBRATION" ||
+          detail.subTab === "TICKETS")
+      ) {
+        setActiveSubTab(detail.subTab);
+      }
+    };
+    window.addEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+    return () => window.removeEventListener(GUIDE_SUBTAB_EVENT, onGuideSubTab);
+  }, []);
 
   const cfg = useMemo(
     () =>
@@ -511,6 +528,7 @@ export function ConfigModule() {
             <div
               role="tablist"
               aria-label="Sub-menu konfigurasi node"
+              data-guide-target="m06-subtabs"
               className="flex flex-wrap items-center gap-1.5 num text-xs"
             >
               {SUB_TABS.map((tab, idx) => {
@@ -658,6 +676,7 @@ export function ConfigModule() {
       {activeSubTab === "ONBOARDING" && (
         <div
           id="panel-config-ONBOARDING"
+          data-guide-target="m06-onboarding"
           role="tabpanel"
           aria-labelledby="tab-config-ONBOARDING"
           className="config-details grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.15fr_1fr]"
@@ -1261,6 +1280,7 @@ export function ConfigModule() {
       {activeSubTab === "CALIBRATION" && (
         <div
           id="panel-config-CALIBRATION"
+          data-guide-target="m06-calibration"
           role="tabpanel"
           aria-labelledby="tab-config-CALIBRATION"
           className="config-details grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.15fr_1fr]"
@@ -1704,6 +1724,7 @@ export function ConfigModule() {
       {activeSubTab === "TICKETS" && (
         <div
           id="panel-config-TICKETS"
+          data-guide-target="m06-tickets"
           role="tabpanel"
           aria-labelledby="tab-config-TICKETS"
           className="config-details grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.15fr_1fr]"

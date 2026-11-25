@@ -376,7 +376,10 @@ export function WarmupQueueModule() {
         </div>
       )}
       {/* Top Operational KPI Command Bar */}
-      <div className="panel flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+      <div
+        data-guide-target="m03-kpi"
+        className="panel flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+      >
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Thermometer className="text-emerald shrink-0" size={16} aria-hidden="true" />
@@ -456,6 +459,7 @@ export function WarmupQueueModule() {
           <Panel
             title={`Konsol Pemantauan: Bay ${selected.bay} (${selected.model})`}
             code="SOP"
+            guideTarget="m03-console"
             className="shrink-0 lg:max-h-[60%]"
             right={
               <div className="flex flex-wrap items-center gap-1.5">
@@ -753,6 +757,7 @@ export function WarmupQueueModule() {
           <Panel
             title="Daftar Prioritas Pemanasan Armada (Voltase Rendah)"
             code="QUEUE"
+            guideTarget="m03-queue"
             right={
               <span className="num text-[11px] text-muted-foreground">
                 {pendingQueue.length} Unit Perlu Dipanaskan
@@ -965,6 +970,7 @@ export function WarmupQueueModule() {
           <Panel
             title="Riwayat Sesi & Penugasan Pemanasan Mesin"
             code="LOG"
+            guideTarget="m03-history"
             right={
               <div className="flex items-center gap-1.5 num text-[11px] text-muted-foreground">
                 <History size={12} aria-hidden="true" />

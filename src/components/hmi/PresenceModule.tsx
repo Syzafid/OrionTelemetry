@@ -168,7 +168,10 @@ export function PresenceModule() {
       )}
 
       {/* Top Guard & Search/Filter Command Bar (shrink-0) */}
-      <div className="panel flex shrink-0 flex-col gap-2.5 px-3 py-2.5 sm:px-4">
+      <div
+        data-guide-target="m05-guard"
+        className="panel flex shrink-0 flex-col gap-2.5 px-3 py-2.5 sm:px-4"
+      >
         <h1 className="sr-only">Presensi Yard, Buffer Offline &amp; Log Pergerakan</h1>
         <div
           className={cn(
@@ -375,6 +378,7 @@ export function PresenceModule() {
         <Panel
           title="Presensi Unit & Antrean Dua Tingkat"
           code="BUF"
+          guideTarget="m05-buffer"
           right={<span className="num text-[11px] text-muted-foreground">Maks 2.020 Slot</span>}
         >
           {/* Filtered Unit Selector Buttons (Accessible >= 44px touch target) */}
@@ -656,8 +660,12 @@ export function PresenceModule() {
         <Panel
           title="Log Pergerakan & Transisi Zona"
           code="LOG"
+          guideTarget="m05-log-table"
           right={
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div
+              data-guide-target="m05-log-controls"
+              className="flex flex-wrap items-center gap-1.5"
+            >
               <div className="flex items-center gap-1" role="group" aria-label="Cakupan unit log">
                 <button
                   type="button"

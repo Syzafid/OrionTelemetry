@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
+import { type GuideTrackId } from "@/data/webGuideSteps";
 import { resolveExportEndpointUrl } from "@/lib/battery-analytics";
 import { buildFormattedExcelPrettier } from "@/lib/excel-export";
 import { matchesFleetSearch } from "@/lib/fleet-filter";
@@ -26,7 +27,7 @@ export interface CommandPaletteModalProps {
   alarmArmed: boolean;
   onToggleAlarm: () => void;
   onOpenHelp?: () => void;
-  onStartGuide?: () => void;
+  onStartGuide?: (trackId?: GuideTrackId) => void;
 }
 
 interface PaletteItem {
@@ -242,13 +243,25 @@ export function CommandPaletteModal({
             {
               id: "act-guide",
               group: "ACTIONS" as const,
-              title: "Mulai Panduan Interaktif",
-              subtitle: "Tur langkah demi langkah penggunaan dashboard web",
-              badge: "8 Langkah",
+              title: "Panduan Menu Aktif (4 Langkah)",
+              subtitle: "Sorotan langkah penggunaan halaman yang sedang dibuka",
+              badge: "4 Langkah",
               tone: "emerald" as const,
               onSelect: () => {
                 onClose();
                 onStartGuide();
+              },
+            },
+            {
+              id: "act-guide-overview",
+              group: "ACTIONS" as const,
+              title: "Panduan Navigasi Utama",
+              subtitle: "Mengenal tab menu, pencarian cepat, alarm, dan mode data",
+              badge: "Navigasi",
+              tone: "dim" as const,
+              onSelect: () => {
+                onClose();
+                onStartGuide("overview");
               },
             },
           ]

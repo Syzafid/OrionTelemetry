@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Info, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
+import { OrionLogo } from "@/components/hmi/OrionLogo";
+import { Led } from "@/components/hmi/primitives";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -68,41 +70,83 @@ export function LandingWelcomeModal() {
         if (!nextOpen) dismiss();
       }}
     >
-      <DialogContent className="w-[calc(100%-2rem)] max-w-lg rounded-[2px] border-border bg-card p-6 text-foreground">
-        <DialogHeader className="space-y-2.5 text-left">
-          <div className="inline-flex w-fit items-center gap-1.5 rounded-[2px] border border-amber/45 bg-amber/12 px-2.5 py-1 num text-[11px] font-medium uppercase tracking-wider text-amber">
-            <Info size={13} strokeWidth={1.75} aria-hidden="true" />
-            <span>Tahap Pengembangan</span>
+      <DialogContent className="w-[calc(100%-2rem)] max-w-xl rounded-[2px] border-border bg-card p-5 sm:p-6 text-foreground shadow-none">
+        {/* Identity & development stage header aligned with ORION instrument panels */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3.5 pr-11">
+          <div className="flex items-center gap-2.5">
+            <OrionLogo variant="icon" className="h-7 w-7 shrink-0" />
+            <span className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
+              ORION TELEMETRY
+            </span>
           </div>
+          <span className="num text-[11px] font-medium uppercase tracking-wider text-amber">
+            Tahap Pengembangan · Web
+          </span>
+        </div>
+
+        <DialogHeader className="space-y-1.5 text-left">
           <DialogTitle className="font-display text-lg sm:text-xl font-semibold tracking-tight text-foreground">
-            Selamat Datang di Web ORION Telemetry
+            Dashboard Web Sedang dalam Pengembangan
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
-            Aplikasi web ini masih berada dalam tahap pengembangan dan penyempurnaan antarmuka.
+            Sebagian fitur dan tampilan antarmuka masih disempurnakan sebelum pemakaian operasional
+            penuh.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2.5 rounded-[2px] border border-border/80 bg-secondary/45 p-3.5 text-[13px] leading-relaxed text-foreground">
-          <p>
-            Halaman dashboard secara bawaan membuka{" "}
-            <strong className="font-medium">Mode Simulasi</strong> dengan 12 unit contoh agar
-            seluruh fitur dapat langsung dicoba.
-          </p>
-          <p className="text-muted-foreground">
-            <strong className="font-medium text-foreground">Mode Live API</strong> tersedia di bilah
-            atas dashboard apabila perangkat dan server MySQL terhubung.
-          </p>
-          {canOfferFullscreen && (
-            <p className="text-muted-foreground">
-              Untuk tampilan grafik dan panel kerja yang lebih lega, Anda dapat mengaktifkan mode
-              layar penuh.
+        {/* Two-column comparison: default Simulation vs optional Live API */}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="rounded-[2px] border border-border bg-secondary/60 p-3 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Led tone="dim" />
+                <span className="font-display text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Mode Simulasi
+                </span>
+              </div>
+              <span className="num text-[11px] text-muted-foreground">12 Unit Contoh</span>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Langsung aktif saat dashboard dibuka untuk mencoba peta komponen, antrean pemanasan,
+              grafik, dan ekspor Excel.
             </p>
-          )}
+          </div>
+
+          <div className="rounded-[2px] border border-border bg-secondary/60 p-3 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Led tone="emerald" />
+                <span className="font-display text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Mode Live API
+                </span>
+              </div>
+              <span className="num text-[11px] text-emerald">Polling 3 dtk</span>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Bisa diaktifkan dari bilah atas dashboard saat perangkat ESP32 dan server MySQL lokal
+              tersambung.
+            </p>
+          </div>
         </div>
+
+        {canOfferFullscreen && (
+          <div className="flex items-start gap-2.5 rounded-[2px] border border-border bg-background/70 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            <Maximize2
+              size={15}
+              strokeWidth={1.75}
+              className="mt-0.5 shrink-0 text-foreground"
+              aria-hidden="true"
+            />
+            <span>
+              Mode layar penuh memberi ruang lebih lega untuk peta kelistrikan, grafik, dan tabel
+              armada.
+            </span>
+          </div>
+        )}
 
         <label
           htmlFor="welcome-dont-show"
-          className="flex min-h-[36px] cursor-pointer items-center gap-2.5 text-xs text-muted-foreground select-none hover:text-foreground"
+          className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs text-muted-foreground select-none hover:text-foreground"
         >
           <Checkbox
             id="welcome-dont-show"
@@ -112,7 +156,7 @@ export function LandingWelcomeModal() {
           <span>Jangan tampilkan lagi di perangkat ini</span>
         </label>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter className="gap-2 border-t border-border pt-3 sm:gap-2">
           {canOfferFullscreen ? (
             <>
               <Button
@@ -121,7 +165,7 @@ export function LandingWelcomeModal() {
                 onClick={dismiss}
                 className="min-h-[44px] rounded-[2px] border-border bg-background text-foreground hover:bg-secondary cursor-pointer"
               >
-                Lanjut Biasa
+                Tutup &amp; Lihat Beranda
               </Button>
               <Button
                 type="button"
@@ -138,7 +182,7 @@ export function LandingWelcomeModal() {
               onClick={dismiss}
               className="min-h-[44px] rounded-[2px] bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
             >
-              Mengerti, Lanjutkan
+              Lanjut ke Beranda
             </Button>
           )}
         </DialogFooter>

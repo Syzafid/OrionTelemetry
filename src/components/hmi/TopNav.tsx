@@ -12,6 +12,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getUnitConnectionState } from "@/data/mockTelemetry";
+import { type GuideTrackId } from "@/data/webGuideSteps";
 import { useTelemetry, type ModuleId } from "@/context/TelemetryContext";
 import {
   loadCommandPaletteModal,
@@ -111,6 +112,7 @@ export function TopNav() {
   const [helpMounted, setHelpMounted] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideMounted, setGuideMounted] = useState(false);
+  const [guideTrack, setGuideTrack] = useState<GuideTrackId>("overview");
   const lastChimeRef = useRef<number>(0);
 
   const openHelpModal = useCallback(() => {
@@ -118,11 +120,15 @@ export function TopNav() {
     setHelpOpen(true);
   }, []);
 
-  const startWebGuide = useCallback(() => {
-    setHelpOpen(false);
-    setGuideMounted(true);
-    setGuideOpen(true);
-  }, []);
+  const startWebGuide = useCallback(
+    (trackId?: GuideTrackId) => {
+      setHelpOpen(false);
+      setGuideTrack(trackId ?? activeModule);
+      setGuideMounted(true);
+      setGuideOpen(true);
+    },
+    [activeModule],
+  );
 
   const hasCriticalCondition = units.some((u) => {
     const critV = configs[u.unit_id]?.crit_v ?? 11.8;
@@ -343,6 +349,7 @@ export function TopNav() {
 
             <button
               type="button"
+              data-guide-target="nav-ap-alarm"
               onClick={toggleAlarm}
               aria-pressed={alarmArmed}
               title={
@@ -525,7 +532,11 @@ export function TopNav() {
 
       {guideMounted && (
         <Suspense fallback={null}>
-          <WebGuideOverlay open={guideOpen} onClose={() => setGuideOpen(false)} />
+          <WebGuideOverlay
+            open={guideOpen}
+            initialTrack={guideTrack}
+            onClose={() => setGuideOpen(false)}
+          />
         </Suspense>
       )}
     </>

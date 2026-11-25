@@ -2,7 +2,7 @@ import type { ComponentType, MouseEvent, ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
-import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
+import { TelemetryProvider, useTelemetry, type ModuleId } from "@/context/TelemetryContext";
 import { requestAppFullscreen, useFullscreen } from "@/hooks/useFullscreen";
 import {
   LandingWelcomeModal,
@@ -10,7 +10,11 @@ import {
   WELCOME_SESSION_KEY,
 } from "@/components/LandingWelcomeModal";
 import { TopNav } from "@/components/hmi/TopNav";
-import { WEB_GUIDE_COMPLETED_KEY } from "@/data/webGuideSteps";
+import {
+  GUIDE_SUBTAB_EVENT,
+  WEB_GUIDE_COMPLETED_KEY,
+  WEB_GUIDE_COMPLETED_TRACKS_KEY,
+} from "@/data/webGuideSteps";
 import { Route as LandingRoute } from "@/routes/index";
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
@@ -94,11 +98,14 @@ function FullscreenProbe() {
   );
 }
 
-function NavBridgeHarness() {
-  const { activeModule } = useTelemetry();
+function NavBridgeHarness({ initialModule = "01" }: { initialModule?: ModuleId }) {
+  const { activeModule, setActiveModule } = useTelemetry();
   return (
     <>
       <div data-testid="nav-module-state" data-module={activeModule} />
+      <button type="button" onClick={() => setActiveModule(initialModule)}>
+        Set Initial Module
+      </button>
       <TopNav />
     </>
   );
@@ -165,14 +172,13 @@ describe("Fullscreen Helpers & Cross-Route State Persistence", () => {
     expect(screen.getByTestId("fs-active")).toHaveTextContent("true");
     expect(document.documentElement.classList.contains("is-fullscreen")).toBe(true);
 
-    // Unmounting route component while fullscreen remains active keeps is-fullscreen class
     activeRender.unmount();
     expect(document.documentElement.classList.contains("is-fullscreen")).toBe(true);
   });
 });
 
 describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
-  it("opens once per session, honors localStorage opt-out, hides fullscreen on unsupported browsers, and triggers fullscreen on Buka Dashboard", async () => {
+  it("renders redesigned welcome dialog once per session, honors localStorage opt-out, handles unsupported fullscreen, and triggers fullscreen on Buka Dashboard", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       writable: true,
@@ -181,43 +187,47 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
     const reqSpy = mockFullscreenApi({ enabled: true });
 
     const { unmount } = render(<LandingWelcomeModal />);
-    expect(await screen.findByText(/Selamat Datang di Web ORION Telemetry/i)).toBeInTheDocument();
-    expect(screen.getByText("Tahap Pengembangan")).toBeInTheDocument();
+    expect(await screen.findByText(/Dashboard Web Sedang dalam Pengembangan/i)).toBeInTheDocument();
+    expect(screen.getByText("ORION TELEMETRY")).toBeInTheDocument();
+    expect(screen.getByText("Mode Simulasi")).toBeInTheDocument();
+    expect(screen.getByText("Mode Live API")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Aktifkan Layar Penuh/i }));
     expect(reqSpy).toHaveBeenCalledTimes(1);
     expect(window.sessionStorage.getItem(WELCOME_SESSION_KEY)).toBe("1");
     await waitFor(() => {
-      expect(screen.queryByText(/Selamat Datang di Web ORION Telemetry/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Dashboard Web Sedang dalam Pengembangan/i),
+      ).not.toBeInTheDocument();
     });
     unmount();
 
     // Same session does not reopen modal
     const sameSession = render(<LandingWelcomeModal />);
-    expect(screen.queryByText(/Selamat Datang di Web ORION Telemetry/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Dashboard Web Sedang dalam Pengembangan/i)).not.toBeInTheDocument();
     sameSession.unmount();
 
     // New session: opt-out forever checkbox writes localStorage
     window.sessionStorage.clear();
     const persistRender = render(<LandingWelcomeModal />);
-    expect(await screen.findByText(/Selamat Datang di Web ORION Telemetry/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Dashboard Web Sedang dalam Pengembangan/i)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/Jangan tampilkan lagi di perangkat ini/i));
-    fireEvent.click(screen.getByRole("button", { name: /Lanjut Biasa/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Tutup & Lihat Beranda/i }));
     expect(window.localStorage.getItem(WELCOME_PERSIST_KEY)).toBe("1");
     persistRender.unmount();
 
     // Clearing sessionStorage alone respects localStorage opt-out
     window.sessionStorage.clear();
     const afterOptOut = render(<LandingWelcomeModal />);
-    expect(screen.queryByText(/Selamat Datang di Web ORION Telemetry/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Dashboard Web Sedang dalam Pengembangan/i)).not.toBeInTheDocument();
     afterOptOut.unmount();
 
-    // Unsupported fullscreen browser hides fullscreen prompt CTA
+    // Unsupported fullscreen browser hides fullscreen CTA and renders single continue button
     window.localStorage.clear();
     window.sessionStorage.clear();
     mockFullscreenApi({ enabled: false });
     const unsupportedRender = render(<LandingWelcomeModal />);
-    expect(await screen.findByRole("button", { name: /Mengerti, Lanjutkan/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Lanjut ke Beranda/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Aktifkan Layar Penuh/i })).not.toBeInTheDocument();
     unsupportedRender.unmount();
 
@@ -233,88 +243,130 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
   });
 });
 
-describe("Web Help Center & 8-Step Interactive Web Guide", () => {
-  it("opens Help via button/?/Ctrl+K, switches modules cleanly, and steps through all 8 interactive guide stages", async () => {
-    render(
-      <MotionConfig reducedMotion="always">
-        <LazyMotion features={domAnimation}>
-          <TelemetryProvider>
-            <NavBridgeHarness />
-          </TelemetryProvider>
-        </LazyMotion>
-      </MotionConfig>,
-    );
+describe("Context-Aware Web Help & 7-Track Per-Menu Interactive Guide", () => {
+  it("opens Help directly on active module, runs 4-step per-menu guide with sub-tab sync, track switcher, and CommandPalette launch", async () => {
+    const subTabEvents: Array<{ moduleId?: string; subTab?: string }> = [];
+    const subTabListener = (e: Event) => {
+      subTabEvents.push((e as CustomEvent<{ moduleId?: string; subTab?: string }>).detail);
+    };
+    window.addEventListener(GUIDE_SUBTAB_EVENT, subTabListener);
 
-    // 1. Open WebHelpModal via TopNav Bantuan button
-    fireEvent.click(screen.getByRole("button", { name: /Buka bantuan penggunaan web/i }));
-    expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: /Mode & Warna/i }));
-    expect(screen.getByText(/Sumber Data di Bilah Atas/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: /Pintasan/i }));
-    expect(screen.getByText(/Ctrl \+ K \/ Cmd \+ K/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: /Menu Dashboard/i }));
-    const openButtons = screen.getAllByRole("button", { name: /^Buka$/i });
-    fireEvent.click(openButtons[1]!); // Menu 02 Armada & PDI
-    expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "02");
-    await waitFor(() => {
-      expect(screen.queryByText(/Bantuan Penggunaan Web ORION/i)).not.toBeInTheDocument();
-    });
-
-    // 2. Reopen via '?' keyboard shortcut outside inputs
-    fireEvent.keyDown(window, { key: "?" });
-    expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
-
-    // 3. Launch 8-step interactive guide from Help modal
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mulai Panduan Interaktif \(8 Langkah\)/i }),
-    );
-    expect(await screen.findByText(/Panduan Web · Langkah 1 dari 8/i)).toBeInTheDocument();
-    expect(screen.getByText(/Sumber Data & Mode Tampilan/i)).toBeInTheDocument();
-
-    // Step 2: nav-tools
-    fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-    expect(screen.getByText(/Panduan Web · Langkah 2 dari 8/i)).toBeInTheDocument();
-
-    // Step 3 -> Step 8 auto-switch modules 01 -> 06
-    const expectedModules = ["01", "02", "03", "04", "05", "06"];
-    for (let i = 0; i < expectedModules.length; i++) {
-      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-      expect(screen.getByText(`Panduan Web · Langkah ${i + 3} dari 8`)).toBeInTheDocument();
-      expect(screen.getByTestId("nav-module-state")).toHaveAttribute(
-        "data-module",
-        expectedModules[i]!,
+    try {
+      render(
+        <MotionConfig reducedMotion="always">
+          <LazyMotion features={domAnimation}>
+            <TelemetryProvider>
+              <NavBridgeHarness initialModule="03" />
+            </TelemetryProvider>
+          </LazyMotion>
+        </MotionConfig>,
       );
+
+      // Move to Menu 03 before pressing Bantuan
+      fireEvent.click(screen.getByRole("button", { name: "Set Initial Module" }));
+      expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "03");
+
+      // 1. Open Help via Bantuan button: lands directly on Menu 03 active tab
+      fireEvent.click(screen.getByRole("button", { name: /Buka bantuan penggunaan web/i }));
+      expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Menu 03/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByText(/Konsol Timer 10 Menit & Status Alternator/i)).toBeInTheDocument();
+
+      // Check Mode & Warna and Pintasan tabs
+      fireEvent.click(screen.getByRole("tab", { name: /Mode & Warna/i }));
+      expect(screen.getByText(/Sumber Data di Bilah Atas/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("tab", { name: /Pintasan/i }));
+      expect(screen.getByText(/Ctrl \+ K \/ Cmd \+ K/i)).toBeInTheDocument();
+
+      // 2. Pick Menu 06 4-step guide from Semua Menu tab
+      fireEvent.click(screen.getByRole("tab", { name: /Semua Menu/i }));
+      const guideButtons = screen.getAllByRole("button", { name: /^Panduan \(4\)$/i });
+      expect(guideButtons).toHaveLength(7);
+      fireEvent.click(guideButtons[6]!); // 0 = overview, 6 = Menu 06
+
+      expect(await screen.findByText(/Menu 06 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "06");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      expect(screen.getByText(/Menu 06 · Langkah 2 dari 4/i)).toBeInTheDocument();
+      expect(screen.getByText(/Sub-Tab 01: Pendaftaran, Pasang & Lepas Node/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      expect(screen.getByText(/Menu 06 · Langkah 3 dari 4/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Sub-Tab 02: Batas Tegangan, Tidur & Kalibrasi/i),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      expect(screen.getByText(/Menu 06 · Langkah 4 dari 4/i)).toBeInTheDocument();
+      expect(screen.getByText(/Sub-Tab 03: Tiket Penanganan & Log Aktivitas/i)).toBeInTheDocument();
+
+      // Verify custom sub-tab events emitted for Menu 06
+      expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "CALIBRATION")).toBe(
+        true,
+      );
+      expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "TICKETS")).toBe(true);
+
+      // Step back and forward, then Finish Menu 06
+      fireEvent.click(screen.getByRole("button", { name: /Sebelumnya/i }));
+      expect(screen.getByText(/Menu 06 · Langkah 3 dari 4/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Selesai$/i }));
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
+        ).not.toBeInTheDocument();
+      });
+      expect(window.localStorage.getItem(WEB_GUIDE_COMPLETED_KEY)).toBe("1");
+      expect(
+        JSON.parse(window.localStorage.getItem(WEB_GUIDE_COMPLETED_TRACKS_KEY) ?? "[]"),
+      ).toContain("06");
+
+      // 3. Reopen via '?' key: Menu 06 now shows Selesai badge inside Semua Menu; launch Navigasi guide
+      fireEvent.keyDown(window, { key: "?" });
+      expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Panduan Navigasi Bilah Atas/i }));
+
+      expect(await screen.findByText(/Navigasi · Langkah 1 dari 4/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      expect(screen.getByText(/Navigasi · Langkah 4 dari 4/i)).toBeInTheDocument();
+
+      // Step 4 offers continuation straight into Menu 01
+      fireEvent.click(screen.getByRole("button", { name: /Lanjut: Menu 01/i }));
+      expect(screen.getByText(/Menu 01 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "01");
+      });
+
+      // Switch directly to Menu 02 via inline track switcher and close via Escape
+      fireEvent.click(screen.getByRole("button", { name: "02" }));
+      expect(screen.getByText(/Menu 02 · Langkah 1 dari 4/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "02");
+      });
+
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
+        ).not.toBeInTheDocument();
+      });
+
+      // 4. Launch active-menu guide from CommandPaletteModal (Ctrl+K) while on Menu 02
+      fireEvent.click(screen.getByTitle(/Buka Pencarian Cepat/i));
+      const paletteGuideBtn = await screen.findByText(/Panduan Menu Aktif \(4 Langkah\)/i);
+      fireEvent.click(paletteGuideBtn);
+      expect(await screen.findByText(/Menu 02 · Langkah 1 dari 4/i)).toBeInTheDocument();
+    } finally {
+      window.removeEventListener(GUIDE_SUBTAB_EVENT, subTabListener);
     }
-
-    // Back one step returns to Menu 05, then forward to Finish
-    fireEvent.click(screen.getByRole("button", { name: /Sebelumnya/i }));
-    expect(screen.getByText(/Panduan Web · Langkah 7 dari 8/i)).toBeInTheDocument();
-    expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "05");
-
-    fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^Selesai$/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
-      ).not.toBeInTheDocument();
-    });
-    expect(window.localStorage.getItem(WEB_GUIDE_COMPLETED_KEY)).toBe("1");
-
-    // 4. Launch guide from CommandPaletteModal (Ctrl+K)
-    fireEvent.click(screen.getByTitle(/Buka Pencarian Cepat/i));
-    const guidePaletteBtn = await screen.findByText(/Mulai Panduan Interaktif/i);
-    fireEvent.click(guidePaletteBtn);
-    expect(await screen.findByText(/Panduan Web · Langkah 1 dari 8/i)).toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: /Panduan penggunaan web ORION/i }),
-      ).not.toBeInTheDocument();
-    });
   }, 15000);
 });
