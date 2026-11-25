@@ -55,10 +55,12 @@ class ResizeObserverStub {
 }
 
 let originalResizeObserver: typeof globalThis.ResizeObserver | undefined;
+let originalPointerEvent: typeof globalThis.PointerEvent | undefined;
 let originalFullscreenEnabledDesc: PropertyDescriptor | undefined;
 let originalFullscreenElementDesc: PropertyDescriptor | undefined;
 let originalRequestFullscreen: typeof HTMLElement.prototype.requestFullscreen | undefined;
 let originalInnerWidth: number;
+let originalInnerHeight: number;
 let originalGetBoundingClientRect: typeof Element.prototype.getBoundingClientRect;
 
 function mockFullscreenApi(opts: {
@@ -127,10 +129,27 @@ function NavBridgeHarness({
 beforeAll(() => {
   originalResizeObserver = globalThis.ResizeObserver;
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  originalPointerEvent = globalThis.PointerEvent;
+  if (typeof globalThis.PointerEvent === "undefined") {
+    class PointerEventStub extends MouseEvent {
+      readonly pointerId: number;
+      readonly pointerType: string;
+      constructor(
+        type: string,
+        params: PointerEventInit & { pointerId?: number; pointerType?: string } = {},
+      ) {
+        super(type, params);
+        this.pointerId = params.pointerId ?? 1;
+        this.pointerType = params.pointerType ?? "mouse";
+      }
+    }
+    globalThis.PointerEvent = PointerEventStub as unknown as typeof PointerEvent;
+  }
   originalFullscreenEnabledDesc = Object.getOwnPropertyDescriptor(document, "fullscreenEnabled");
   originalFullscreenElementDesc = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
   originalRequestFullscreen = document.documentElement.requestFullscreen;
   originalInnerWidth = window.innerWidth;
+  originalInnerHeight = window.innerHeight;
   originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 });
 
@@ -145,6 +164,11 @@ afterEach(() => {
     configurable: true,
     writable: true,
     value: originalInnerWidth,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: originalInnerHeight,
   });
   if (originalFullscreenEnabledDesc) {
     Object.defineProperty(document, "fullscreenEnabled", originalFullscreenEnabledDesc);
@@ -164,6 +188,11 @@ afterEach(() => {
 afterAll(() => {
   if (originalResizeObserver) {
     globalThis.ResizeObserver = originalResizeObserver;
+  }
+  if (originalPointerEvent) {
+    globalThis.PointerEvent = originalPointerEvent;
+  } else {
+    delete (globalThis as unknown as Record<string, unknown>)["PointerEvent"];
   }
 });
 
@@ -254,9 +283,20 @@ describe("Landing Welcome Modal & CTA Auto-Fullscreen", () => {
 });
 
 describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () => {
-  it("opens Help on active module, keeps page interactive during non-blocking Guide, supports compact/dock controls, and navigates 42 detailed steps", async () => {
+  it("opens Help on active module, keeps page interactive, supports drag/resize/presets/scrim toggle, and navigates 42 detailed steps", async () => {
     expect(WEB_GUIDE_TRACKS).toHaveLength(7);
     expect(WEB_GUIDE_STEPS).toHaveLength(42);
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1280,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 800,
+    });
 
     // Give elements visible bounds in jsdom so the 4-strip pointer-events-none scrim mounts
     Element.prototype.getBoundingClientRect = () =>
@@ -311,19 +351,23 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
       expect(sevenStepButtons).toHaveLength(2); // Menu 04 & Menu 06
       fireEvent.click(sevenStepButtons[1]!); // Launch Menu 06 (7 steps)
 
-      // Guide card uses non-modal region semantics at z-[45], while 4-strip scrim is pointer-events-none z-[42]
+      // Guide card uses non-modal region semantics at z-[45], starts compact at 360px
       const guideRegion = await screen.findByRole("region", {
         name: /Panduan penggunaan web ORION/i,
       });
       expect(guideRegion).toHaveClass("z-[45]");
       expect(guideRegion).not.toHaveAttribute("aria-modal");
-      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
+      expect(guideRegion).toHaveAttribute("data-size-preset", "normal");
+      expect(parseInt(guideRegion.style.width, 10)).toBeLessThanOrEqual(360);
+      expect(screen.getByText(/Menu 06 · 1\/7/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "06");
       });
 
       const scrimLayer = screen.getByTestId("guide-scrim-layer");
       expect(scrimLayer).toHaveClass("pointer-events-none", "z-[42]");
+      expect(screen.getAllByTestId("guide-scrim-dim")).toHaveLength(4);
+      expect(screen.getByTestId("guide-highlight-frame")).toBeInTheDocument();
 
       // Page behind guide stays clickable & interactive while guide is open
       fireEvent.click(screen.getByRole("button", { name: "Tombol Uji Interaksi" }));
@@ -332,19 +376,82 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
       // Typing/pressing ArrowRight inside an input must NOT advance the guide step
       const exampleInput = screen.getByLabelText("Kolom ketik contoh");
       fireEvent.keyDown(exampleInput, { key: "ArrowRight" });
-      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
-
-      // Compact (Ringkas/Perluas) & Move (Pindah) controls work cleanly
-      fireEvent.click(screen.getByRole("button", { name: /Ringkas kartu panduan/i }));
       expect(screen.getByText(/Menu 06 · 1\/7/i)).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: /Perluas/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 1 dari 7/i)).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: /Pindah posisi kartu panduan/i }));
 
-      // Step through remaining 6 steps of Menu 06 (steps 2..7)
-      for (let step = 2; step <= 7; step++) {
+      // Scrim toggle: Bebas removes dark strips while preserving highlight frame
+      fireEvent.click(
+        screen.getByRole("button", { name: /Mode layar bebas tanpa lapisan gelap/i }),
+      );
+      expect(screen.queryAllByTestId("guide-scrim-dim")).toHaveLength(0);
+      expect(screen.getByTestId("guide-highlight-frame")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Aktifkan lapisan sorotan gelap/i }));
+      expect(screen.getAllByTestId("guide-scrim-dim")).toHaveLength(4);
+
+      // Size presets: Normal (360) -> Kecil/slim (292) -> Mini (288, not 620) -> Perluas -> Normal
+      fireEvent.click(screen.getByRole("button", { name: /Perkecil kartu panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-size-preset", "slim");
+      expect(parseInt(guideRegion.style.width, 10)).toBe(292);
+
+      fireEvent.click(screen.getByRole("button", { name: /Ringkas kartu panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-size-preset", "mini");
+      expect(parseInt(guideRegion.style.width, 10)).toBeLessThanOrEqual(300);
+      expect(screen.getByText(/Menu 06 · 1\/7/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Perluas kartu panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-size-preset", "slim");
+      fireEvent.click(screen.getByRole("button", { name: /Perbesar kartu panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-size-preset", "normal");
+
+      // Free drag-to-move updates position and persists across step navigation
+      const dragHandle = screen.getByTestId("guide-drag-handle");
+      const beforeDragLeft = guideRegion.style.left;
+      const beforeDragTop = guideRegion.style.top;
+      fireEvent.pointerDown(dragHandle, {
+        clientX: 200,
+        clientY: 200,
+        button: 0,
+        pointerType: "mouse",
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(window, { clientX: 310, clientY: 270, pointerId: 1 });
+      fireEvent.pointerUp(window, { clientX: 310, clientY: 270, pointerId: 1 });
+      expect(guideRegion).toHaveAttribute("data-dock-mode", "custom");
+      expect(
+        guideRegion.style.left !== beforeDragLeft || guideRegion.style.top !== beforeDragTop,
+      ).toBe(true);
+
+      // Advance to step 2 -> custom dragged position persists
+      fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
+      expect(screen.getByText("Menu 06 · 2/7")).toBeInTheDocument();
+      expect(guideRegion).toHaveAttribute("data-dock-mode", "custom");
+
+      // Free drag-to-resize changes width within [260px, 520px]
+      const widthBeforeResize = parseInt(guideRegion.style.width, 10);
+      const resizeHandle = screen.getByTestId("guide-resize-handle");
+      fireEvent.pointerDown(resizeHandle, {
+        clientX: 400,
+        clientY: 400,
+        button: 0,
+        pointerType: "mouse",
+        pointerId: 2,
+      });
+      fireEvent.pointerMove(window, { clientX: 495, clientY: 460, pointerId: 2 });
+      fireEvent.pointerUp(window, { clientX: 495, clientY: 460, pointerId: 2 });
+      const widthAfterResize = parseInt(guideRegion.style.width, 10);
+      expect(widthAfterResize).toBeGreaterThan(widthBeforeResize);
+      expect(widthAfterResize).toBeLessThanOrEqual(520);
+
+      // Reset returns to Auto + default 360px width; Pindah cycles corner presets cleanly
+      fireEvent.click(screen.getByRole("button", { name: /Reset posisi dan ukuran panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-dock-mode", "auto");
+      expect(parseInt(guideRegion.style.width, 10)).toBe(360);
+      fireEvent.click(screen.getByRole("button", { name: /Pindah posisi kartu panduan/i }));
+      expect(guideRegion).toHaveAttribute("data-dock-mode", "bottom-left");
+
+      // Step through remaining steps 3..7 of Menu 06
+      for (let step = 3; step <= 7; step++) {
         fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
-        expect(screen.getByText(`Menu 06 · Langkah ${step} dari 7`)).toBeInTheDocument();
+        expect(screen.getByText(`Menu 06 · ${step}/7`)).toBeInTheDocument();
       }
 
       expect(subTabEvents.some((ev) => ev.moduleId === "06" && ev.subTab === "ONBOARDING")).toBe(
@@ -357,7 +464,7 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
 
       // Step back then Finish Menu 06
       fireEvent.click(screen.getByRole("button", { name: /Sebelumnya/i }));
-      expect(screen.getByText(/Menu 06 · Langkah 6 dari 7/i)).toBeInTheDocument();
+      expect(screen.getByText(/Menu 06 · 6\/7/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
       fireEvent.click(screen.getByRole("button", { name: /^Selesai$/i }));
 
@@ -376,14 +483,14 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
       expect(await screen.findByText(/Bantuan Penggunaan Web ORION/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /Panduan Navigasi Bilah Atas/i }));
 
-      expect(await screen.findByText(/Navigasi · Langkah 1 dari 5/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Navigasi · 1\/5/i)).toBeInTheDocument();
       for (let s = 2; s <= 5; s++) {
         fireEvent.click(screen.getByRole("button", { name: /^Lanjut$/i }));
       }
-      expect(screen.getByText(/Navigasi · Langkah 5 dari 5/i)).toBeInTheDocument();
+      expect(screen.getByText(/Navigasi · 5\/5/i)).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: /Lanjut: Menu 01/i }));
-      expect(screen.getByText(/Menu 01 · Langkah 1 dari 6/i)).toBeInTheDocument();
+      expect(screen.getByText(/Menu 01 · 1\/6/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "01");
       });
@@ -397,9 +504,14 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
         true,
       );
 
-      // Switch directly to Menu 02 (6 steps) via inline track switcher and close with Escape
+      // Switch directly to Menu 02 (6 steps) via collapsible track switcher and close with Escape
+      fireEvent.click(screen.getByRole("button", { name: /Pilih menu panduan/i }));
+      expect(screen.getByRole("group", { name: /Pilih paket panduan menu/i })).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "02" }));
-      expect(screen.getByText(/Menu 02 · Langkah 1 dari 6/i)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("group", { name: /Pilih paket panduan menu/i }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText(/Menu 02 · 1\/6/i)).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("nav-module-state")).toHaveAttribute("data-module", "02");
       });
@@ -415,9 +527,65 @@ describe("Context-Aware Web Help & 7-Track 42-Step Live-Interactive Guide", () =
       fireEvent.click(screen.getByTitle(/Buka Pencarian Cepat/i));
       const paletteGuideBtn = await screen.findByText(/Panduan Menu Aktif \(6 Langkah\)/i);
       fireEvent.click(paletteGuideBtn);
-      expect(await screen.findByText(/Menu 02 · Langkah 1 dari 6/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Menu 02 · 1\/6/i)).toBeInTheDocument();
     } finally {
       window.removeEventListener(GUIDE_SUBTAB_EVENT, subTabListener);
     }
   }, 20000);
+
+  it("lets mobile users flip guide card between bottom and top edges and stay compact", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 375,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 667,
+    });
+
+    Element.prototype.getBoundingClientRect = () =>
+      ({
+        top: 260,
+        left: 16,
+        right: 359,
+        bottom: 420,
+        width: 343,
+        height: 160,
+        x: 16,
+        y: 260,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    render(
+      <MotionConfig reducedMotion="always">
+        <LazyMotion features={domAnimation}>
+          <TelemetryProvider>
+            <NavBridgeHarness initialModule="01" />
+          </TelemetryProvider>
+        </LazyMotion>
+      </MotionConfig>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Buka bantuan penggunaan web/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Panduan Sorotan Menu 01/i }));
+
+    const guideRegion = await screen.findByRole("region", {
+      name: /Panduan penggunaan web ORION/i,
+    });
+    expect(guideRegion).toHaveAttribute("data-dock-mode", "bottom");
+    expect(parseInt(guideRegion.style.width, 10)).toBeLessThanOrEqual(359);
+
+    fireEvent.click(screen.getByRole("button", { name: /Pindah posisi kartu panduan ke atas/i }));
+    expect(guideRegion).toHaveAttribute("data-dock-mode", "top");
+    expect(parseInt(guideRegion.style.top, 10)).toBeGreaterThanOrEqual(60);
+    expect(
+      screen.getByRole("button", { name: /Pindah posisi kartu panduan ke bawah/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Ringkas kartu panduan/i }));
+    expect(guideRegion).toHaveAttribute("data-size-preset", "mini");
+    expect(parseInt(guideRegion.style.width, 10)).toBeLessThanOrEqual(300);
+  });
 });

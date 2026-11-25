@@ -112,7 +112,8 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
             Panduan fungsi tiap menu di browser, arti warna indikator, dan pintasan keyboard. Saat
-            panduan sorotan berjalan, fitur di layar tetap bisa diklik dan digulir langsung.
+            panduan sorotan berjalan, layar tetap bisa diklik dan digulir; kartu panduan juga bisa
+            diseret, diperkecil, atau dibebaskan dari lapisan gelap.
           </DialogDescription>
         </DialogHeader>
 
@@ -184,7 +185,7 @@ export function WebHelpModal({ open, onClose, onStartGuide }: WebHelpModalProps)
                 </Button>
               </div>
 
-              {/* 4 Concrete Steps for the Active Module */}
+              {/* Concrete Steps for the Active Module */}
               <ol className="divide-y divide-border rounded-[2px] border border-border bg-secondary/35">
                 {activeTrack.steps.map((step, idx) => (
                   <li key={step.id} className="flex items-start gap-3 p-3.5">
